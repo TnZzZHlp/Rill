@@ -1,8 +1,8 @@
 # 配置与 CLI 契约
 
-本文以 001 确认的配置语义为基线。002 已实现加载、严格解析、Profile 规范化、配置语义校验及 Clap 驱动的 `rill check`；HTTP 服务、TLS 和静态资源准备尚未实现。原始需求保留在 [writing-block.md](../writing-block.md)。
+本文以 001 确认的配置语义为基线。002 已实现配置管线与 Clap 驱动的 `rill check`；003 增加明文 HTTP/1.x 的 `rill run`、路由与流式代理。TLS、HTTP/2、静态资源和生产 Reload 仍由后续阶段实现。原始需求保留在 [writing-block.md](../writing-block.md)。
 
-当前可运行 `cargo run --locked -- check --config examples/config.kdl` 或使用 `examples/multi/config.kdl` 检查多文件示例。成功仅表示配置及字面量上游地址策略通过；输出明确标识未检查 DNS、连接及 TLS/静态资源。存在 TLS 定义或静态 root 时返回 `CONFIG_UNSUPPORTED` 和退出码 1，不能将阶段性检查视为完整资源验证。
+当前可运行 `cargo run --locked -- check --config examples/config.kdl`，或使用 `examples/multi/config.kdl` 检查多文件示例。`cargo run --locked -- run --config examples/config.kdl` 启动 HTTP 服务，需自行提供配置的后端；多文件示例含 HTTPS 上游，只能做阶段性 check，尚不能 run。成功仅表示配置及字面量上游地址策略通过；输出明确标识未检查 DNS、连接及 TLS/静态资源。存在 TLS 定义或静态 root 时返回 `CONFIG_UNSUPPORTED` 和退出码 1，不能将阶段性检查视为完整资源验证。
 
 ## 1. 格式与兼容
 
@@ -15,7 +15,7 @@
 
 ## 2. CLI
 
-最终包名与可执行文件名为小写 `rill`，替代原文暂定的 `proxy-server`。002 使用 Clap 派生 CLI，仅提供 check、帮助及版本；run、reload 尚未提供，调用时返回参数错误退出码 2。以下 run/reload 用法为后续阶段契约。
+最终包名与可执行文件名为小写 `rill`，替代原文暂定的 `proxy-server`。CLI 使用 Clap 派生解析；003 已提供 run、check、帮助及版本，reload 尚未提供，调用 reload 返回参数错误退出码 2。以下 reload 用法为后续阶段契约。
 
 ```text
 rill run --config /etc/rill/config.kdl
@@ -28,7 +28,10 @@ rill reload --socket /run/rill/control.sock --timeout 30s
 - `check` 完整准备候选配置但不绑定服务端口、不发送管理请求、不修改运行实例。
 - 成功退出码 0；配置或准备失败 1；命令参数错误 2；管理通信失败、超时或结果未知 3。服务端明确返回失败时退出码 1。
 - `reload` 等待真实结果，成功输出请求 ID 与配置代次；超时不承诺操作没有发生，不自动重试。`--timeout` 必须为有限正时长，默认 30 秒。
-- 日志写标准错误，成功结果写标准输出，错误不得打印私钥、凭据或完整敏感配置。
+- 日志写标准错误，成功结果写标准输出，错误不得打印私钥、凭据或完整敏感配置。run 输出受 log-level 过滤的 JSON 行日志；check 保留配置位置诊断文本。
+- 003 run 在启动前完成 HTTP 上游 DNS 解析并验证全部地址，连接只使用批准的具体地址，最多尝试 8 个候选；当前地址固定到进程退出。DNS 更新策略留给 006，Reload 留给 007。HTTPS 上游、TLS/root 服务暂报 CONFIG_UNSUPPORTED，不静默降级。
+- HTTP 监听为 IPv4/IPv6 独立绑定，IPv6 设置 IPv6-only，可同端口双栈部署；任一监听绑定失败即启动失败，不继续提供部分站点。SIGTERM/SIGINT 都停止接受并等待最多 30 秒排空；正常退出 0，超期中止并退出 1。
+- 初始请求头总期限为 60 秒，复用连接下一请求的头部总期限使用上一请求路由的 idle-timeout；总期限不会随每次读取重新计时。已解析请求头最多 64 KiB；框架解析本身仍有约 1 MiB 硬边界。全局最多 1024 个接受容量槽位，包含等待接受的保留槽位。
 
 ## 3. 顶层与路径
 
@@ -105,6 +108,7 @@ site "app.example.com" {
 - 路径只支持 `/path` 精确匹配与末尾 `/*` 前缀匹配，不支持正则或路径参数。
 - `/api/*` 匹配 `/api/` 和其后代，不匹配 `/api`、`/apix`；如需 `/api`，另加精确路由。`/*` 匹配所有绝对路径。
 - 精确匹配优先，其次最长前缀；不按声明顺序选路。百分号转义的十六进制字母统一为大写用于模式比较，但不解码；重复规范化模式报错，转发仍保留原始请求路径。无匹配返回 404。
+- HTTP 分帧复用 Pingora 校验；冲突 Content-Length 会拒绝。同时携带 Transfer-Encoding 与 Content-Length 时，框架按 chunked 规范化、移除 Content-Length 并关闭该客户端连接；应用不得因调整超时重新启用复用。
 - 每个路由恰好一个动作：`proxy` 或 `root`；不允许多个动作。`spa`、`cache-control` 等静态字段不能用于代理动作。
 - site 级 `proxy`/`root` 简写被展开成 `route "/*"`。它可以和不冲突的显式路由并存，但与显式 `/*` 冲突；不能同级同时简写 proxy 和 root。site 级 `spa` 只修饰简写 root。
 - 路由匹配以框架校验后的原始 URI 路径为基准，不包含查询串；不隐式解码 `%2F` 或消除点段改变代理路由。非法百分号编码、NUL 和反斜杠拒绝。代理转发保留原始路径、编码和查询串，不隐式去前缀。
@@ -133,7 +137,8 @@ site "api.example.com" {
 - 允许复用的字段仅为 `connect-timeout`、`read-timeout`、`request-timeout`、`idle-timeout`、`websocket`。禁止复用 TLS、root、proxy、监听、域名、路由和控制权限字段。
 - Profile 可引用 Profile，循环及未知引用报错。site 合并后的参数为路由默认值，route 的 use 覆盖 site 默认，再以 route 显式值覆盖。
 - 默认 connect-timeout 5s；read-timeout 60s，为上游相邻读取间隔，不是响应总时长；request-timeout 300s，为开始代理到收到响应头的期限，不限制合法流式响应总长度；idle-timeout 60s，为连接无活动期限。WebSocket 默认允许且使用明确配置的 idle-timeout，可按路由调大，不允许无限时长。
-- `websocket #false` 时显式拒绝 Upgrade，不能静默降为普通请求。
+- `websocket #false` 时显式拒绝 Upgrade，不能静默降为普通请求。003 中允许的 Upgrade 暂返回 501，显式禁用返回 403；完整 WebSocket 支持归 006。
+- request-timeout 从路由选择后开始计入连接、上传及等待最终响应头的总时间，最终响应头到达后不限制流式响应总时长；read-timeout 限制上游相邻读取，idle-timeout 用于下游读写及连接池闲置。连接/上游读取超时返回 504，拒绝连接返回 502；响应已开始后故障只中止连接，不追加第二份 HTTP 响应。
 
 ## 7. P1 语法保留与兼容边界
 

@@ -132,6 +132,7 @@ pub enum Action {
 #[derive(Debug)]
 pub struct Route {
     pub pattern: Located<String>,
+    pub action_origin: Origin,
     pub action: Action,
     pub parameters: Parameters,
 }

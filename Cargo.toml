@@ -10,8 +10,9 @@ async-trait = "0.1"
 clap = { version = "4.6", features = ["derive"] }
 kdl = { version = "=6.7.1", default-features = false, features = ["span"] }
 openssl = "0.10"
+socket2 = "0.6"
 pingora = { version = "=0.9.0", default-features = false, features = ["openssl", "proxy"] }
-tokio = { version = "=1.53.3", features = ["io-util", "macros", "rt-multi-thread", "sync", "time"] }
+tokio = { version = "=1.53.3", features = ["io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
 
 [workspace.lints.rust]
 unsafe_code = "deny"

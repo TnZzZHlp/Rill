@@ -6,10 +6,10 @@
 - 项目根目录：当前仓库 `/root/github/Rill`
 - 输出目录：`docs/plans/rill-web-server/`
 - 规划状态：已批准
-- 实施状态：001 已完成（ae4158b）；002 已验收，独立完成提交成功后关闭；003–012 未开始
+- 实施状态：001 已完成（ae4158b）；002 已完成（028fce3）；003 已验收，独立完成提交成功后关闭；004–012 未开始
 - 批准依据：用户选择完整拆解 P0 与 P1、保留原始需求、采用独立总计划与子计划，并在十二阶段评审后回复“确认”。
 - 需求来源：[writing-block.md](../../../writing-block.md)
-- 规划时仅创建计划；用户已分别授权实施 001、002，要求完成后复审、测试，通过后各自独立提交；002 CLI 按用户要求使用 Clap。
+- 规划时仅创建计划；用户已分别授权实施 001、002、003，要求完成后复审、测试，通过后各自独立提交；CLI 按用户要求使用 Clap，003 的 socket2 直接依赖已单独批准。
 
 ## 概述与范围
 
@@ -21,7 +21,7 @@ P0 包含原文全部必需服务、配置、安全、可观测性和交付要�
 
 ## 当前状态与依据
 
-下表保留规划时的工程基线；001/002 的新增交付和检查结果见表后记录。
+下表保留规划时的工程基线；001–003 的新增交付和检查结果见表后记录。
 
 | 已检查事实 | 依据 | 影响 |
 | --- | --- | --- |
@@ -33,7 +33,9 @@ P0 包含原文全部必需服务、配置、安全、可观测性和交付要�
 
 001 已完成技术验证与复审，结果见 [技术验证记录](../../validation/001-feasibility.md)。已验证 Pingora 0.9.0 的证书/握手扩展、快照选择机制、分块代理和优雅排空；锁定 Tokio 1.53.3 以规避已复现兼容问题。用户已确认 001 核心契约与依赖基线，001 完成提交为 ae4158b。
 
-002 已实现严格配置解析、导入与 Profile 规范化、语义校验、资源准备接口和 Clap 驱动的阶段性 check。复审及 15 项配置验证通过，加上 001 的 7 项机制验证共 22 项通过；详见 [002 验证记录](../../validation/002-configuration-check.md)。TLS/静态资源未接入时 check 明确拒绝，成功结果也标识未检查 DNS/连通性。生产 run、代理服务、实际证书/root 准备和管理 Reload 尚未实现。
+002 已实现严格配置解析、导入与 Profile 规范化、语义校验、资源准备接口和 Clap 驱动的阶段性 check。复审及 15 项配置验证通过，加上 001 的 7 项机制验证共 22 项通过；详见 [002 验证记录](../../validation/002-configuration-check.md)。TLS/静态资源未接入时 check 明确拒绝，成功结果也标识未检查 DNS/连通性。002 完成提交为 028fce3。
+
+003 已实现 Clap run、IPv4/IPv6 HTTP 服务、不可变路由快照、基础流式 HTTP 代理、头部安全策略、有限超时和优雅排空。复审及 13 项真实服务验证通过，连同既有验证共 35 项通过，详见 [003 验证记录](../../validation/003-http-routing-proxy.md)。TLS/HTTP2、HTTPS 上游、实际证书/root 准备、WebSocket 和管理 Reload 尚未实现；这些配置或操作不会静默降级。
 
 ## 目标与成功标准
 
@@ -44,7 +46,7 @@ P0 包含原文全部必需服务、配置、安全、可观测性和交付要�
 - [ ] **G02：完整 HTTP/HTTPS 反向代理可运行**
   - 多站点、路径、SNI、HTTP/1.1/HTTP/2、IPv4/IPv6、HTTP/HTTPS 上游、流式传输、WS/SSE、超时和安全头策略均符合契约。
   - 计划验证：003、004、006 的真实服务端到端场景及连接排空。
-  - 验证证据：未执行。
+  - 验证证据：003 的 HTTP 服务、路由、流式传输和排空已通过，见 docs/validation/003-http-routing-proxy.md；G02 仍需 004/006 的 TLS/HTTP2 与完整代理，不提前勾选。
 - [ ] **G03：静态服务安全且协议行为完整**
   - GET/HEAD、MIME、条件请求、Range、缓存头、索引、受限 SPA 回退可用，编码与符号链接不能越出 root。
   - 计划验证：005 的响应与路径访问检查，包含 T09–T11、T16。
@@ -68,7 +70,7 @@ P0 包含原文全部必需服务、配置、安全、可观测性和交付要�
 
 ## 架构与模块边界
 
-main、lib、cli 和 config 已由 002 建立；tests 与 examples 已包含必要验证及单/多文件配置。其余服务模块、部署和压测路径仍为拟议。更新已有文件时保留无关用户修改。
+main、lib、cli 和 config 已由 002 建立，003 已提供 routing、HTTP proxy、初始 runtime 及结构化日志；tests 与 examples 包含必要验证及配置。TLS、静态文件、控制面、完整观测、部署和压测仍待对应阶段。更新已有文件时保留无关用户修改。
 
 ```text
 src/
@@ -106,10 +108,10 @@ docs/
 
 ### 关键接口与数据流
 
-接口与代次契约已由 001 在 docs/architecture.md 固化；以下仍为待生产实现的 API：
+接口与代次契约已在 docs/architecture.md 固化；002/003 已实现共享构建管线及初始 HTTP 快照，TLS/root 准备与发布接口仍待后续阶段：
 
-1. `load(path) → ParsedConfig`：导入、解析、保留来源文件和位置。
-2. `normalize → validate → NormalizedConfig`：展开复用、消除简写、检查全局冲突。
+1. `load(path) → LoadedConfig → parse → ParsedConfig`：导入、解析、保留来源文件和位置。
+2. `normalize → NormalizedConfig → validate → ValidatedConfig`：展开复用、消除简写、检查全局冲突。
 3. `prepare → PreparedSnapshot`：构建路由、上游策略、root 资源和 TLS 上下文；任一失败无发布副作用。
 4. 启动、check、reload 复用上述管线。check 不启动监听和管理服务；各实现阶段必须明确校验覆盖，004/005 后才具备完整资源校验。
 5. `publish(PreparedSnapshot) → generation`：在重启项不变时通过一个 ArcSwap 根发布；禁止先换路由再换证书。
@@ -130,7 +132,8 @@ docs/
 | D06 | P0/P1 都详细拆解，008 为独立 P0 检查点 | 控制交付顺序；P1 在完整计划内仍需完成 |
 | D07 | 必要测试和实际端到端证据，不追逐覆盖率 | 沿用原文必要测试要求；新增依赖、工具、外部委托先获批 |
 | D08 | 分阶段验收、更新复选框、每阶段独立完成提交 | 保留真实进度和清晰回滚边界；本次规划不提交 |
-| D09 | CLI 使用 Clap 派生解析，002 仅启用 check | 用户实施期间明确要求；复用现有锁定的 Clap 4.6.7，不引入手写参数解析器 |
+| D09 | CLI 使用 Clap 派生解析，002 启用 check，003 增加 run | 用户实施期间明确要求；复用现有锁定的 Clap 4.6.7，不引入手写参数解析器 |
+| D10 | 003 直接使用已有 socket2 0.6.5，Tokio 管理监听生命周期 | 用户访谈已批准；安全设置 IPv6-only 并正常报告绑定失败，避免私有监听构建接口；HTTP 解析、流式代理及连接池仍复用 Pingora |
 
 不得将可恢复的外部输入错误交给 unwrap，不添加无依据 unsafe；必须拒绝未知配置，日志不得包含私钥或敏感值。禁止目录越界、无限缓冲和不可信转发头注入。现有配置行为如需变更，必须给出明确迁移方式并获得批准。
 
@@ -152,8 +155,8 @@ Q01–Q04 已解决：KDL v2、rill 命名、一级通配及完整路径 root �
 | 编号 | 子计划 | 目标与交付边界 | 依赖 | 实施状态 |
 | --- | --- | --- | --- | --- |
 | 001 | [配置契约与技术可行性](subplans/001-contracts-feasibility.md) | 冻结跨模块契约，验证 Pingora 的关键扩展点，避免在实现末期发现无法满足原子 Reload。 | 无 | 已完成（ae4158b） |
-| 002 | [完整配置系统与 check](subplans/002-configuration-check.md) | 以同一套配置构建管线支持启动、check 和未来 Reload，输出可定位错误。 | 001 | 已验收，独立完成提交成功后关闭 |
-| 003 | [HTTP 路由与基础代理](subplans/003-http-routing-proxy.md) | 提供可运行的多站点 HTTP 反向代理纵向切片。 | 002 | 未开始 |
+| 002 | [完整配置系统与 check](subplans/002-configuration-check.md) | 以同一套配置构建管线支持启动、check 和未来 Reload，输出可定位错误。 | 001 | 已完成（028fce3） |
+| 003 | [HTTP 路由与基础代理](subplans/003-http-routing-proxy.md) | 提供可运行的多站点 HTTP 反向代理纵向切片。 | 002 | 已验收，独立完成提交成功后关闭 |
 | 004 | [HTTPS 与 SNI 证书管理](subplans/004-https-certificates.md) | 提供真实证书校验、HTTPS 多站点及后续热更新可复用的 TLS 准备能力。 | 003 | 未开始 |
 | 005 | [安全静态文件与 SPA](subplans/005-static-files.md) | 安全托管站点目录，提供完整 P0 文件响应语义。 | 003 | 未开始 |
 | 006 | [完整代理、流式连接与安全边界](subplans/006-proxy-streaming-safety.md) | 补齐 HTTPS 上游、WebSocket、SSE 及完整代理安全和资源约束。 | 004 | 未开始 |
@@ -186,7 +189,7 @@ T01–T18 不是全部验收：还需核对 IPv4/IPv6、HTTP/2、上游 HTTPS �
 
 验证环境需 Rust Stable、Linux/Debian、OpenSSL、受控 HTTP/HTTPS 上游、临时测试目录/证书，以及 systemd/Podman 与对照服务器环境。任何新增工具或依赖需先批准。不要提交真实密钥，不为方便测试公开管理端口。
 
-原文支持的质量命令为 `cargo fmt`、`cargo clippy`；实施阶段执行 `cargo fmt --check`、`cargo check`、`cargo test`、`cargo build --release` 等必要门禁。001/002 均已执行 fmt --check、check --locked、clippy --locked --all-targets -- -D warnings、test --locked，均通过，002 全量共 22 项验证；详见各阶段验证记录；生产构建及性能检查仍留给对应阶段。集成和性能命令待实际脚本存在后记录，不虚构可运行命令。
+原文支持的质量命令为 `cargo fmt`、`cargo clippy`；实施阶段执行 `cargo fmt --check`、`cargo check`、`cargo test`、`cargo build --release` 等必要门禁。001–003 均已执行 fmt --check、check --locked、clippy --locked --all-targets -- -D warnings、test --locked，均通过，003 全量共 35 项验证；详见各阶段验证记录；生产构建及性能检查仍留给对应阶段。集成和性能命令待实际脚本存在后记录，不虚构可运行命令。
 
 性能不预设 RPS；同一环境、相同负载与 Nginx/Caddy/Pingap 中至少一个对比。记录环境、版本、参数、原始数据、p50/p95/p99、吞吐、CPU/RSS、错误与断连，以及 Reload 时延峰值。环境不具备时保持阻塞，不能用说明文档代替通过证据。
 
@@ -210,9 +213,9 @@ T01–T18 不是全部验收：还需核对 IPv4/IPv6、HTTP/2、上游 HTTPS �
 3. 提交前同步本子计划与总计划进度。检查 Git 状态、工作区和暂存区，只暂存本阶段明确路径或已审阅代码块，不包含无关编辑、预先暂存内容或其他阶段未完成工作。无法安全分离时暂停询问。
 4. 每个子计划单独创建一次完成提交，成功后才能进入依赖它的阶段；不合并多个阶段，不逐任务提交。遵循仓库约定，否则使用 `feat(rill-web-server): complete subplan NNN - phase-name`，将 NNN 和 phase-name 替换为本阶段值。
 5. 验证提交成功并报告哈希；失败时说明阶段仍待提交。Git 不可用、非仓库、无身份、钩子失败或变更已提交时停止询问；不得自动初始化仓库、修改身份、绕过钩子、推送、改写历史或创建空提交。
-6. 规划阶段不执行实施检查或创建完成提交。001/002 已单独授权并实际验证，结果见各阶段验证记录；003–012 保持未实施。
+6. 规划阶段不执行实施检查或创建完成提交。001–003 已单独授权并实际验证，结果见各阶段验证记录；004–012 保持未实施。
 
 
 ## 交接
 
-001 已完成并提交为 ae4158b。002 的配置管线、Clap check、示例及必要回归已完成复审与全量验证，任务/验收项均已勾选并记录证据；本阶段关闭以 Git 历史中的 `feat(rill-web-server): complete subplan 002 - configuration-check` 提交成功为准，失败则仍待提交。003–012 未开始，不自动进入下一阶段。
+001 已完成并提交为 ae4158b，002 为 028fce3。003 的 HTTP 服务、路由、安全头部、流式与生命周期已完成复审和全量验证，任务/验收均有证据；本阶段关闭以 Git 历史中的 `feat(rill-web-server): complete subplan 003 - http-routing-proxy` 提交成功为准，失败仍待提交。004–012 未开始，不自动进入下一阶段。

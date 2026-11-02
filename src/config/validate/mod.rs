@@ -6,7 +6,7 @@ use super::error::{ConfigError, Result};
 use super::model::{Action, NormalizedConfig, RawAction, Route, Site, ValidatedConfig};
 use super::source::Origin;
 
-pub use address::{check_ip, normalized_ip};
+pub use address::{check_ip, domain as normalize_domain, normalized_ip};
 
 fn pattern(value: &str, origin: &Origin) -> Result<String> {
     let invalid = || {
@@ -173,6 +173,10 @@ pub fn validate(normalized: NormalizedConfig) -> Result<ValidatedConfig> {
                 )
                 .related(&first));
             }
+            let action_origin = match &route.action {
+                RawAction::Proxy(value) => value.origin.clone(),
+                RawAction::Root(value) => value.origin.clone(),
+            };
             let action = match route.action {
                 RawAction::Proxy(proxy) => {
                     if route.spa.is_some() || route.cache_control.is_some() {
@@ -193,6 +197,7 @@ pub fn validate(normalized: NormalizedConfig) -> Result<ValidatedConfig> {
             };
             routes.push(Route {
                 pattern: route.pattern,
+                action_origin,
                 action,
                 parameters: route.parameters,
             });

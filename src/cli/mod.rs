@@ -1,4 +1,5 @@
 mod check;
+mod run;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -9,7 +10,7 @@ use clap::{Parser, Subcommand};
 #[command(
     name = "rill",
     version,
-    about = "Stage 002 configuration checker; run and reload are not yet available"
+    about = "HTTP reverse proxy and configuration checker; reload is not yet available"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -18,6 +19,11 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    #[command(about = "Run the HTTP reverse proxy")]
+    Run {
+        #[arg(long, value_name = "PATH", default_value = "/etc/rill/config.kdl")]
+        config: PathBuf,
+    },
     #[command(about = "Validate configuration without starting or contacting a service")]
     Check {
         #[arg(long, value_name = "PATH", default_value = "/etc/rill/config.kdl")]
@@ -28,5 +34,6 @@ enum Command {
 pub fn run() -> ExitCode {
     match Cli::parse().command {
         Command::Check { config } => ExitCode::from(check::check(&config)),
+        Command::Run { config } => ExitCode::from(run::run(&config)),
     }
 }

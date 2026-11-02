@@ -1,10 +1,10 @@
 # Rill 架构与实施基线
 
-本文是 001 的模块与接口契约。配置格式见 [configuration.md](configuration.md)，验证结果见 [001 技术验证记录](validation/001-feasibility.md)。本文不是对 002–012 功能已完成的声明。
+本文以 001 的模块与接口契约为基线，并记录 002/003 已交付边界。配置格式见 [configuration.md](configuration.md)，HTTP 服务验证见 [003 验证记录](validation/003-http-routing-proxy.md)。未实现的 TLS、静态文件和 Reload 契约仍为后续要求。
 
 ## 1. 目录与职责
 
-当前 main 仅委托 `cli::run`，CLI 使用 Clap 解析参数，check 调用统一配置构建入口。002 已提供 config 模块；001 的技术验证仍隔离在 tests/feasibility/，不作为生产服务。其余服务模块按下列边界后续实现，不在 main 或 CLI 中堆业务逻辑。
+当前 main 仅委托 `cli::run`，CLI 使用 Clap 解析参数，check 调用统一配置构建入口。002 已提供 config 模块，003 已提供 routing、proxy、runtime 和结构化日志。001 的技术验证仍隔离在 tests/feasibility/；003 的真实服务验证在 tests/http_proxy/。TLS、静态文件、控制面和高级观测仍后续实现，不在 main 或 CLI 中堆业务逻辑。
 
 | 拟议模块 | 负责 | 不负责 |
 | --- | --- | --- |
@@ -22,7 +22,7 @@
 
 ## 2. 配置构建契约
 
-002 在 src/config/ 实现下列加载至准备边界；publish 和生产 RuntimeSnapshot 由后续 runtime 阶段实现。解析、导入、继承及验证不依赖 Pingora 类型：
+002 在 src/config/ 实现下列加载至准备边界；003 已建立 HTTP RuntimeSnapshot，publish 留给 007。解析、导入、继承及验证不依赖 Pingora 类型：
 
 ```text
 load(entry) -> LoadedConfig
@@ -37,7 +37,7 @@ publish(prepared) -> Generation
 - `ParsedConfig` 保留每个文件、节点跨度、导入关系；错误来源不能在展开时丢失。
 - `NormalizedConfig` 消除简写、应用继承，仍不包含 Pingora 对象。
 - `ValidatedConfig` 保证字段类型、域名与路径冲突、引用及安全策略一致；验证不是资源存在性的替代。
-- `PreparedSnapshot` 持有完整路由、解析后的上游策略、root 句柄、证书/私钥及已验证 TLS 材料；准备失败则不产生发布副作用。
+- 完整服务的 `PreparedSnapshot` 必须持有路由、上游策略、root 句柄与已验证 TLS 材料，准备失败不产生发布副作用。003 的 HttpPreparer 只准备 HTTP 地址/策略，TLS 和静态配置暂拒绝；不假装资源已存在。
 - `StartupSettings` 保存监听、控制 Socket、运行时线程和 TLS 基础协议设置。Reload 必须和启动值比较；任何需要重启的差异整体报错。
 - 002 check 使用 build → load → parse → normalize → validate → ResourcePreparer，同一个入口供后续 run/reload 复用，不另写验证管线。check 不监听、不发请求、不发布。ConfigurationOnly 仅允许无 TLS/静态 root 的配置通过，并明确输出未检查 DNS/连接；TLS/静态配置在资源准备器接入前报 CONFIG_UNSUPPORTED。004/005 补齐后才算完整资源检查。
 - 新配置依赖的文件必须在本轮准备时读取并保持必要资源，不能发布后再懒加载证书或 root。
@@ -45,7 +45,7 @@ publish(prepared) -> Generation
 
 ## 3. 单根快照与原子发布
 
-`RuntimeSnapshot` 的一个不可变实例包含：
+003 已实现的 RuntimeSnapshot 包含配置代次 1、标准化配置、Router、准备好的 HTTP 上游矩阵和日志策略；RuntimeState 只有初始构建和 load_full 读取，没有发布接口。以下为后续完整服务必须持续遵守的快照内容：
 
 - 单调递增的 `Generation`；溢出时失败而不是回绕。
 - 站点及 Host/路径路由表。
@@ -56,6 +56,15 @@ publish(prepared) -> Generation
 `RuntimeState` 拥有唯一 `ArcSwap<RuntimeSnapshot>`。准备时不写活动状态，管理提交串行化：读取配置、准备全部资源、比较启动设置、赋代次、一次 store，随后返回成功。失败没有发布，因此所谓回滚是保留旧快照，而不是先局部更新再反向恢复。
 
 只有管理提交路径可以串行化。HTTP 请求不持有全局管理互斥锁；通过 `load_full` 获取 Arc。路由、TLS、root 和上游不得各自维护独立活动指针。旧快照由持有者自然释放，不能在发布时关闭旧连接。
+
+### 003 HTTP 运行适配
+
+- 使用经用户批准的 socket2 0.6.5 安全绑定 TCP，IPv6-only 避免双栈占用冲突，绑定失败返回启动错误。全部地址绑定成功后才进入接受循环。
+- Tokio 负责接受、信号和连接 JoinSet，接收后交给 Pingora Listener/HttpServerApp/HttpProxy；HTTP 解析、流式背压和连接池不重复实现。框架高级监听构建是私有接口，不依赖该接口或 expect 绑定失败。
+- 全局 1024 个接受容量槽位（包括保留待接受槽位），单监听 backlog 1024。SIGTERM/SIGINT 先停止接受并通知 Pingora cleanup，最多 30 秒排空；超期取消连接任务并退出 1。
+- App 在每请求外层维护 Ingress/Headers/Streaming 预算。首请求头总期限 60 秒，后续头部期限用上一请求路由的 idle-timeout；request-timeout 包含连接、上传和最终响应头等待，不能由慢速滴入不断延后。最终响应头后只保留流式读写/空闲限制。
+- SharedStream 的锁只属于单个连接、只在一次 poll 内持有，不跨 await。预算到期先取消原代理请求，再安全写入有限错误响应，不因取得错误响应能力引入全局互斥或后台请求继续执行。
+- DNS 候选在准备期全部校验并固定，连接不重新解析域名；已建立连接的失败不重放请求，仅连接建立失败可尝试后续已批准地址。自动 DNS 更新策略留给 006。
 
 ## 4. 握手、请求、连接的代次
 
@@ -93,7 +102,7 @@ publish(prepared) -> Generation
 - URL、地址和 CA 检查在配置准备和实际地址更新时执行。内网后端属于明确需求，不一概禁用；受保护元数据服务仍禁止。
 - 默认不信任任何转发代理。删除客户端 Forwarded、X-Forwarded-For/Host/Proto/Port 后，根据已验证 Host、真实对端和当前 TLS 状态重新生成。
 - 如使用 `server { trusted-proxy "CIDR" }`，仅当直接对端在允许集合内才解析其 X-Forwarded-For；从右到左移除可信跳点，首个不可信地址为客户地址。格式无效则拒绝请求，不能保留原始字符串。重新生成 Forwarded/X-Forwarded-*；Proto 只允许可信直接对端给出的单值 http/https，Host 始终以已验证 authority 为准。
-- 清理标准 Hop-by-Hop 字段及 Connection 指定字段；Upgrade 仅在允许的 WebSocket 路径显式处理。报文长度冲突和协议解析依赖 Pingora，复核框架行为，不另写宽松解析器。
+- 清理标准 Hop-by-Hop 字段及 Connection 指定字段；Upgrade 仅在允许的 WebSocket 路径显式处理，003 暂明确返回 501/403。报文长度冲突和协议解析依赖 Pingora，复核框架行为，不另写宽松解析器。CL+TE 会规范化为 chunked 并强制关闭客户端连接，应用不能为设置超时重新启用已被框架禁用的复用。
 - 流式背压、有界头/体缓冲、有限连接/读取/空闲超时是 P0。默认不自动重试已发送到上游的请求，尤其不能重复执行非幂等写入。
 
 ## 6. 静态文件边界
@@ -149,11 +158,11 @@ publish(prepared) -> Generation
 
 - 使用 Rust Stable，edition 2024；KDL 6.7.1 声明最低 Rust 1.95，工程声明相同下限。实际已验证工具链和完整锁定版本以验证记录为准，不声称在未运行的旧工具链通过。
 - 直接使用 Pingora 0.9.0 的 openssl/proxy 功能，关闭默认可选功能；不接入 BoringSSL、rustls、ACME、负载均衡或网络缓存。
-- `arc-swap` 1.9.3；Tokio 提供测试及运行时所需异步能力；async-trait 用于 Pingora 回调；直接 openssl 依赖用于安全 ex_data 类型和内存证书验证。002 按用户明确要求添加 Clap 派生 CLI，锁定版本 4.6.7，复用已有传递依赖，未增加其他依赖或测试工具。完整传递依赖固定在 Cargo.lock。
+- `arc-swap` 1.9.3；Tokio 提供测试及运行时所需异步能力；async-trait 用于 Pingora 回调；直接 openssl 依赖用于安全 ex_data 类型和内存证书验证。002 按用户明确要求添加 Clap 派生 CLI，锁定版本 4.6.7，复用已有传递依赖，未增加其他依赖或测试工具。003 经用户访谈明确批准直接使用既有 socket2 0.6.5，并显式开启 Tokio 的 net/signal 功能；没有其他新增依赖或测试框架。完整传递依赖固定在 Cargo.lock。
 - Debian 构建需要 Rust、C 工具链、make 和 Perl。Pingora 0.9.0 的 pingora-openssl 无条件启用 openssl 的 vendored 功能，因此本基线使用锁文件中的 openssl-src 构建 OpenSSL，而不是系统 openssl 命令对应的库。不要将两者版本混为一谈。未启用 OPENSSL_NO_VENDOR 覆盖；系统动态库方案须单独验证，008 部署说明必须以实际链接结果为准。001 不安装系统包、不引入测试框架或额外 dev-dependencies。
 - 001 必须通过 cargo fmt --check、cargo check --locked、cargo clippy --locked --all-targets -- -D warnings、cargo test --locked。测试不监听公网、不需要真实密钥或额外证书工具。
 - 003/004 验证真实监听、HTTP/2、优雅关闭；006 验证真实流式代理、WS/SSE；007 验证管理权限、真实 Reload 和并发原子性；008/012 补齐部署与性能门禁。不能用 001 的 TLS 字节流验证替代这些端到端验收。
 
 ## 10. 重要限制
 
-001 仅解除技术机制可行性阻塞。002 提供配置语义检查与阶段性 check，不提供生产 run/reload，不宣称 TLS、根目录、DNS 或连接资源已验证；也未执行独立安全审计或生产性能测试。合同如需改变通配层级、路径映射、Host/SNI 或快照代次边界，必须先更新计划并获得确认。
+001 解除技术机制可行性阻塞，002 提供配置语义检查，003 提供 HTTP/1.x run 和基础代理。check 仍是明确标识范围的阶段性检查，不宣称 TLS、根目录、DNS 或连通性已验证；run 的 HttpPreparer 会准备 HTTP DNS/地址策略，但拒绝 HTTPS 上游和未支持的服务动作。尚无生产 Reload，也未执行独立安全审计或生产性能测试。合同如需改变通配层级、路径映射、Host/SNI 或快照代次边界，必须先更新计划并获得确认。
