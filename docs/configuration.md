@@ -1,8 +1,8 @@
 # 配置与 CLI 契约
 
-本文以 001 确认的配置语义为基线。002 已实现配置管线与 Clap 驱动的 `rill check`；003 增加明文 HTTP/1.x 的 `rill run`、路由与流式代理。TLS、HTTP/2、静态资源和生产 Reload 仍由后续阶段实现。原始需求保留在 [writing-block.md](../writing-block.md)。
+本文以 001 确认的配置语义为基线。002 已实现配置管线与 Clap 驱动的 `rill check`；003 增加 HTTP 服务、路由与流式代理；004 增加 HTTPS、SNI、HTTP/2、证书准备和 HTTPS 重定向。静态资源和生产 Reload 仍由后续阶段实现。原始需求保留在 [writing-block.md](../writing-block.md)。
 
-当前可运行 `cargo run --locked -- check --config examples/config.kdl`，或使用 `examples/multi/config.kdl` 检查多文件示例。`cargo run --locked -- run --config examples/config.kdl` 启动 HTTP 服务，需自行提供配置的后端；多文件示例含 HTTPS 上游，只能做阶段性 check，尚不能 run。成功仅表示配置及字面量上游地址策略通过；输出明确标识未检查 DNS、连接及 TLS/静态资源。存在 TLS 定义或静态 root 时返回 `CONFIG_UNSUPPORTED` 和退出码 1，不能将阶段性检查视为完整资源验证。
+当前可运行 `cargo run --locked -- check --config examples/config.kdl`，或使用 `examples/multi/config.kdl` 检查多文件示例。`cargo run --locked -- run --config examples/config.kdl` 启动 HTTP 服务，需自行提供配置的后端；多文件示例含 HTTPS 上游，只能做阶段性 check，尚不能 run。成功表示配置、TLS 证书及字面量上游地址策略通过；输出明确标识未检查 DNS、连接及静态资源。静态 root 仍返回 `CONFIG_UNSUPPORTED` 和退出码 1；证书读取或验证失败分别报告 `RESOURCE_IO`、`TLS_INVALID` 等定位错误，不能将阶段性检查视为完整资源验证。
 
 ## 1. 格式与兼容
 
@@ -29,9 +29,10 @@ rill reload --socket /run/rill/control.sock --timeout 30s
 - 成功退出码 0；配置或准备失败 1；命令参数错误 2；管理通信失败、超时或结果未知 3。服务端明确返回失败时退出码 1。
 - `reload` 等待真实结果，成功输出请求 ID 与配置代次；超时不承诺操作没有发生，不自动重试。`--timeout` 必须为有限正时长，默认 30 秒。
 - 日志写标准错误，成功结果写标准输出，错误不得打印私钥、凭据或完整敏感配置。run 输出受 log-level 过滤的 JSON 行日志；check 保留配置位置诊断文本。
-- 003 run 在启动前完成 HTTP 上游 DNS 解析并验证全部地址，连接只使用批准的具体地址，最多尝试 8 个候选；当前地址固定到进程退出。DNS 更新策略留给 006，Reload 留给 007。HTTPS 上游、TLS/root 服务暂报 CONFIG_UNSUPPORTED，不静默降级。
-- HTTP 监听为 IPv4/IPv6 独立绑定，IPv6 设置 IPv6-only，可同端口双栈部署；任一监听绑定失败即启动失败，不继续提供部分站点。SIGTERM/SIGINT 都停止接受并等待最多 30 秒排空；正常退出 0，超期中止并退出 1。
-- 初始请求头总期限为 60 秒，复用连接下一请求的头部总期限使用上一请求路由的 idle-timeout；总期限不会随每次读取重新计时。已解析请求头最多 64 KiB；框架解析本身仍有约 1 MiB 硬边界。全局最多 1024 个接受容量槽位，包含等待接受的保留槽位。
+- 003 run 在启动前完成 HTTP 上游 DNS 解析并验证全部地址，连接只使用批准的具体地址，最多尝试 8 个候选；当前地址固定到进程退出。DNS 更新策略留给 006，Reload 留给 007。HTTPS 上游和静态 root 服务暂报 CONFIG_UNSUPPORTED，不静默降级。
+- HTTP/HTTPS 监听为 IPv4/IPv6 独立绑定，IPv6 设置 IPv6-only，可同端口双栈部署；任一监听绑定失败即启动失败，不继续提供部分站点。SIGTERM/SIGINT 都停止接受并等待最多 30 秒排空；正常退出 0，超期中止并退出 1。
+- HTTP/1.x 初始请求头总期限为 60 秒，复用连接下一请求的头部总期限使用上一请求路由的 idle-timeout；总期限不会随每次读取重新计时。已解析请求头最多 64 KiB；HTTP/1.x 框架解析本身仍有约 1 MiB 硬边界。全局最多 1024 个接受容量槽位，包含等待接受的保留槽位。
+- TLS 至少 1.2，握手期限 10 秒，ALPN 优先 h2，其次 http/1.1。协商 h2 后，客户端 24 字节前言另有 10 秒总期限，滴入不重置；读齐即解除，不限制合法长流。HTTP/2 使用 Pingora 默认 100 个并发流和 64 KiB 解码头部限制，连接无活跃流时 60 秒关闭。每流独立执行 request-timeout 总响应头预算；预算耗尽取消该流，不关闭兄弟流、不伪造已发送 504 的日志。HTTP/1.x 对应预算耗尽时尝试返回 504。
 
 ## 3. 顶层与路径
 
@@ -84,7 +85,8 @@ site "*.example.com" {
 - HTTP/1.1 缺失、重复、畸形 Host 返回 400；HTTP/2 使用合法 `:authority`，若同时有 Host 必须一致。合法 Host 的端口不参与站点匹配，但必须语法有效。IP Host 不匹配 DNS site，返回 404。
 - 未匹配的合法 Host 返回 404，无默认站点。Host 不允许空白、用户信息、逗号或控制字符。
 - 同一 server 可同时包含纯 HTTP 站点和引用 TLS 的站点；HTTPS 监听至少需要一个 TLS 站点，开启全局 HTTPS 重定向时所有站点都必须有 TLS 引用。TLS 要求合法、已配置且绑定证书的 SNI；缺失或未知 SNI 拒绝握手，不提供兜底证书。握手后 Host 与规范化 SNI 必须相同，否则 421；即便证书覆盖多域名也不允许 HTTP/2 跨域连接合并。移除的站点在旧连接上的新请求返回 404。
-- 证书链使用 PEM，私钥使用无交互口令的 PEM；检查私钥匹配、有效期、SAN 域名覆盖和上下文构建。域名覆盖以 SAN 为准，不回退 CN。无法完整覆盖 site 的通配范围时拒绝。
+- 证书链使用只含证书的 PEM，叶证书在前，最多 16 项、1 MiB；私钥为单个未加密 PEM，最多 64 KiB，不交互询问口令。准备全部定义，检查私钥匹配、整链有效期、相邻签名/顺序、服务器认证用途、SAN 覆盖和上下文构建；检测读取期间资源变化。链末项作为管理员提供的准备期锚点，不承诺任意客户端的公共信任。
+- 域名覆盖以合法 DNS SAN 为准，不回退 CN；SAN 不接受末尾根点或部分标签通配。证书 `*.example.com` 只覆盖一级子域，通配 site 必须有相同通配 SAN，有限个精确 SAN 不能覆盖整个命名空间。错误不包含 PEM、私钥或口令。
 - 手动 Reload 必须重读全部证书和私钥。新握手使用回调开始时选定的单个快照；发布前已开始的握手可完成旧代次，已建立连接不被重新握手或主动关闭。
 - 为保证每个新握手都执行证书选择，初版关闭 TLS 会话缓存和 session tickets，禁用重新协商；恢复支持需要另行验证跨代次语义，不能绕过证书更新。
 

@@ -19,17 +19,10 @@ pub trait ResourcePreparer {
 pub struct ConfigurationOnly;
 
 impl ResourcePreparer for ConfigurationOnly {
-    type Resources = ();
+    type Resources = crate::tls::cert::PreparedTls;
 
-    fn prepare(&self, configuration: &ValidatedConfig) -> Result<()> {
-        if let Some(certificate) = configuration.certificates.values().next() {
-            return Err(ConfigError::new(
-                "CONFIG_UNSUPPORTED",
-                "tls",
-                "TLS resource preparation is unavailable until stage 004; check cannot report success",
-                &certificate.name.origin,
-            ));
-        }
+    fn prepare(&self, configuration: &ValidatedConfig) -> Result<Self::Resources> {
+        let tls = crate::tls::cert::PreparedTls::prepare(configuration)?;
         for site in &configuration.sites {
             for route in &site.routes {
                 if let Action::Static { root, .. } = &route.action {
@@ -42,7 +35,7 @@ impl ResourcePreparer for ConfigurationOnly {
                 }
             }
         }
-        Ok(())
+        Ok(tls)
     }
 }
 

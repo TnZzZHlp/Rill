@@ -1,10 +1,10 @@
 # Rill 架构与实施基线
 
-本文以 001 的模块与接口契约为基线，并记录 002/003 已交付边界。配置格式见 [configuration.md](configuration.md)，HTTP 服务验证见 [003 验证记录](validation/003-http-routing-proxy.md)。未实现的 TLS、静态文件和 Reload 契约仍为后续要求。
+本文以 001 的模块与接口契约为基线，并记录 002–004 已交付边界。配置格式见 [configuration.md](configuration.md)，服务验证见 [003 验证记录](validation/003-http-routing-proxy.md) 与 [004 验证记录](validation/004-https-certificates.md)。未实现的静态文件和 Reload 契约仍为后续要求。
 
 ## 1. 目录与职责
 
-当前 main 仅委托 `cli::run`，CLI 使用 Clap 解析参数，check 调用统一配置构建入口。002 已提供 config 模块，003 已提供 routing、proxy、runtime 和结构化日志。001 的技术验证仍隔离在 tests/feasibility/；003 的真实服务验证在 tests/http_proxy/。TLS、静态文件、控制面和高级观测仍后续实现，不在 main 或 CLI 中堆业务逻辑。
+当前 main 仅委托 `cli::run`，CLI 使用 Clap 解析参数，check 调用统一配置构建入口。002 已提供 config 模块，003 已提供 routing、proxy、runtime 和结构化日志。001 的技术验证仍隔离在 tests/feasibility/；003 的真实服务验证在 tests/http_proxy/，004 的 TLS/HTTP2 验证在 tests/https/。004 已增加 tls 模块，静态文件、控制面和高级观测仍后续实现，不在 main 或 CLI 中堆业务逻辑。
 
 | 拟议模块 | 负责 | 不负责 |
 | --- | --- | --- |
@@ -37,15 +37,15 @@ publish(prepared) -> Generation
 - `ParsedConfig` 保留每个文件、节点跨度、导入关系；错误来源不能在展开时丢失。
 - `NormalizedConfig` 消除简写、应用继承，仍不包含 Pingora 对象。
 - `ValidatedConfig` 保证字段类型、域名与路径冲突、引用及安全策略一致；验证不是资源存在性的替代。
-- 完整服务的 `PreparedSnapshot` 必须持有路由、上游策略、root 句柄与已验证 TLS 材料，准备失败不产生发布副作用。003 的 HttpPreparer 只准备 HTTP 地址/策略，TLS 和静态配置暂拒绝；不假装资源已存在。
+- 完整服务的 `PreparedSnapshot` 必须持有路由、上游策略、root 句柄与已验证 TLS 材料，准备失败不产生发布副作用。004 的 HttpPreparer 准备 HTTP 地址/策略和 PreparedTls，静态配置暂拒绝；不假装资源已存在。
 - `StartupSettings` 保存监听、控制 Socket、运行时线程和 TLS 基础协议设置。Reload 必须和启动值比较；任何需要重启的差异整体报错。
-- 002 check 使用 build → load → parse → normalize → validate → ResourcePreparer，同一个入口供后续 run/reload 复用，不另写验证管线。check 不监听、不发请求、不发布。ConfigurationOnly 仅允许无 TLS/静态 root 的配置通过，并明确输出未检查 DNS/连接；TLS/静态配置在资源准备器接入前报 CONFIG_UNSUPPORTED。004/005 补齐后才算完整资源检查。
+- 002 check 使用 build → load → parse → normalize → validate → ResourcePreparer，同一个入口供后续 run/reload 复用，不另写验证管线。check 不监听、不发请求、不发布。004 的 ConfigurationOnly 已准备全部 TLS 证书，仍明确输出未检查 DNS/连接/静态资源；静态 root 在 005 接入前报 CONFIG_UNSUPPORTED。证书资源检查与 run 共用 PreparedTls，不单独维护一套规则。
 - 新配置依赖的文件必须在本轮准备时读取并保持必要资源，不能发布后再懒加载证书或 root。
 - 文件读取过程中可能发生外部编辑；准备期检测所读取文件身份/元数据变化并拒绝不稳定候选。管理员需要跨文件内容事务时应先准备完整版本再触发 Reload，系统不承诺替外部文件系统提供事务。
 
 ## 3. 单根快照与原子发布
 
-003 已实现的 RuntimeSnapshot 包含配置代次 1、标准化配置、Router、准备好的 HTTP 上游矩阵和日志策略；RuntimeState 只有初始构建和 load_full 读取，没有发布接口。以下为后续完整服务必须持续遵守的快照内容：
+004 的 RuntimeSnapshot 包含配置代次 1、标准化配置、Router、准备好的 HTTP 上游矩阵、PreparedTls 和日志策略；RuntimeState 只有初始构建和 load_full 读取，没有发布接口。以下为后续完整服务必须持续遵守的快照内容：
 
 - 单调递增的 `Generation`；溢出时失败而不是回绕。
 - 站点及 Host/路径路由表。
@@ -70,7 +70,7 @@ publish(prepared) -> Generation
 
 ### TLS 握手
 
-1. `TlsSettings::with_callbacks` 安装 `TlsAccept`，证书回调在开始选证书时读取一次活动快照。
+1. 004 的 Resolver 通过 Pingora `handshake_with_callback` 安装 `TlsAccept`（001 验证的 `TlsSettings::with_callbacks` 使用同一扩展点），证书回调在开始选证书时读取一次活动快照。
 2. 从该快照按规范化 SNI 查找并安装证书、链和私钥。完整准备已验证材料，回调不做文件读取。
 3. 使用 OpenSSL 安全的 `Ssl::new_ex_index` / `set_ex_data` 保存选中的 Arc。不能在握手完成时重新 load 当前配置推断证书代次。
 4. `handshake_complete_callback` 把同一选择传入 `SslDigest.extension`，HTTP 层可以查询握手身份。缺少身份或安装失败则拒绝服务，不能退到其他站点。
@@ -144,7 +144,7 @@ publish(prepared) -> Generation
 | --- | --- | --- |
 | CONFIG_SYNTAX / CONFIG_TYPE / CONFIG_UNKNOWN | 语法、类型、未知字段 | 不发布 |
 | CONFIG_LIMIT / RESOURCE_CHANGED | 解析/导入资源限制，或加载期间文件变化 | 拒绝候选，不发布 |
-| CONFIG_UNSUPPORTED | 当前阶段缺少 TLS/静态资源准备实现 | check 返回非零，不能假装完整成功 |
+| CONFIG_UNSUPPORTED | 当前阶段缺少静态资源或 HTTPS 上游等实现 | check 返回非零，不能假装完整成功 |
 | IMPORT_CYCLE / DUPLICATE / ROUTE_CONFLICT / PROFILE_REF | 结构或引用错误 | 不发布，保留来源链 |
 | RESOURCE_IO / TLS_INVALID / UPSTREAM_DENIED | 目录、证书或上游策略失败 | 不发布，错误脱敏 |
 | RESTART_REQUIRED | 启动配置发生变化 | 整体拒绝，不部分应用 |
@@ -152,7 +152,7 @@ publish(prepared) -> Generation
 | PREPARE_TIMEOUT / SHUTTING_DOWN | 准备过期或实例关闭 | 发布前取消，不晚到提交 |
 | INTERNAL | 无法分类的内部故障 | 不泄露内部敏感数据，拒绝候选 |
 
-客户端报文问题通过 400/404/405/421 等明确响应；上游连接失败 502、超时 504。不能把后端故障伪装为配置成功或返回其他站点内容。
+客户端报文问题通过 400/404/405/421 等明确响应；上游连接失败 502、读取超时 504。外层总响应头预算耗尽时，HTTP/1.x 尝试发送 504；HTTP/2 取消超时流，不追加原始 HTTP/1 报文、不关闭整个连接，日志记录 reset_stream 而非声称已返回 504。不能把后端故障伪装为配置成功或返回其他站点内容。
 
 ## 9. 构建与检查基线
 
@@ -165,4 +165,4 @@ publish(prepared) -> Generation
 
 ## 10. 重要限制
 
-001 解除技术机制可行性阻塞，002 提供配置语义检查，003 提供 HTTP/1.x run 和基础代理。check 仍是明确标识范围的阶段性检查，不宣称 TLS、根目录、DNS 或连通性已验证；run 的 HttpPreparer 会准备 HTTP DNS/地址策略，但拒绝 HTTPS 上游和未支持的服务动作。尚无生产 Reload，也未执行独立安全审计或生产性能测试。合同如需改变通配层级、路径映射、Host/SNI 或快照代次边界，必须先更新计划并获得确认。
+001 解除技术机制可行性阻塞，002 提供配置语义检查，003 提供 HTTP/1.x run 和基础代理，004 提供真实 HTTPS/SNI、HTTP/2、证书检查及安全重定向。check 仍是明确标识范围的阶段性检查，不宣称根目录、DNS 或连通性已验证；run 的 HttpPreparer 会准备 HTTP DNS/地址策略，但拒绝 HTTPS 上游和未支持的服务动作。尚无生产 Reload，也未执行独立安全审计或生产性能测试。合同如需改变通配层级、路径映射、Host/SNI 或快照代次边界，必须先更新计划并获得确认。

@@ -35,13 +35,17 @@ impl HttpServerApp for App {
         let shared = session
             .as_http1()
             .and_then(|session| session.stream().as_any().downcast_ref::<SharedStream>())
-            .cloned()?;
+            .cloned();
         let idle = session
             .take_connection_user_context()
             .and_then(|context| context.downcast::<Duration>().ok())
             .map_or(Duration::from_secs(60), |value| *value);
         let (sender, mut receiver) = watch::channel(Phase::Ingress(Instant::now() + idle));
-        session.set_connection_user_context(Some(Box::new(sender)));
+        if session.is_http2() {
+            session.req_header_mut().extensions_mut().insert(sender);
+        } else {
+            session.set_connection_user_context(Some(Box::new(sender)));
+        }
         let timed_out = {
             let request = self.proxy.process_new_http(session, shutdown);
             tokio::pin!(request);
@@ -61,6 +65,14 @@ impl HttpServerApp for App {
                     _ = sleep_until(deadline) => break status,
                 }
             }
+        };
+        let Some(shared) = shared else {
+            self.logger.event(
+                Level::Warn,
+                "request_timeout",
+                &[("protocol", "h2"), ("action", "reset_stream")],
+            );
+            return None;
         };
         self.logger.event(
             Level::Warn,

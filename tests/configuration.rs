@@ -376,9 +376,9 @@ fn http_only_sites_can_share_a_server_with_tls_sites() -> TestResult {
     assert!(configuration.sites[1].tls.is_some());
     assert_eq!(
         build(&entry, &ConfigurationOnly)
-            .expect_err("TLS preparation unavailable")
+            .expect_err("TLS certificate missing")
             .code,
-        "CONFIG_UNSUPPORTED"
+        "RESOURCE_IO"
     );
     fs::remove_file(entry)?;
     Ok(())
@@ -391,9 +391,15 @@ fn missing_resource_preparers_cannot_report_success() -> TestResult {
         "rill-002-resources-{}-{unique}.kdl",
         std::process::id()
     ));
-    for body in [
-        "site \"example.test\" { root \"missing-directory\"; }",
-        "tls \"cert\" { cert \"missing.pem\"; key \"missing.key\"; }\nsite \"example.test\" { tls \"cert\"; proxy \"http://127.0.0.1:3000\"; }",
+    for (body, code) in [
+        (
+            "site \"example.test\" { root \"missing-directory\"; }",
+            "CONFIG_UNSUPPORTED",
+        ),
+        (
+            "tls \"cert\" { cert \"missing.pem\"; key \"missing.key\"; }\nsite \"example.test\" { tls \"cert\"; proxy \"http://127.0.0.1:3000\"; }",
+            "RESOURCE_IO",
+        ),
     ] {
         fs::write(
             &entry,
@@ -406,7 +412,7 @@ fn missing_resource_preparers_cannot_report_success() -> TestResult {
             .output()?;
         assert_eq!(result.status.code(), Some(1));
         assert!(result.stdout.is_empty());
-        assert!(String::from_utf8_lossy(&result.stderr).contains("CONFIG_UNSUPPORTED"));
+        assert!(String::from_utf8_lossy(&result.stderr).contains(code));
     }
     fs::remove_file(entry)?;
     Ok(())

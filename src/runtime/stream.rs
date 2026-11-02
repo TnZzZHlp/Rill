@@ -1,7 +1,9 @@
+use std::future::Future;
 use std::io;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
+use std::time::Duration;
 
 use async_trait::async_trait;
 use pingora::protocols::raw_connect::ProxyDigest;
@@ -14,14 +16,23 @@ use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 #[derive(Clone, Debug)]
 pub struct SharedStream {
-    io: Arc<Mutex<Stream>>,
+    io: Arc<Mutex<StreamState>>,
     digest: Digest,
     id: i32,
     alpn: Option<ALPN>,
 }
 
+#[derive(Debug)]
+struct StreamState {
+    stream: Stream,
+    preface: Option<(usize, Pin<Box<tokio::time::Sleep>>)>,
+}
+
 impl SharedStream {
     pub fn new(stream: Stream) -> Self {
+        let alpn = stream.selected_alpn_proto();
+        let preface = (alpn == Some(ALPN::H2))
+            .then(|| (24, Box::pin(tokio::time::sleep(Duration::from_secs(10)))));
         Self {
             digest: Digest {
                 ssl_digest: stream.get_ssl_digest(),
@@ -30,8 +41,8 @@ impl SharedStream {
                 socket_digest: stream.get_socket_digest(),
             },
             id: stream.id(),
-            alpn: stream.selected_alpn_proto(),
-            io: Arc::new(Mutex::new(stream)),
+            alpn,
+            io: Arc::new(Mutex::new(StreamState { stream, preface })),
         }
     }
 }
@@ -43,7 +54,25 @@ impl AsyncRead for SharedStream {
         buffer: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<()>> {
         match self.io.lock() {
-            Ok(mut stream) => Pin::new(&mut **stream).poll_read(cx, buffer),
+            Ok(mut state) => {
+                if let Some((_, deadline)) = &mut state.preface
+                    && deadline.as_mut().poll(cx).is_ready()
+                {
+                    return Poll::Ready(Err(io::Error::new(
+                        io::ErrorKind::TimedOut,
+                        "HTTP/2 preface timeout",
+                    )));
+                }
+                let before = buffer.filled().len();
+                let result = Pin::new(&mut *state.stream).poll_read(cx, buffer);
+                if let Some((remaining, _)) = &mut state.preface {
+                    *remaining = remaining.saturating_sub(buffer.filled().len() - before);
+                    if *remaining == 0 {
+                        state.preface = None;
+                    }
+                }
+                result
+            }
             Err(_) => Poll::Ready(Err(io::Error::other("stream lock poisoned"))),
         }
     }
@@ -56,19 +85,19 @@ impl AsyncWrite for SharedStream {
         buffer: &[u8],
     ) -> Poll<io::Result<usize>> {
         match self.io.lock() {
-            Ok(mut stream) => Pin::new(&mut **stream).poll_write(cx, buffer),
+            Ok(mut stream) => Pin::new(&mut *stream.stream).poll_write(cx, buffer),
             Err(_) => Poll::Ready(Err(io::Error::other("stream lock poisoned"))),
         }
     }
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         match self.io.lock() {
-            Ok(mut stream) => Pin::new(&mut **stream).poll_flush(cx),
+            Ok(mut stream) => Pin::new(&mut *stream.stream).poll_flush(cx),
             Err(_) => Poll::Ready(Err(io::Error::other("stream lock poisoned"))),
         }
     }
     fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         match self.io.lock() {
-            Ok(mut stream) => Pin::new(&mut **stream).poll_shutdown(cx),
+            Ok(mut stream) => Pin::new(&mut *stream.stream).poll_shutdown(cx),
             Err(_) => Poll::Ready(Err(io::Error::other("stream lock poisoned"))),
         }
     }

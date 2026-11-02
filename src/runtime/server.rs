@@ -41,6 +41,7 @@ async fn endpoint_loop(
     app: Arc<Transport>,
     mut shutdown: watch::Receiver<bool>,
     capacity: Arc<Semaphore>,
+    tls: Option<Arc<crate::tls::resolver::Resolver>>,
 ) -> Result<(), &'static str> {
     let mut connections = JoinSet::new();
     loop {
@@ -59,9 +60,19 @@ async fn endpoint_loop(
                 };
                 let app = app.clone();
                 let shutdown = shutdown.clone();
+                let tls = tls.clone();
                 connections.spawn(async move {
                     let _permit = permit;
-                    app.process_new(Box::new(stream), &shutdown).await;
+                    let stream: pingora::protocols::Stream = if let Some(tls) = tls {
+                        match timeout(Duration::from_secs(10), tls.accept(stream)).await {
+                            Ok(Ok(stream)) => stream,
+                            _ => {
+                                app.app.logger.event(Level::Warn, "tls_handshake_failed", &[]);
+                                return;
+                            }
+                        }
+                    } else { Box::new(stream) };
+                    app.process_new(stream, &shutdown).await;
                 });
             }
         }
@@ -130,25 +141,40 @@ pub async fn serve(state: Arc<RuntimeState>) -> u8 {
         "starting",
         &[("generation", &snapshot.generation.to_string())],
     );
-    for address in &snapshot.configuration.server.http {
-        match bind(address.value) {
-            Ok(listener) => listeners.push(listener),
-            Err(_) => {
-                logger.event(
-                    Level::Error,
-                    "listen_failed",
-                    &[("address", &address.value.to_string())],
-                );
-                return 1;
+    for (addresses, secure) in [
+        (&snapshot.configuration.server.http, false),
+        (&snapshot.configuration.server.https, true),
+    ] {
+        for address in addresses {
+            match bind(address.value) {
+                Ok(listener) => listeners.push((listener, secure)),
+                Err(_) => {
+                    logger.event(
+                        Level::Error,
+                        "listen_failed",
+                        &[("address", &address.value.to_string())],
+                    );
+                    return 1;
+                }
             }
         }
     }
+    let resolver = match crate::tls::resolver::Resolver::new(state.clone()) {
+        Ok(resolver) => resolver,
+        Err(_) => {
+            logger.event(Level::Error, "tls_context_failed", &[]);
+            return 1;
+        }
+    };
     let configuration = Arc::new(ServerConf {
         threads: 1,
         max_retries: 8,
         ..ServerConf::default()
     });
     let mut proxy = HttpProxy::new(Handler { state }, configuration);
+    let mut options = pingora::apps::HttpServerOptions::default();
+    options.h2_idle_timeout = Some(Duration::from_secs(60));
+    proxy.server_options = Some(options);
     proxy.handle_init_modules();
     let app = Arc::new(Transport {
         app: Arc::new(App {
@@ -159,12 +185,13 @@ pub async fn serve(state: Arc<RuntimeState>) -> u8 {
     let capacity = Arc::new(Semaphore::new(1024));
     let (shutdown, receiver) = watch::channel(false);
     let mut workers = JoinSet::new();
-    for endpoint in listeners {
+    for (endpoint, secure) in listeners {
         workers.spawn(endpoint_loop(
             endpoint,
             app.clone(),
             receiver.clone(),
             capacity.clone(),
+            secure.then(|| resolver.clone()),
         ));
     }
     logger.event(
@@ -172,7 +199,8 @@ pub async fn serve(state: Arc<RuntimeState>) -> u8 {
         "started",
         &[(
             "listeners",
-            &snapshot.configuration.server.http.len().to_string(),
+            &(snapshot.configuration.server.http.len() + snapshot.configuration.server.https.len())
+                .to_string(),
         )],
     );
     let mut status = 0;

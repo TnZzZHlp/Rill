@@ -109,6 +109,13 @@ impl ProxyHttp for Handler {
     }
 
     async fn request_filter(&self, session: &mut Session, ctx: &mut Context) -> Result<bool> {
+        if ctx.budget.is_none() {
+            ctx.budget = session
+                .req_header()
+                .extensions
+                .get::<watch::Sender<Phase>>()
+                .cloned();
+        }
         let request = session.req_header();
         let size = request.raw_path().len()
             + request
@@ -119,10 +126,22 @@ impl ProxyHttp for Handler {
         if size > 64 * 1024 {
             return reject(session, 431).await;
         }
-        let authority = match authority(request) {
+        let authority = match authority(request, session.is_http2()) {
             Ok(value) => value,
             Err(status) => return reject(session, status).await,
         };
+        let secure = session
+            .digest()
+            .is_some_and(|digest| digest.ssl_digest.is_some());
+        if secure {
+            let identity = session
+                .digest()
+                .and_then(|digest| digest.ssl_digest.as_ref())
+                .and_then(|digest| digest.extension.get::<crate::tls::resolver::Handshake>());
+            if identity.is_none_or(|identity| identity.server_name != authority.host) {
+                return reject(session, 421).await;
+            }
+        }
         let path = match path(request) {
             Some(value) => value,
             None => return reject(session, 400).await,
@@ -131,6 +150,41 @@ impl ProxyHttp for Handler {
             Ok(value) => value,
             Err(status) => return reject(session, status).await,
         };
+        let Some(site) = ctx.snapshot.router.site(&authority.host) else {
+            return reject(session, 404).await;
+        };
+        if secure && ctx.snapshot.configuration.sites[site].tls.is_none() {
+            return reject(session, 404).await;
+        }
+        if !secure && ctx.snapshot.configuration.server.redirect_https {
+            let port = ctx
+                .snapshot
+                .configuration
+                .server
+                .redirect_port
+                .ok_or_else(|| {
+                    Error::explain(ErrorType::InternalError, "redirect port not prepared")
+                })?;
+            let suffix = if port == 443 {
+                String::new()
+            } else {
+                format!(":{port}")
+            };
+            let target = std::str::from_utf8(request.raw_path()).map_err(|_| {
+                Error::explain(ErrorType::HTTPStatus(400), "invalid redirect target")
+            })?;
+            let mut response = ResponseHeader::build(308, None)?;
+            response.insert_header(
+                "location",
+                format!("https://{}{suffix}{target}", authority.host),
+            )?;
+            response.insert_header("content-length", "0")?;
+            session.set_keepalive(None);
+            session
+                .write_response_header(Box::new(response), true)
+                .await?;
+            return Ok(true);
+        }
         let Some((site, route)) = ctx.snapshot.router.find(&authority.host, &path) else {
             return reject(session, 404).await;
         };
@@ -157,6 +211,7 @@ impl ProxyHttp for Handler {
             &authority,
             peer,
             local_port,
+            secure,
             &ctx.snapshot.configuration.server,
         ) {
             Ok(value) => value,

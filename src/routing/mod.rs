@@ -49,15 +49,19 @@ impl Router {
         result
     }
 
-    pub fn find(&self, host: &str, path: &str) -> Option<(usize, usize)> {
-        let site = self.exact.get(host).copied().or_else(|| {
+    pub fn site(&self, host: &str) -> Option<usize> {
+        self.exact.get(host).copied().or_else(|| {
             let (label, suffix) = host.split_once('.')?;
             if label.is_empty() {
                 None
             } else {
                 self.wildcard.get(suffix).copied()
             }
-        })?;
+        })
+    }
+
+    pub fn find(&self, host: &str, path: &str) -> Option<(usize, usize)> {
+        let site = self.site(host)?;
         let paths = self.paths.get(site)?;
         let route = paths.exact.get(path).copied().or_else(|| {
             paths

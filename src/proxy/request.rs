@@ -12,12 +12,20 @@ pub struct Authority {
     pub port: Option<u16>,
 }
 
-pub fn authority(request: &RequestHeader) -> Result<Authority, u16> {
-    let values: Vec<_> = request.headers.get_all("host").iter().collect();
-    if values.len() != 1 {
+pub fn authority(request: &RequestHeader, http2: bool) -> Result<Authority, u16> {
+    if http2 && request.uri.authority().is_none() {
         return Err(400);
     }
-    let original = values[0].to_str().map_err(|_| 400_u16)?;
+    let values: Vec<_> = request.headers.get_all("host").iter().collect();
+    let original = match values.as_slice() {
+        [value] => value.to_str().map_err(|_| 400_u16)?,
+        [] if http2 => request
+            .uri
+            .authority()
+            .map(|authority| authority.as_str())
+            .ok_or(400_u16)?,
+        _ => return Err(400),
+    };
     if original.is_empty()
         || !original.is_ascii()
         || original
@@ -90,6 +98,7 @@ pub fn forwarding(
     authority: &Authority,
     peer: IpAddr,
     local_port: u16,
+    secure: bool,
     server: &Server,
 ) -> Result<Forwarding, u16> {
     let peer = normalized_ip(peer);
@@ -101,7 +110,7 @@ pub fn forwarding(
     };
     let mut client = peer;
     let mut chain = vec![peer];
-    let mut proto = "http";
+    let mut proto = if secure { "https" } else { "http" };
     if trusted(peer) {
         let mut addresses = Vec::new();
         for value in request.headers.get_all("x-forwarded-for").iter() {
@@ -192,4 +201,16 @@ pub fn connection_names(request: &RequestHeader) -> Result<Vec<String>, u16> {
         }
     }
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn http2_host_without_uri_authority_returns_400() {
+        let mut request = RequestHeader::build("GET", b"/", None).unwrap();
+        request.insert_header("host", "app.test").unwrap();
+        assert!(matches!(authority(&request, true), Err(400)));
+    }
 }

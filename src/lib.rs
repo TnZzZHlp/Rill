@@ -4,3 +4,4 @@ pub mod observability;
 pub mod proxy;
 pub mod routing;
 pub mod runtime;
+pub mod tls;

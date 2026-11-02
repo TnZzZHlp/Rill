@@ -1,15 +1,17 @@
 use std::sync::Arc;
 
+use crate::config::Result;
 use crate::config::model::ValidatedConfig;
 use crate::config::prepare::{ConfigurationOnly, PreparedSnapshot, ResourcePreparer};
-use crate::config::{ConfigError, Result};
 use crate::observability::logging::Logger;
 use crate::proxy::upstream::PreparedPeer;
 use crate::routing::Router;
+use crate::tls::cert::PreparedTls;
 use arc_swap::ArcSwap;
 
 #[derive(Debug)]
 pub struct HttpResources {
+    pub tls: PreparedTls,
     pub peers: Vec<Vec<PreparedPeer>>,
 }
 
@@ -19,15 +21,7 @@ impl ResourcePreparer for HttpPreparer {
     type Resources = HttpResources;
 
     fn prepare(&self, configuration: &ValidatedConfig) -> Result<HttpResources> {
-        ConfigurationOnly.prepare(configuration)?;
-        if !configuration.server.https.is_empty() || configuration.server.redirect_https {
-            return Err(ConfigError::new(
-                "CONFIG_UNSUPPORTED",
-                "https",
-                "HTTPS service is unavailable until stage 004",
-                &configuration.server.origin,
-            ));
-        }
+        let tls = ConfigurationOnly.prepare(configuration)?;
         let peers = configuration
             .sites
             .iter()
@@ -38,7 +32,7 @@ impl ResourcePreparer for HttpPreparer {
                     .collect::<Result<Vec<_>>>()
             })
             .collect::<Result<Vec<_>>>()?;
-        Ok(HttpResources { peers })
+        Ok(HttpResources { peers, tls })
     }
 }
 
@@ -48,6 +42,7 @@ pub struct RuntimeSnapshot {
     pub configuration: ValidatedConfig,
     pub router: Router,
     pub peers: Vec<Vec<PreparedPeer>>,
+    pub tls: PreparedTls,
     pub logger: Logger,
 }
 
@@ -64,6 +59,7 @@ impl RuntimeState {
             logger: Logger::new(&prepared.configuration.server.log_level),
             configuration: prepared.configuration,
             peers: prepared.resources.peers,
+            tls: prepared.resources.tls,
         };
         Arc::new(Self {
             active: ArcSwap::from_pointee(snapshot),

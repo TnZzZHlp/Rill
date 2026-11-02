@@ -21,7 +21,7 @@ P0 包含原文全部必需服务、配置、安全、可观测性和交付要�
 
 ## 当前状态与依据
 
-下表保留规划时的工程基线；001–003 的新增交付和检查结果见表后记录。
+下表保留规划时的工程基线；001–004 的新增交付和检查结果见表后记录。
 
 | 已检查事实 | 依据 | 影响 |
 | --- | --- | --- |
@@ -35,18 +35,20 @@ P0 包含原文全部必需服务、配置、安全、可观测性和交付要�
 
 002 已实现严格配置解析、导入与 Profile 规范化、语义校验、资源准备接口和 Clap 驱动的阶段性 check。复审及 15 项配置验证通过，加上 001 的 7 项机制验证共 22 项通过；详见 [002 验证记录](../../validation/002-configuration-check.md)。TLS/静态资源未接入时 check 明确拒绝，成功结果也标识未检查 DNS/连通性。002 完成提交为 028fce3。
 
-003 已实现 Clap run、IPv4/IPv6 HTTP 服务、不可变路由快照、基础流式 HTTP 代理、头部安全策略、有限超时和优雅排空。复审及 13 项真实服务验证通过，连同既有验证共 35 项通过，详见 [003 验证记录](../../validation/003-http-routing-proxy.md)。TLS/HTTP2、HTTPS 上游、实际证书/root 准备、WebSocket 和管理 Reload 尚未实现；这些配置或操作不会静默降级。
+003 已实现 Clap run、IPv4/IPv6 HTTP 服务、不可变路由快照、基础流式 HTTP 代理、头部安全策略、有限超时和优雅排空。复审及 13 项真实服务验证通过，连同既有验证共 35 项通过，详见 [003 验证记录](../../validation/003-http-routing-proxy.md)。在 003 结束时 TLS/HTTP2、HTTPS 上游、证书/root 准备、WebSocket 和管理 Reload 尚未实现，未静默降级。003 完成提交为 3ad652c。
+
+004 已实现 PreparedTls 完整证书检查、共享快照 SNI、IPv4/IPv6 HTTPS、HTTP/1.1 与 HTTP/2、Host/SNI 隔离及安全 308 重定向。使用 Sub Agent 独立复审和定界修复，补齐 authority 与前言期限边界；最终隔离门禁及 48 项验证通过，详见 [004 验证记录](../../validation/004-https-certificates.md)。静态资源、HTTPS 上游、完整代理与 Reload 仍待对应阶段；独立完成提交见 Git 历史。
 
 ## 目标与成功标准
 
 - [ ] **G01：配置及技术契约可执行**
   - 001 的关键决策获得确认；002 支持严格解析、导入、Profile、来源定位和 check，004/005 补齐真实资源校验。
   - 计划验证：合法/非法配置、冲突、循环引用、证书和根目录检查；记录统一构建流程证据。
-  - 验证证据：001 契约及技术机制已确认；002 配置管线与阶段性 check 已通过 15 项验证，见 docs/validation/002-configuration-check.md。G01 仍需 004/005 的完整资源校验，因此保持未勾选。
+  - 验证证据：001 契约及技术机制已确认；002 配置管线与阶段性 check 已通过 15 项验证，见 docs/validation/002-configuration-check.md。004 已完成证书资源检查；G01 仍需 005 的 root 资源校验，因此保持未勾选。
 - [ ] **G02：完整 HTTP/HTTPS 反向代理可运行**
   - 多站点、路径、SNI、HTTP/1.1/HTTP/2、IPv4/IPv6、HTTP/HTTPS 上游、流式传输、WS/SSE、超时和安全头策略均符合契约。
   - 计划验证：003、004、006 的真实服务端到端场景及连接排空。
-  - 验证证据：003 的 HTTP 服务、路由、流式传输和排空已通过，见 docs/validation/003-http-routing-proxy.md；G02 仍需 004/006 的 TLS/HTTP2 与完整代理，不提前勾选。
+  - 验证证据：003 的 HTTP 服务、路由、流式传输和排空已通过，见 docs/validation/003-http-routing-proxy.md；004 的 TLS/HTTP2 已通过；G02 仍需 006 的 HTTPS 上游与完整代理，不提前勾选。
 - [ ] **G03：静态服务安全且协议行为完整**
   - GET/HEAD、MIME、条件请求、Range、缓存头、索引、受限 SPA 回退可用，编码与符号链接不能越出 root。
   - 计划验证：005 的响应与路径访问检查，包含 T09–T11、T16。
@@ -70,7 +72,7 @@ P0 包含原文全部必需服务、配置、安全、可观测性和交付要�
 
 ## 架构与模块边界
 
-main、lib、cli 和 config 已由 002 建立，003 已提供 routing、HTTP proxy、初始 runtime 及结构化日志；tests 与 examples 包含必要验证及配置。TLS、静态文件、控制面、完整观测、部署和压测仍待对应阶段。更新已有文件时保留无关用户修改。
+main、lib、cli 和 config 已由 002 建立，003 已提供 routing、HTTP proxy、初始 runtime 及结构化日志；tests 与 examples 包含必要验证及配置。004 已提供 TLS/证书模块，静态文件、控制面、完整观测、部署和压测仍待对应阶段。更新已有文件时保留无关用户修改。
 
 ```text
 src/
@@ -108,7 +110,7 @@ docs/
 
 ### 关键接口与数据流
 
-接口与代次契约已在 docs/architecture.md 固化；002/003 已实现共享构建管线及初始 HTTP 快照，TLS/root 准备与发布接口仍待后续阶段：
+接口与代次契约已在 docs/architecture.md 固化；002–004 已实现共享构建管线及初始 HTTP/TLS 快照，root 准备与发布接口仍待后续阶段：
 
 1. `load(path) → LoadedConfig → parse → ParsedConfig`：导入、解析、保留来源文件和位置。
 2. `normalize → NormalizedConfig → validate → ValidatedConfig`：展开复用、消除简写、检查全局冲突。
@@ -156,8 +158,8 @@ Q01–Q04 已解决：KDL v2、rill 命名、一级通配及完整路径 root �
 | --- | --- | --- | --- | --- |
 | 001 | [配置契约与技术可行性](subplans/001-contracts-feasibility.md) | 冻结跨模块契约，验证 Pingora 的关键扩展点，避免在实现末期发现无法满足原子 Reload。 | 无 | 已完成（ae4158b） |
 | 002 | [完整配置系统与 check](subplans/002-configuration-check.md) | 以同一套配置构建管线支持启动、check 和未来 Reload，输出可定位错误。 | 001 | 已完成（028fce3） |
-| 003 | [HTTP 路由与基础代理](subplans/003-http-routing-proxy.md) | 提供可运行的多站点 HTTP 反向代理纵向切片。 | 002 | 已验收，独立完成提交成功后关闭 |
-| 004 | [HTTPS 与 SNI 证书管理](subplans/004-https-certificates.md) | 提供真实证书校验、HTTPS 多站点及后续热更新可复用的 TLS 准备能力。 | 003 | 未开始 |
+| 003 | [HTTP 路由与基础代理](subplans/003-http-routing-proxy.md) | 提供可运行的多站点 HTTP 反向代理纵向切片。 | 002 | 已完成（3ad652c） |
+| 004 | [HTTPS 与 SNI 证书管理](subplans/004-https-certificates.md) | 提供真实证书校验、HTTPS 多站点及后续热更新可复用的 TLS 准备能力。 | 003 | 已验收（独立完成提交见 Git 历史） |
 | 005 | [安全静态文件与 SPA](subplans/005-static-files.md) | 安全托管站点目录，提供完整 P0 文件响应语义。 | 003 | 未开始 |
 | 006 | [完整代理、流式连接与安全边界](subplans/006-proxy-streaming-safety.md) | 补齐 HTTPS 上游、WebSocket、SSE 及完整代理安全和资源约束。 | 004 | 未开始 |
 | 007 | [原子 Reload 与本地管理](subplans/007-atomic-reload.md) | 通过受权限保护的本地控制面提供有实际结果反馈的事务性热更新。 | 004、005、006 | 未开始 |
@@ -171,7 +173,7 @@ Q01–Q04 已解决：KDL v2、rill 命名、一级通配及完整路径 root �
 
 主线为 `001 → 002 → 003`；003 完成后可进行 004 和 005，004 完成后进行 006；004/005/006 全部完成后进入 007，再进入 008。008 是完整 P0 交付关卡。随后 009/010/011 可独立推进，全部完成后进入 012。
 
-可并行不等于可以共享未完成变更。涉及相同 config、runtime 或文档文件的工作须协调写入和提交；无法安全隔离时顺序执行。每个前置阶段必须已验收并完成独立提交，才启动依赖它的阶段。本计划不启动并行任务或子代理。
+可并行不等于可以共享未完成变更。涉及相同 config、runtime 或文档文件的工作须协调写入和提交；无法安全隔离时顺序执行。每个前置阶段必须已验收并完成独立提交，才启动依赖它的阶段。并行或委派仍需用户授权；004 已按用户明确要求使用 Sub Agent 分工复审和修复，共享工作区始终只保留一个写入者。
 
 ## 验证策略与需求追溯
 
@@ -189,7 +191,7 @@ T01–T18 不是全部验收：还需核对 IPv4/IPv6、HTTP/2、上游 HTTPS �
 
 验证环境需 Rust Stable、Linux/Debian、OpenSSL、受控 HTTP/HTTPS 上游、临时测试目录/证书，以及 systemd/Podman 与对照服务器环境。任何新增工具或依赖需先批准。不要提交真实密钥，不为方便测试公开管理端口。
 
-原文支持的质量命令为 `cargo fmt`、`cargo clippy`；实施阶段执行 `cargo fmt --check`、`cargo check`、`cargo test`、`cargo build --release` 等必要门禁。001–003 均已执行 fmt --check、check --locked、clippy --locked --all-targets -- -D warnings、test --locked，均通过，003 全量共 35 项验证；详见各阶段验证记录；生产构建及性能检查仍留给对应阶段。集成和性能命令待实际脚本存在后记录，不虚构可运行命令。
+原文支持的质量命令为 `cargo fmt`、`cargo clippy`；实施阶段执行 `cargo fmt --check`、`cargo check`、`cargo test`、`cargo build --release` 等必要门禁。001–004 均通过 fmt --check、check --locked、clippy --locked --all-targets -- -D warnings、test --locked；004 最终在只读、离线、隔离 loopback 环境额外使用 --offline 验证，全量共 48 项通过；详见各阶段验证记录；生产构建及性能检查仍留给对应阶段。集成和性能命令待实际脚本存在后记录，不虚构可运行命令。
 
 性能不预设 RPS；同一环境、相同负载与 Nginx/Caddy/Pingap 中至少一个对比。记录环境、版本、参数、原始数据、p50/p95/p99、吞吐、CPU/RSS、错误与断连，以及 Reload 时延峰值。环境不具备时保持阻塞，不能用说明文档代替通过证据。
 

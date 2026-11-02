@@ -108,7 +108,11 @@ impl Proxy {
         let deadline = Instant::now() + Duration::from_secs(5);
         loop {
             if result.child.try_wait()?.is_some() {
-                return Err("proxy exited before listening".into());
+                let mut logs = String::new();
+                if let Some(mut pipe) = result.child.stderr.take() {
+                    pipe.read_to_string(&mut logs)?;
+                }
+                return Err(format!("proxy exited before listening: {logs}").into());
             }
             if TcpStream::connect_timeout(&address, Duration::from_millis(100)).is_ok() {
                 break;
