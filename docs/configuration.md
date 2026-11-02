@@ -1,8 +1,8 @@
 # 配置与 CLI 契约
 
-本文以 001 确认的配置语义为基线。002 已实现配置管线与 Clap 驱动的 `rill check`；003 增加 HTTP 服务、路由与流式代理；004 增加 HTTPS、SNI、HTTP/2、证书准备和 HTTPS 重定向。静态资源和生产 Reload 仍由后续阶段实现。原始需求保留在 [writing-block.md](../writing-block.md)。
+本文以 001 确认的配置语义为基线。002 已实现配置管线与 Clap 驱动的 `rill check`；003 增加 HTTP 服务、路由与流式代理；004 增加 HTTPS、SNI、HTTP/2、证书准备和 HTTPS 重定向。005 增加安全静态文件；生产 Reload 仍由后续阶段实现。原始需求保留在 [writing-block.md](../writing-block.md)。
 
-当前可运行 `cargo run --locked -- check --config examples/config.kdl`，或使用 `examples/multi/config.kdl` 检查多文件示例。`cargo run --locked -- run --config examples/config.kdl` 启动 HTTP 服务，需自行提供配置的后端；多文件示例含 HTTPS 上游，只能做阶段性 check，尚不能 run。成功表示配置、TLS 证书及字面量上游地址策略通过；输出明确标识未检查 DNS、连接及静态资源。静态 root 仍返回 `CONFIG_UNSUPPORTED` 和退出码 1；证书读取或验证失败分别报告 `RESOURCE_IO`、`TLS_INVALID` 等定位错误，不能将阶段性检查视为完整资源验证。
+当前可运行 `cargo run --locked -- check --config examples/config.kdl`，或使用 `examples/multi/config.kdl` 检查多文件示例。`cargo run --locked -- run --config examples/config.kdl` 启动 HTTP 服务，需自行提供配置的后端；多文件示例含 HTTPS 上游，只能做阶段性 check，尚不能 run。成功表示配置、TLS 证书、静态 root 及字面量上游地址策略通过；check 不验证 DNS、连接或上游 TLS 信任，也不监听或写资源。证书读取或验证失败分别报告 `RESOURCE_IO`、`TLS_INVALID` 等定位错误，不能将阶段性检查视为完整资源验证。
 
 ## 1. 格式与兼容
 
@@ -29,7 +29,7 @@ rill reload --socket /run/rill/control.sock --timeout 30s
 - 成功退出码 0；配置或准备失败 1；命令参数错误 2；管理通信失败、超时或结果未知 3。服务端明确返回失败时退出码 1。
 - `reload` 等待真实结果，成功输出请求 ID 与配置代次；超时不承诺操作没有发生，不自动重试。`--timeout` 必须为有限正时长，默认 30 秒。
 - 日志写标准错误，成功结果写标准输出，错误不得打印私钥、凭据或完整敏感配置。run 输出受 log-level 过滤的 JSON 行日志；check 保留配置位置诊断文本。
-- 003 run 在启动前完成 HTTP 上游 DNS 解析并验证全部地址，连接只使用批准的具体地址，最多尝试 8 个候选；当前地址固定到进程退出。DNS 更新策略留给 006，Reload 留给 007。HTTPS 上游和静态 root 服务暂报 CONFIG_UNSUPPORTED，不静默降级。
+- 003 run 在启动前完成 HTTP 上游 DNS 解析并验证全部地址，连接只使用批准的具体地址，最多尝试 8 个候选；当前地址固定到进程退出。DNS 更新策略留给 006，Reload 留给 007。run 的 HTTPS 上游暂报 CONFIG_UNSUPPORTED，不静默降级。
 - HTTP/HTTPS 监听为 IPv4/IPv6 独立绑定，IPv6 设置 IPv6-only，可同端口双栈部署；任一监听绑定失败即启动失败，不继续提供部分站点。SIGTERM/SIGINT 都停止接受并等待最多 30 秒排空；正常退出 0，超期中止并退出 1。
 - HTTP/1.x 初始请求头总期限为 60 秒，复用连接下一请求的头部总期限使用上一请求路由的 idle-timeout；总期限不会随每次读取重新计时。已解析请求头最多 64 KiB；HTTP/1.x 框架解析本身仍有约 1 MiB 硬边界。全局最多 1024 个接受容量槽位，包含等待接受的保留槽位。
 - TLS 至少 1.2，握手期限 10 秒，ALPN 优先 h2，其次 http/1.1。协商 h2 后，客户端 24 字节前言另有 10 秒总期限，滴入不重置；读齐即解除，不限制合法长流。HTTP/2 使用 Pingora 默认 100 个并发流和 64 KiB 解码头部限制，连接无活跃流时 60 秒关闭。每流独立执行 request-timeout 总响应头预算；预算耗尽取消该流，不关闭兄弟流、不伪造已发送 504 的日志。HTTP/1.x 对应预算耗尽时尝试返回 504。
@@ -116,9 +116,9 @@ site "app.example.com" {
 - 路由匹配以框架校验后的原始 URI 路径为基准，不包含查询串；不隐式解码 `%2F` 或消除点段改变代理路由。非法百分号编码、NUL 和反斜杠拒绝。代理转发保留原始路径、编码和查询串，不隐式去前缀。
 - 静态动作在匹配后单独对路径做一次严格百分号解码，拒绝编码的分隔符、NUL、反斜杠和解码后的 `.`/`..` 段，不进行二次解码；使用目录句柄约束的打开方式防止竞态与符号链接越界。
 - root 始终拼接完整站点路径，不剥离路由前缀：`/assets/a.css` 加 root `/srv/www` 指向 `/srv/www/assets/a.css`。原文 root `/srv/www/assets` 会指向 `/srv/www/assets/assets/a.css`，应按期望调整为 `/srv/www`；不隐式提供 alias 行为。
-- 目录默认查找 `index.html`，无索引返回 404，不列目录。GET/HEAD 之外静态动作返回 405；HEAD 与 GET 状态/头语义一致，但无响应体。
-- P0 使用 Last-Modified 实现条件请求，支持 If-Modified-Since/304；提供单个字节范围、If-Range、206/416。多段范围忽略 Range 并返回完整 200，避免隐含 multipart 实现。P1 的各压缩表示需独立验证器。
-- SPA 回退仅用于 GET/HEAD、Accept 包含 `text/html` 且最终路径段无扩展名的页面导航。不存在的带扩展名资源、Range 请求、访问拒绝和非法路径不回退。
+- 目录默认查找 `index.html`，无索引返回 404，不列目录。GET/HEAD 之外静态动作返回 405；HEAD 无响应体，忽略 Range 并返回完整表示的 200 元数据。
+- P0 使用 Last-Modified 和 Date，If-Modified-Since 以秒为精度返回 304；存在 If-None-Match 时不以 IMS 优先。未来修改时间钳位到 Date，无法表示时省略 Last-Modified 并禁用日期判断；同秒更新可能无法区分。支持单个 closed/open/suffix 字节范围及 206/416，非法或多段范围忽略并返回 200；超大数字安全饱和并检查原始十进制逆序。If-Range 仅有效匹配的日期且修改时间距 Date 至少 60 秒时支持 206，近期、无效值或 ETag 返回完整 200。MIME 使用小型明确映射，未知类型为 application/octet-stream；Cache-Control 在准备期校验头值。P1 的各压缩表示需独立验证器。
+- SPA 回退仅用于 GET/HEAD、Accept 包含 `text/html` 且 q > 0、最终路径段无点的页面导航。仅 Missing 回退；不存在的带扩展名资源、无索引目录、Range 请求、访问拒绝和非法路径不回退。
 
 ## 6. Profile 与继承
 

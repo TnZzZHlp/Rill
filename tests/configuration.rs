@@ -394,7 +394,7 @@ fn missing_resource_preparers_cannot_report_success() -> TestResult {
     for (body, code) in [
         (
             "site \"example.test\" { root \"missing-directory\"; }",
-            "CONFIG_UNSUPPORTED",
+            "RESOURCE_IO",
         ),
         (
             "tls \"cert\" { cert \"missing.pem\"; key \"missing.key\"; }\nsite \"example.test\" { tls \"cert\"; proxy \"http://127.0.0.1:3000\"; }",

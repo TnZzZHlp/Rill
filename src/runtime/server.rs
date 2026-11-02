@@ -101,6 +101,7 @@ pub fn run(path: &Path) -> u8 {
     let state = RuntimeState::new(prepared);
     let runtime = match tokio::runtime::Builder::new_multi_thread()
         .worker_threads(std::thread::available_parallelism().map_or(2, |count| count.get().min(8)))
+        .max_blocking_threads(16)
         .enable_all()
         .build()
     {
@@ -113,7 +114,9 @@ pub fn run(path: &Path) -> u8 {
             return 1;
         }
     };
-    runtime.block_on(serve(state))
+    let status = runtime.block_on(serve(state));
+    runtime.shutdown_background();
+    status
 }
 
 pub async fn serve(state: Arc<RuntimeState>) -> u8 {

@@ -1,6 +1,9 @@
 use std::path::Path;
+use std::sync::Arc;
 
-use super::error::{ConfigError, Result};
+use tokio::sync::Semaphore;
+
+use super::error::Result;
 use super::model::{Action, ValidatedConfig};
 use super::{load, normalize, parse, validate};
 
@@ -18,24 +21,40 @@ pub trait ResourcePreparer {
 
 pub struct ConfigurationOnly;
 
+#[derive(Debug)]
+pub enum CheckedRoute {
+    Proxy,
+    Static(Arc<crate::static_files::PreparedStatic>),
+}
+
+#[derive(Debug)]
+pub struct CheckResources {
+    pub tls: crate::tls::cert::PreparedTls,
+    pub routes: Vec<Vec<CheckedRoute>>,
+}
+
 impl ResourcePreparer for ConfigurationOnly {
-    type Resources = crate::tls::cert::PreparedTls;
+    type Resources = CheckResources;
 
     fn prepare(&self, configuration: &ValidatedConfig) -> Result<Self::Resources> {
         let tls = crate::tls::cert::PreparedTls::prepare(configuration)?;
-        for site in &configuration.sites {
-            for route in &site.routes {
-                if let Action::Static { root, .. } = &route.action {
-                    return Err(ConfigError::new(
-                        "CONFIG_UNSUPPORTED",
-                        "root",
-                        "secure static root preparation is unavailable until stage 005; check cannot report success",
-                        &root.origin,
-                    ));
-                }
-            }
-        }
-        Ok(tls)
+        let capacity = Arc::new(Semaphore::new(128));
+        let routes = configuration
+            .sites
+            .iter()
+            .map(|site| {
+                site.routes
+                    .iter()
+                    .map(|route| match &route.action {
+                        Action::Proxy(_) => Ok(CheckedRoute::Proxy),
+                        Action::Static { .. } => Ok(CheckedRoute::Static(Arc::new(
+                            crate::static_files::PreparedStatic::prepare(route, capacity.clone())?,
+                        ))),
+                    })
+                    .collect::<Result<Vec<_>>>()
+            })
+            .collect::<Result<Vec<_>>>()?;
+        Ok(CheckResources { tls, routes })
     }
 }
 

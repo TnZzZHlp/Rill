@@ -13,7 +13,7 @@ use tokio::time::Instant;
 use super::app::Phase;
 use super::request::{Forwarding, authority, connection_names, forwarding};
 use crate::observability::logging::Level;
-use crate::runtime::state::{RuntimeSnapshot, RuntimeState};
+use crate::runtime::state::{PreparedRoute, RuntimeSnapshot, RuntimeState};
 
 pub struct Handler {
     pub state: Arc<RuntimeState>,
@@ -27,9 +27,54 @@ pub struct Context {
     attempt: usize,
     budget: Option<watch::Sender<Phase>>,
     idle: Duration,
+    response_started: bool,
 }
 
-async fn reject(session: &mut Session, status: u16) -> Result<bool> {
+fn begin_response(budget: Option<&watch::Sender<Phase>>) -> Result<()> {
+    if let Some(budget) = budget {
+        let status = match *budget.borrow() {
+            Phase::Ingress(deadline) if Instant::now() >= deadline => Some(408),
+            Phase::Headers(deadline) if Instant::now() >= deadline => Some(504),
+            _ => None,
+        };
+        if let Some(status) = status {
+            return Err(Error::explain(
+                ErrorType::HTTPStatus(status),
+                "response deadline exceeded",
+            ));
+        }
+        budget.send_replace(Phase::Streaming);
+    }
+    Ok(())
+}
+
+impl Context {
+    fn start_response(&mut self) {
+        if let Some(budget) = &self.budget {
+            budget.send_replace(Phase::Streaming);
+        }
+        self.response_started = true;
+    }
+
+    fn begin_response(&mut self) -> Result<()> {
+        begin_response(self.budget.as_ref())?;
+        self.response_started = true;
+        Ok(())
+    }
+}
+
+async fn reject(session: &mut Session, ctx: &mut Context, status: u16) -> Result<bool> {
+    let status = match ctx.begin_response() {
+        Ok(()) => status,
+        Err(error) => {
+            let status = match error.etype() {
+                ErrorType::HTTPStatus(status) => *status,
+                _ => status,
+            };
+            ctx.start_response();
+            status
+        }
+    };
     session.set_keepalive(None);
     session.respond_error(status).await?;
     Ok(true)
@@ -85,6 +130,7 @@ impl ProxyHttp for Handler {
             attempt: 0,
             budget: None,
             idle: Duration::from_secs(60),
+            response_started: false,
         }
     }
 
@@ -124,11 +170,11 @@ impl ProxyHttp for Handler {
                 .map(|(name, value)| name.as_str().len() + value.as_bytes().len() + 4)
                 .sum::<usize>();
         if size > 64 * 1024 {
-            return reject(session, 431).await;
+            return reject(session, ctx, 431).await;
         }
         let authority = match authority(request, session.is_http2()) {
             Ok(value) => value,
-            Err(status) => return reject(session, status).await,
+            Err(status) => return reject(session, ctx, status).await,
         };
         let secure = session
             .digest()
@@ -139,22 +185,22 @@ impl ProxyHttp for Handler {
                 .and_then(|digest| digest.ssl_digest.as_ref())
                 .and_then(|digest| digest.extension.get::<crate::tls::resolver::Handshake>());
             if identity.is_none_or(|identity| identity.server_name != authority.host) {
-                return reject(session, 421).await;
+                return reject(session, ctx, 421).await;
             }
         }
         let path = match path(request) {
             Some(value) => value,
-            None => return reject(session, 400).await,
+            None => return reject(session, ctx, 400).await,
         };
         let names = match connection_names(request) {
             Ok(value) => value,
-            Err(status) => return reject(session, status).await,
+            Err(status) => return reject(session, ctx, status).await,
         };
         let Some(site) = ctx.snapshot.router.site(&authority.host) else {
-            return reject(session, 404).await;
+            return reject(session, ctx, 404).await;
         };
         if secure && ctx.snapshot.configuration.sites[site].tls.is_none() {
-            return reject(session, 404).await;
+            return reject(session, ctx, 404).await;
         }
         if !secure && ctx.snapshot.configuration.server.redirect_https {
             let port = ctx
@@ -179,6 +225,7 @@ impl ProxyHttp for Handler {
                 format!("https://{}{suffix}{target}", authority.host),
             )?;
             response.insert_header("content-length", "0")?;
+            ctx.begin_response()?;
             session.set_keepalive(None);
             session
                 .write_response_header(Box::new(response), true)
@@ -186,16 +233,42 @@ impl ProxyHttp for Handler {
             return Ok(true);
         }
         let Some((site, route)) = ctx.snapshot.router.find(&authority.host, &path) else {
-            return reject(session, 404).await;
+            return reject(session, ctx, 404).await;
         };
-        let prepared = &ctx.snapshot.peers[site][route];
+        let prepared = ctx
+            .snapshot
+            .routes
+            .get(site)
+            .and_then(|routes| routes.get(route))
+            .ok_or_else(|| Error::explain(ErrorType::InternalError, "route not prepared"))?;
+        ctx.idle = prepared.idle();
+        if let Some(budget) = &ctx.budget {
+            budget.send_replace(Phase::Headers(Instant::now() + prepared.request()));
+        }
+        if session.get_keepalive().is_some() {
+            session.set_keepalive(Some(
+                ctx.idle
+                    .as_secs()
+                    .saturating_add(u64::from(ctx.idle.subsec_nanos() != 0))
+                    .max(1),
+            ));
+        }
+        session.set_read_timeout(Some(ctx.idle));
+        session.set_write_timeout(Some(ctx.idle));
+        session.set_total_drain_timeout(Some(ctx.idle));
+        if let PreparedRoute::Static(prepared) = prepared {
+            let prepared = prepared.clone();
+            crate::static_files::serve(prepared, session, &path, || ctx.begin_response()).await?;
+            return Ok(true);
+        }
+        let request = session.req_header();
         if request.headers.contains_key("upgrade") || names.iter().any(|name| name == "upgrade") {
             let allowed = ctx.snapshot.configuration.sites[site].routes[route]
                 .parameters
                 .websocket
                 .as_ref()
                 .is_none_or(|value| value.value);
-            return reject(session, if allowed { 501 } else { 403 }).await;
+            return reject(session, ctx, if allowed { 501 } else { 403 }).await;
         }
         let peer = session
             .client_addr()
@@ -215,23 +288,8 @@ impl ProxyHttp for Handler {
             &ctx.snapshot.configuration.server,
         ) {
             Ok(value) => value,
-            Err(status) => return reject(session, status).await,
+            Err(status) => return reject(session, ctx, status).await,
         };
-        ctx.idle = prepared.idle;
-        if let Some(budget) = &ctx.budget {
-            budget.send_replace(Phase::Headers(Instant::now() + prepared.request));
-        }
-        if session.get_keepalive().is_some() {
-            session.set_keepalive(Some(
-                ctx.idle
-                    .as_secs()
-                    .saturating_add(u64::from(ctx.idle.subsec_nanos() != 0))
-                    .max(1),
-            ));
-        }
-        session.set_read_timeout(Some(ctx.idle));
-        session.set_write_timeout(Some(ctx.idle));
-        session.set_total_drain_timeout(Some(ctx.idle));
         ctx.selected = Some((site, route));
         ctx.forwarding = Some(forwarding);
         ctx.connection_names = names;
@@ -242,8 +300,12 @@ impl ProxyHttp for Handler {
         let (site, route) = ctx
             .selected
             .ok_or_else(|| Error::explain(ErrorType::InternalError, "route not selected"))?;
-        ctx.snapshot.peers[site][route]
-            .peer(ctx.attempt)
+        ctx.snapshot
+            .routes
+            .get(site)
+            .and_then(|routes| routes.get(route))
+            .and_then(PreparedRoute::as_proxy)
+            .and_then(|peer| peer.peer(ctx.attempt))
             .map(Box::new)
             .ok_or_else(|| Error::explain(ErrorType::ConnectError, "no upstream address").into_up())
     }
@@ -294,7 +356,12 @@ impl ProxyHttp for Handler {
     ) -> Box<Error> {
         ctx.attempt += 1;
         let retry = ctx.selected.is_some_and(|(site, route)| {
-            ctx.attempt < ctx.snapshot.peers[site][route].addresses.len().min(8)
+            ctx.snapshot
+                .routes
+                .get(site)
+                .and_then(|routes| routes.get(route))
+                .and_then(PreparedRoute::as_proxy)
+                .is_some_and(|peer| ctx.attempt < peer.addresses.len().min(8))
         });
         error.set_retry(retry);
         error
@@ -343,7 +410,7 @@ impl ProxyHttp for Handler {
         &self,
         session: &mut Session,
         error: &Error,
-        _: &mut Context,
+        ctx: &mut Context,
     ) -> FailToProxy {
         let status = match error.etype() {
             ErrorType::HTTPStatus(status) => *status,
@@ -353,12 +420,33 @@ impl ProxyHttp for Handler {
             _ => 502,
         };
         session.set_keepalive(None);
-        if session.response_written().is_none() {
+        if session.response_written().is_none() && !ctx.response_started {
+            ctx.start_response();
             let _ = session.respond_error(status).await;
         }
         FailToProxy {
             error_code: status,
             can_reuse_downstream: false,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn begin_response_rejects_expired_headers_before_writing() {
+        let (budget, _) = watch::channel(Phase::Headers(Instant::now() - Duration::from_secs(1)));
+        let error = begin_response(Some(&budget)).expect_err("expired budget accepted");
+        assert!(matches!(error.etype(), ErrorType::HTTPStatus(504)));
+    }
+
+    #[test]
+    fn begin_response_switches_headers_budget_to_streaming() {
+        let (budget, receiver) =
+            watch::channel(Phase::Headers(Instant::now() + Duration::from_secs(60)));
+        begin_response(Some(&budget)).unwrap();
+        assert!(matches!(*receiver.borrow(), Phase::Streaming));
     }
 }

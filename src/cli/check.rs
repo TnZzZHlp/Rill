@@ -6,7 +6,7 @@ pub fn check(path: &Path) -> u8 {
     match build(path, &ConfigurationOnly) {
         Ok(snapshot) => {
             println!(
-                "configuration valid: {} sites, {} routes (scope: configuration, TLS certificates and literal upstream policy; DNS, connectivity and static resources are not validated)",
+                "configuration valid: {} sites, {} routes (scope: configuration, TLS certificates, static roots and literal upstream policy; DNS and connectivity are not validated)",
                 snapshot.configuration.sites.len(),
                 snapshot
                     .configuration

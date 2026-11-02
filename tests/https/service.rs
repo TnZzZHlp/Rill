@@ -263,6 +263,85 @@ fn ipv4_and_ipv6_https_listeners_can_share_a_port() -> TestResult {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn http2_serves_static_files_and_keeps_connection_after_misdirected_request() -> TestResult {
+    let directory = Directory::new()?;
+    let root = directory.0.join("root");
+    std::fs::create_dir(&root)?;
+    std::fs::write(root.join("file.txt"), b"abcdef")?;
+
+    let certificate = Certificate::issue(&["app.test", "alias.test"], None, false, (-60, 3600))?;
+    certificate.save(&directory.0, "default", &[])?;
+    let http = vacant()?;
+    let https = vacant()?;
+    let config = configuration(
+        &directory.0,
+        Some(http),
+        https,
+        "127.0.0.1:3000".parse()?,
+        &format!(
+            "site \"app.test\" \"alias.test\" {{ tls \"default\"; root \"{}\"; }}",
+            root.display()
+        ),
+    );
+    let mut proxy = Proxy::start(https, &config)?;
+
+    let connector = Connector::new(None);
+    let mut peer = HttpPeer::new(https, true, "app.test".to_string());
+    peer.options.ca = Some(Arc::new(vec![certificate.cert.clone()].into_boxed_slice()));
+    peer.options.alpn = ALPN::H2;
+    peer.options.connection_timeout = Some(Duration::from_secs(2));
+
+    let mut connection_id = None;
+    for (name, range, status, expected) in [
+        ("app.test", false, 200, &b"abcdef"[..]),
+        ("app.test", true, 206, &b"bcd"[..]),
+        ("alias.test", false, 421, &b""[..]),
+        ("app.test", false, 200, &b"abcdef"[..]),
+    ] {
+        let (mut session, _) = connector.get_http_session(&peer).await?;
+        let HttpSession::H2(ref mut http2) = session else {
+            return Err("HTTP/2 not negotiated".into());
+        };
+        if let Some(id) = connection_id {
+            assert_eq!(http2.fd(), id);
+        } else {
+            connection_id = Some(http2.fd());
+        }
+
+        let mut request = RequestHeader::build("GET", b"/file.txt", None)?;
+        request.set_uri(format!("https://{name}/file.txt").parse()?);
+        request.insert_header("host", name)?;
+        if range {
+            request.insert_header("range", "bytes=1-3")?;
+        }
+        http2.write_request_header(Box::new(request), true)?;
+        tokio::time::timeout(Duration::from_secs(5), http2.read_response_header()).await??;
+        assert_eq!(
+            http2
+                .response_header()
+                .ok_or("missing response")?
+                .status
+                .as_u16(),
+            status
+        );
+        let mut body = Vec::new();
+        while let Some(bytes) = http2.read_response_body().await? {
+            body.extend_from_slice(&bytes);
+        }
+        if status != 421 {
+            assert_eq!(body, expected);
+        }
+        connector
+            .release_http_session(session, &peer, Some(Duration::from_secs(5)))
+            .await;
+    }
+
+    proxy.signal()?;
+    assert_eq!(proxy.finish()?.0, 0);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn http2_request_deadlines_reset_only_the_expired_stream() -> TestResult {
     let directory = Directory::new()?;
     let certificate = Certificate::issue(&["app.test"], None, false, (-60, 3600))?;

@@ -1,10 +1,10 @@
 # Rill 架构与实施基线
 
-本文以 001 的模块与接口契约为基线，并记录 002–004 已交付边界。配置格式见 [configuration.md](configuration.md)，服务验证见 [003 验证记录](validation/003-http-routing-proxy.md) 与 [004 验证记录](validation/004-https-certificates.md)。未实现的静态文件和 Reload 契约仍为后续要求。
+本文以 001 的模块与接口契约为基线，并记录 002–005 已交付边界。配置格式见 [configuration.md](configuration.md)，服务验证见 [003 验证记录](validation/003-http-routing-proxy.md) 、[004 验证记录](validation/004-https-certificates.md) 与 [005 验证记录](validation/005-static-files.md)。Reload 契约仍为后续要求。
 
 ## 1. 目录与职责
 
-当前 main 仅委托 `cli::run`，CLI 使用 Clap 解析参数，check 调用统一配置构建入口。002 已提供 config 模块，003 已提供 routing、proxy、runtime 和结构化日志。001 的技术验证仍隔离在 tests/feasibility/；003 的真实服务验证在 tests/http_proxy/，004 的 TLS/HTTP2 验证在 tests/https/。004 已增加 tls 模块，静态文件、控制面和高级观测仍后续实现，不在 main 或 CLI 中堆业务逻辑。
+当前 main 仅委托 `cli::run`，CLI 使用 Clap 解析参数，check 调用统一配置构建入口。002 已提供 config 模块，003 已提供 routing、proxy、runtime 和结构化日志。001 的技术验证仍隔离在 tests/feasibility/；003 的真实服务验证在 tests/http_proxy/，004 的 TLS/HTTP2 验证在 tests/https/。004 已增加 tls 模块，005 已增加 static_files 模块，控制面和高级观测仍后续实现，不在 main 或 CLI 中堆业务逻辑。
 
 | 拟议模块 | 负责 | 不负责 |
 | --- | --- | --- |
@@ -37,15 +37,15 @@ publish(prepared) -> Generation
 - `ParsedConfig` 保留每个文件、节点跨度、导入关系；错误来源不能在展开时丢失。
 - `NormalizedConfig` 消除简写、应用继承，仍不包含 Pingora 对象。
 - `ValidatedConfig` 保证字段类型、域名与路径冲突、引用及安全策略一致；验证不是资源存在性的替代。
-- 完整服务的 `PreparedSnapshot` 必须持有路由、上游策略、root 句柄与已验证 TLS 材料，准备失败不产生发布副作用。004 的 HttpPreparer 准备 HTTP 地址/策略和 PreparedTls，静态配置暂拒绝；不假装资源已存在。
+- 完整服务的 `PreparedSnapshot` 必须持有路由、上游策略、root 句柄与已验证 TLS 材料，准备失败不产生发布副作用。005 以同形 PreparedRoute 区分 Proxy/Static，准备 root 和 PreparedTls。
 - `StartupSettings` 保存监听、控制 Socket、运行时线程和 TLS 基础协议设置。Reload 必须和启动值比较；任何需要重启的差异整体报错。
-- 002 check 使用 build → load → parse → normalize → validate → ResourcePreparer，同一个入口供后续 run/reload 复用，不另写验证管线。check 不监听、不发请求、不发布。004 的 ConfigurationOnly 已准备全部 TLS 证书，仍明确输出未检查 DNS/连接/静态资源；静态 root 在 005 接入前报 CONFIG_UNSUPPORTED。证书资源检查与 run 共用 PreparedTls，不单独维护一套规则。
+- 002 check 使用 build → load → parse → normalize → validate → ResourcePreparer，同一个入口供后续 run/reload 复用，不另写验证管线。check 不监听、不发请求、不发布。check 与 run 共用 root 和 TLS 准备；check 不检查 DNS、连接或上游 TLS 信任，不监听或写资源。证书资源检查与 run 共用 PreparedTls，不单独维护一套规则。
 - 新配置依赖的文件必须在本轮准备时读取并保持必要资源，不能发布后再懒加载证书或 root。
 - 文件读取过程中可能发生外部编辑；准备期检测所读取文件身份/元数据变化并拒绝不稳定候选。管理员需要跨文件内容事务时应先准备完整版本再触发 Reload，系统不承诺替外部文件系统提供事务。
 
 ## 3. 单根快照与原子发布
 
-004 的 RuntimeSnapshot 包含配置代次 1、标准化配置、Router、准备好的 HTTP 上游矩阵、PreparedTls 和日志策略；RuntimeState 只有初始构建和 load_full 读取，没有发布接口。以下为后续完整服务必须持续遵守的快照内容：
+005 的 RuntimeSnapshot 包含配置代次 1、标准化配置、Router、准备好的代理或静态路由、PreparedTls 和日志策略；RuntimeState 只有初始构建和 load_full 读取，没有发布接口。以下为后续完整服务必须持续遵守的快照内容：
 
 - 单调递增的 `Generation`；溢出时失败而不是回绕。
 - 站点及 Host/路径路由表。
@@ -107,11 +107,11 @@ publish(prepared) -> Generation
 
 ## 6. 静态文件边界
 
-- `static_files` 根据独立静态路径策略处理编码，不把代理的原始路径改写为隐式新路径。
-- Linux 使用可验证的根目录约束打开机制；建议目录句柄配合 openat2 的 BENEATH/NO_MAGICLINKS 约束。不得用字符串前缀检查，也不能把先 canonicalize 后普通 open 当作竞态安全。
-- 如果目标内核不支持选定机制，在 005 明确采用逐段 no-follow 方案或拒绝启动对应能力；不能静默降级到易受竞态攻击的普通打开。
-- 允许根内符号链接的策略必须与实际安全打开机制一致；任何指向根外、magic link 或路径逃逸均拒绝。默认无目录浏览。
-- 缓存键必须包括站点、配置代次、路径及表示类型，缓存有上限和明确失效语义。root 更新后不得复用旧目录的可见内容。
+- Linux root 以 O_PATH 目录 FD 持有；准备时探测 openat2 BENEATH/NO_MAGICLINKS，核对 /proc/self PID、procfd 的 procfs 类型和自身 FD，能力不可用则 fail closed。允许约束解析的根内相对符号链接，拒绝绝对、越界和 magic link。
+- 客户路径先以 O_PATH 打开并检查普通文件或目录；普通文件经持存可信自身 procfd 的数字入口重开并比较 dev/ino/type，原 FD 保持存活，避免设备/FIFO 先读开和 FD 重用竞态。索引和 SPA 均从原 root FD 重开。路径严格解码一次，使用完整站点路径，不去路由前缀。
+- 信任本地文件系统、procfs 挂载/namespace 和进程 FD 表；不保证恶意挂载、FUSE 或 NFS 不阻塞，不替代 OS hardlink 和内容发布权限，也不声称消除所有文件系统竞态。
+- 全静态路由共享 128 个 Semaphore 许可，随 Opened 和 blocking 任务持有；max blocking 为 16，单块不超过 64 KiB，逐块背压且不超过声明长度。文件截断则中止流，不追加 HTTP 响应。最终头之前同步交接 Headers → Streaming 和 response_started，本地错误及重定向也如此；正常排空最多 30 秒，runtime.shutdown_background 避免未完成阻塞 IO 卡住运行时析构。
+- 缓存、预压缩和目录浏览属于后续阶段；无目录列表。具体响应语义见配置文档和 005 验证记录。
 
 ## 7. 本地控制协议
 
@@ -144,7 +144,7 @@ publish(prepared) -> Generation
 | --- | --- | --- |
 | CONFIG_SYNTAX / CONFIG_TYPE / CONFIG_UNKNOWN | 语法、类型、未知字段 | 不发布 |
 | CONFIG_LIMIT / RESOURCE_CHANGED | 解析/导入资源限制，或加载期间文件变化 | 拒绝候选，不发布 |
-| CONFIG_UNSUPPORTED | 当前阶段缺少静态资源或 HTTPS 上游等实现 | check 返回非零，不能假装完整成功 |
+| CONFIG_UNSUPPORTED | 当前阶段缺少 HTTPS 上游等实现 | check 返回非零，不能假装完整成功 |
 | IMPORT_CYCLE / DUPLICATE / ROUTE_CONFLICT / PROFILE_REF | 结构或引用错误 | 不发布，保留来源链 |
 | RESOURCE_IO / TLS_INVALID / UPSTREAM_DENIED | 目录、证书或上游策略失败 | 不发布，错误脱敏 |
 | RESTART_REQUIRED | 启动配置发生变化 | 整体拒绝，不部分应用 |
@@ -158,11 +158,11 @@ publish(prepared) -> Generation
 
 - 使用 Rust Stable，edition 2024；KDL 6.7.1 声明最低 Rust 1.95，工程声明相同下限。实际已验证工具链和完整锁定版本以验证记录为准，不声称在未运行的旧工具链通过。
 - 直接使用 Pingora 0.9.0 的 openssl/proxy 功能，关闭默认可选功能；不接入 BoringSSL、rustls、ACME、负载均衡或网络缓存。
-- `arc-swap` 1.9.3；Tokio 提供测试及运行时所需异步能力；async-trait 用于 Pingora 回调；直接 openssl 依赖用于安全 ex_data 类型和内存证书验证。002 按用户明确要求添加 Clap 派生 CLI，锁定版本 4.6.7，复用已有传递依赖，未增加其他依赖或测试工具。003 经用户访谈明确批准直接使用既有 socket2 0.6.5，并显式开启 Tokio 的 net/signal 功能；没有其他新增依赖或测试框架。完整传递依赖固定在 Cargo.lock。
+- `arc-swap` 1.9.3；Tokio 提供测试及运行时所需异步能力；async-trait 用于 Pingora 回调；直接 openssl 依赖用于安全 ex_data 类型和内存证书验证。002 按用户明确要求添加 Clap 派生 CLI，锁定版本 4.6.7，复用已有传递依赖，未增加其他依赖或测试工具。003 经用户访谈明确批准直接使用既有 socket2 0.6.5，并显式开启 Tokio 的 net/signal 功能；没有其他新增依赖或测试框架。005 经批准直接依赖 nix 0.31.3（fs）和 httpdate 1.0.3；Tokio fs 虽获批但实现未使用、未开启。Cargo.lock 仅 rill 依赖列表变化，无新包升级或测试框架。完整传递依赖固定在 Cargo.lock。
 - Debian 构建需要 Rust、C 工具链、make 和 Perl。Pingora 0.9.0 的 pingora-openssl 无条件启用 openssl 的 vendored 功能，因此本基线使用锁文件中的 openssl-src 构建 OpenSSL，而不是系统 openssl 命令对应的库。不要将两者版本混为一谈。未启用 OPENSSL_NO_VENDOR 覆盖；系统动态库方案须单独验证，008 部署说明必须以实际链接结果为准。001 不安装系统包、不引入测试框架或额外 dev-dependencies。
 - 001 必须通过 cargo fmt --check、cargo check --locked、cargo clippy --locked --all-targets -- -D warnings、cargo test --locked。测试不监听公网、不需要真实密钥或额外证书工具。
-- 003/004 验证真实监听、HTTP/2、优雅关闭；006 验证真实流式代理、WS/SSE；007 验证管理权限、真实 Reload 和并发原子性；008/012 补齐部署与性能门禁。不能用 001 的 TLS 字节流验证替代这些端到端验收。
+- 003/004/005 验证真实监听、HTTP/2、优雅关闭；006 验证真实流式代理、WS/SSE；007 验证管理权限、真实 Reload 和并发原子性；008/012 补齐部署与性能门禁。不能用 001 的 TLS 字节流验证替代这些端到端验收。
 
 ## 10. 重要限制
 
-001 解除技术机制可行性阻塞，002 提供配置语义检查，003 提供 HTTP/1.x run 和基础代理，004 提供真实 HTTPS/SNI、HTTP/2、证书检查及安全重定向。check 仍是明确标识范围的阶段性检查，不宣称根目录、DNS 或连通性已验证；run 的 HttpPreparer 会准备 HTTP DNS/地址策略，但拒绝 HTTPS 上游和未支持的服务动作。尚无生产 Reload，也未执行独立安全审计或生产性能测试。合同如需改变通配层级、路径映射、Host/SNI 或快照代次边界，必须先更新计划并获得确认。
+001 解除技术机制可行性阻塞，002 提供配置语义检查，003 提供 HTTP/1.x run 和基础代理，004 提供真实 HTTPS/SNI、HTTP/2、证书检查及安全重定向。005 已准备静态 root；check 仍不宣称 DNS、连通性或上游 TLS 信任已验证；run 的 HttpPreparer 会准备 HTTP DNS/地址策略，但拒绝 HTTPS 上游和未支持的服务动作。尚无生产 Reload，也未执行独立安全审计或生产性能测试。合同如需改变通配层级、路径映射、Host/SNI 或快照代次边界，必须先更新计划并获得确认。
