@@ -1,0 +1,10 @@
+site "api.example.test" {
+    use "backend"
+    route "/slow/*" {
+        use "slow"
+        proxy "http://127.0.0.1:3001"
+    }
+    route "/*" {
+        proxy "https://backend.example.test:8443"
+    }
+}

@@ -4,7 +4,7 @@
 
 ## 1. 目录与职责
 
-当前生产代码仍为薄初始化入口。001 仅增加独立集成验证，不把验证服务当作生产模块。后续按下列边界实现，不在 main 或 CLI 中堆业务逻辑。
+当前 main 仅委托 `cli::run`，CLI 使用 Clap 解析参数，check 调用统一配置构建入口。002 已提供 config 模块；001 的技术验证仍隔离在 tests/feasibility/，不作为生产服务。其余服务模块按下列边界后续实现，不在 main 或 CLI 中堆业务逻辑。
 
 | 拟议模块 | 负责 | 不负责 |
 | --- | --- | --- |
@@ -22,13 +22,15 @@
 
 ## 2. 配置构建契约
 
-下列名称为后续实现接口，不是 001 已提供的生产 API：
+002 在 src/config/ 实现下列加载至准备边界；publish 和生产 RuntimeSnapshot 由后续 runtime 阶段实现。解析、导入、继承及验证不依赖 Pingora 类型：
 
 ```text
-load(entry) -> ParsedConfig
+load(entry) -> LoadedConfig
+parse(loaded) -> ParsedConfig
 normalize(parsed) -> NormalizedConfig
 validate(normalized) -> ValidatedConfig
-prepare(validated, startup_settings) -> PreparedSnapshot
+ResourcePreparer::prepare(validated) -> Resources
+build(entry, preparer) -> PreparedSnapshot<Resources>
 publish(prepared) -> Generation
 ```
 
@@ -37,7 +39,7 @@ publish(prepared) -> Generation
 - `ValidatedConfig` 保证字段类型、域名与路径冲突、引用及安全策略一致；验证不是资源存在性的替代。
 - `PreparedSnapshot` 持有完整路由、解析后的上游策略、root 句柄、证书/私钥及已验证 TLS 材料；准备失败则不产生发布副作用。
 - `StartupSettings` 保存监听、控制 Socket、运行时线程和 TLS 基础协议设置。Reload 必须和启动值比较；任何需要重启的差异整体报错。
-- `check`、`run`、`reload` 共用完整构建管线；check 不监听、不发请求、不发布。002 的阶段性 check 必须说明资源检查未全部接入，004/005 补齐后才算完整。
+- 002 check 使用 build → load → parse → normalize → validate → ResourcePreparer，同一个入口供后续 run/reload 复用，不另写验证管线。check 不监听、不发请求、不发布。ConfigurationOnly 仅允许无 TLS/静态 root 的配置通过，并明确输出未检查 DNS/连接；TLS/静态配置在资源准备器接入前报 CONFIG_UNSUPPORTED。004/005 补齐后才算完整资源检查。
 - 新配置依赖的文件必须在本轮准备时读取并保持必要资源，不能发布后再懒加载证书或 root。
 - 文件读取过程中可能发生外部编辑；准备期检测所读取文件身份/元数据变化并拒绝不稳定候选。管理员需要跨文件内容事务时应先准备完整版本再触发 Reload，系统不承诺替外部文件系统提供事务。
 
@@ -132,6 +134,8 @@ publish(prepared) -> Generation
 | 错误码 | 含义 | 状态影响 |
 | --- | --- | --- |
 | CONFIG_SYNTAX / CONFIG_TYPE / CONFIG_UNKNOWN | 语法、类型、未知字段 | 不发布 |
+| CONFIG_LIMIT / RESOURCE_CHANGED | 解析/导入资源限制，或加载期间文件变化 | 拒绝候选，不发布 |
+| CONFIG_UNSUPPORTED | 当前阶段缺少 TLS/静态资源准备实现 | check 返回非零，不能假装完整成功 |
 | IMPORT_CYCLE / DUPLICATE / ROUTE_CONFLICT / PROFILE_REF | 结构或引用错误 | 不发布，保留来源链 |
 | RESOURCE_IO / TLS_INVALID / UPSTREAM_DENIED | 目录、证书或上游策略失败 | 不发布，错误脱敏 |
 | RESTART_REQUIRED | 启动配置发生变化 | 整体拒绝，不部分应用 |
@@ -145,11 +149,11 @@ publish(prepared) -> Generation
 
 - 使用 Rust Stable，edition 2024；KDL 6.7.1 声明最低 Rust 1.95，工程声明相同下限。实际已验证工具链和完整锁定版本以验证记录为准，不声称在未运行的旧工具链通过。
 - 直接使用 Pingora 0.9.0 的 openssl/proxy 功能，关闭默认可选功能；不接入 BoringSSL、rustls、ACME、负载均衡或网络缓存。
-- `arc-swap` 1.9.3；Tokio 提供测试及运行时所需异步能力；async-trait 用于 Pingora 回调；直接 openssl 依赖用于安全 ex_data 类型和内存证书验证。完整传递依赖固定在 Cargo.lock。
+- `arc-swap` 1.9.3；Tokio 提供测试及运行时所需异步能力；async-trait 用于 Pingora 回调；直接 openssl 依赖用于安全 ex_data 类型和内存证书验证。002 按用户明确要求添加 Clap 派生 CLI，锁定版本 4.6.7，复用已有传递依赖，未增加其他依赖或测试工具。完整传递依赖固定在 Cargo.lock。
 - Debian 构建需要 Rust、C 工具链、make 和 Perl。Pingora 0.9.0 的 pingora-openssl 无条件启用 openssl 的 vendored 功能，因此本基线使用锁文件中的 openssl-src 构建 OpenSSL，而不是系统 openssl 命令对应的库。不要将两者版本混为一谈。未启用 OPENSSL_NO_VENDOR 覆盖；系统动态库方案须单独验证，008 部署说明必须以实际链接结果为准。001 不安装系统包、不引入测试框架或额外 dev-dependencies。
 - 001 必须通过 cargo fmt --check、cargo check --locked、cargo clippy --locked --all-targets -- -D warnings、cargo test --locked。测试不监听公网、不需要真实密钥或额外证书工具。
 - 003/004 验证真实监听、HTTP/2、优雅关闭；006 验证真实流式代理、WS/SSE；007 验证管理权限、真实 Reload 和并发原子性；008/012 补齐部署与性能门禁。不能用 001 的 TLS 字节流验证替代这些端到端验收。
 
 ## 10. 重要限制
 
-001 不提供生产 run/check/reload，不完成完整配置语义校验，不执行独立安全审计，也不证明生产性能。其结论仅用于解除技术方案可行性阻塞。合同如需改变通配层级、路径映射、Host/SNI 或快照代次边界，必须先更新计划并获得确认。
+001 仅解除技术机制可行性阻塞。002 提供配置语义检查与阶段性 check，不提供生产 run/reload，不宣称 TLS、根目录、DNS 或连接资源已验证；也未执行独立安全审计或生产性能测试。合同如需改变通配层级、路径映射、Host/SNI 或快照代次边界，必须先更新计划并获得确认。

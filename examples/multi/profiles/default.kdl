@@ -1,0 +1,9 @@
+profile "slow" {
+    use "backend"
+    read-timeout "120s"
+}
+profile "backend" {
+    connect-timeout "5s"
+    read-timeout "60s"
+    websocket #true
+}

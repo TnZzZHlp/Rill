@@ -1,0 +1,11 @@
+server {
+    http "127.0.0.1:8080"
+}
+profile "backend" {
+    connect-timeout "5s"
+    read-timeout "60s"
+}
+site "example.test" "www.example.test" {
+    use "backend"
+    proxy "http://127.0.0.1:3000"
+}
