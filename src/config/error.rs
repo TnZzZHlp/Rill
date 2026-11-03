@@ -41,9 +41,22 @@ impl fmt::Display for ConfigError {
         write!(f, "{} ", self.code)?;
         location(f, &self.origin)?;
         write!(f, " [{:?}]: {}", self.item, self.reason)?;
-        for origin in self.related.iter().chain(&self.origin.references) {
-            write!(f, "\n  related: ")?;
-            location(f, origin)?;
+        let mut seen = std::collections::BTreeSet::new();
+        seen.insert((
+            &self.origin.source.path,
+            self.origin.offset,
+            self.origin.length,
+        ));
+        for origin in self
+            .related
+            .iter()
+            .flat_map(|origin| std::iter::once(origin).chain(origin.references.iter()))
+            .chain(&self.origin.references)
+        {
+            if seen.insert((&origin.source.path, origin.offset, origin.length)) {
+                write!(f, "\n  related: ")?;
+                location(f, origin)?;
+            }
         }
         Ok(())
     }

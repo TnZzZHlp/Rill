@@ -4,8 +4,20 @@ use std::time::{Duration, Instant};
 use tokio::sync::Semaphore;
 
 use super::state::{HttpPreparer, RuntimeState};
+use super::watch::resources::WatchResources;
+use crate::config::ConfigError;
 use crate::config::Result;
-use crate::config::prepare::build;
+use crate::config::dependencies::DependencyPlan;
+use crate::config::prepare::{build, build_tracked};
+
+enum PreparedReload {
+    Plain(crate::config::prepare::PreparedSnapshot<super::state::HttpResources>),
+    Tracked(
+        crate::config::prepare::TrackedSnapshot<super::state::HttpResources>,
+        WatchResources,
+    ),
+    Failed(ConfigError, DependencyPlan, Option<WatchResources>, bool),
+}
 
 pub struct ReloadCoordinator {
     state: Arc<RuntimeState>,
@@ -43,18 +55,76 @@ impl ReloadCoordinator {
         let permits = Arc::new((admission, execution));
         let blocking_permits = permits.clone();
         let entry = self.state.entry().to_path_buf();
+        let watching = self.state.watch_enabled();
+        let active = self.state.active_plan();
         let deadline = Instant::now() + Duration::from_secs(30);
         let task = tokio::task::spawn_blocking(move || {
-            let _permits = blocking_permits;
-            build(&entry, &HttpPreparer)
+            let outcome = (|| {
+                if !watching {
+                    return build(&entry, &HttpPreparer).map(PreparedReload::Plain);
+                }
+                match build_tracked(&entry, &HttpPreparer) {
+                    Ok(tracked) => {
+                        if !tracked.prepared.configuration.server.watch {
+                            return Err(ConfigError::new(
+                                "RESTART_REQUIRED",
+                                "watch",
+                                "startup settings changed",
+                                &crate::config::source::Origin::file(&entry),
+                            ));
+                        }
+                        match WatchResources::prepare(&tracked.dependencies) {
+                            Ok(watch) => Ok(PreparedReload::Tracked(tracked, watch)),
+                            Err(error) => Ok(PreparedReload::Failed(
+                                error,
+                                tracked.dependencies,
+                                None,
+                                true,
+                            )),
+                        }
+                    }
+                    Err(failure) => {
+                        let failure = *failure;
+                        let replacement = active.as_ref().and_then(|active| {
+                            WatchResources::prepare_with_failure(active, &failure.dependencies).ok()
+                        });
+                        let degraded = replacement.is_none();
+                        Ok(PreparedReload::Failed(
+                            failure.error,
+                            failure.dependencies,
+                            replacement,
+                            degraded,
+                        ))
+                    }
+                }
+            })();
+            (outcome, blocking_permits)
         });
-        let prepared = tokio::select! {
+        let (prepared, blocking_guard) = tokio::select! {
             biased;
             _ = shutdown.changed() => return Err(self.state.error("SHUTTING_DOWN", "runtime is shutting down")),
             _ = tokio::time::sleep_until(deadline.into()) => return Err(self.state.error("PREPARE_TIMEOUT", "reload preparation timed out")),
-            result = task => result.map_err(|_| self.state.error("INTERNAL", "reload preparation failed"))??,
+            result = task => result.map_err(|_| self.state.error("INTERNAL", "reload preparation failed"))?,
         };
-        let result = self.state.publish(prepared, deadline);
+        let result = match prepared? {
+            PreparedReload::Plain(prepared) => self.state.publish(prepared, deadline),
+            PreparedReload::Tracked(tracked, watch) => {
+                self.state
+                    .publish_tracked(tracked.prepared, tracked.dependencies, watch, deadline)
+            }
+            PreparedReload::Failed(error, dependencies, watch, degraded) => {
+                self.state.install_failure(dependencies, watch, deadline);
+                if degraded {
+                    self.state.snapshot().logger.event(
+                        crate::observability::logging::Level::Warn,
+                        "watch_degraded",
+                        &[("code", "RESOURCE_IO")],
+                    );
+                }
+                Err(error)
+            }
+        };
+        drop(blocking_guard);
         drop(permits);
         result
     }

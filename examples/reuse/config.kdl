@@ -1,0 +1,20 @@
+server {
+    http "127.0.0.1:8080"
+    control-socket "/ADMIN_PRIVATE_0700_DIR/control.sock"
+}
+
+import "snippets/routes.kdl"
+
+site "sitea.test" {
+    use-snippet "shared"
+    route "/sitea.txt" {
+        root "www"
+    }
+}
+
+site "b.test" {
+    use-snippet "shared"
+    route "/b.txt" {
+        root "www"
+    }
+}

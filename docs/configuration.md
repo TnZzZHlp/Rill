@@ -10,7 +10,7 @@
 - 布尔值使用 `#true`、`#false`。原文的 `spa true`、`websocket true`、`redirect-https true` 必须迁移；v2 中裸 `true` 为保留值且缺少 `#`，解析器直接拒绝；显式字符串 `"true"` 也不能通过布尔类型校验。
 - `{}` 决定层级，缩进不影响语义；保留 KDL 注释支持。
 - DSL 不接收属性参数、类型注解或未定义节点；每个节点的参数数量、类型和子节点均须严格检查。数字不接受 NaN/Inf；超时只接受有限正时长字符串，如 `5s`、`500ms`。
-- 同一作用域的标量字段只能出现一次；不能用“最后一个胜出”掩盖重复配置。只有明确允许的 `import`、`use`、监听地址、路由、域名列表和 CIDR 策略列表可重复。
+- 同一作用域的标量字段只能出现一次；不能用“最后一个胜出”掩盖重复配置。只有明确允许的 `import`、`use`、监听地址、路由、`use-snippet`、域名列表和 CIDR 策略列表可重复。
 - 所有错误包括错误码、文件、节点、行列及原因。跨文件冲突同时给出两处来源；展开节点保留定义与引用链。
 
 ## 2. CLI
@@ -37,7 +37,7 @@ rill reload --socket /run/rill/control.sock --timeout 30s
 
 ## 3. 顶层与路径
 
-P0 顶层允许 `server`、`import`、`tls`、`profile`、`site`；P1 增加 `snippet`。尚未实现的功能必须报告“不支持”，不能静默忽略。
+顶层允许 `server`、`import`、`tls`、`profile`、`snippet`、`site`。尚未实现的功能必须报告“不支持”，不能静默忽略。
 
 ```kdl
 server {
@@ -56,7 +56,7 @@ import "sites/*.kdl"
 - 全配置只能有一个 `server`。允许多个不重复的 HTTP/HTTPS 地址；地址必须包含合法 IP 和端口，IPv6 使用方括号。IPv4/IPv6 共端口须避免双栈重复绑定。
 - 至少有一个服务监听；HTTPS 站点必须有 TLS 引用，纯 HTTP 站点可以没有。启用 HTTPS 重定向时必须有 HTTPS 监听且重定向站点可完成 TLS。
 - `redirect-https` 默认关闭。自定义重定向端口使用 `redirect-port 8443`；只有一个不同的 HTTPS 监听端口时可自动推导，多端口歧义必须显式指定。443 不附加端口。只对匹配站点重定向，使用规范化站点 Host，不回显非法 Host。
-- `control-socket` 与 HTTP/HTTPS 监听地址集合属于启动配置；仅改变地址顺序允许，集合或 Socket 路径更改时 Reload 整体失败并提示重启。运行时线程和 TLS 基础协议设置固定于代码，没有可配置字段。`log-level`、`redirect-https`、`redirect-port`、可信代理和上游允许集合随快照热更新；P0 server 除本文列举字段外全部拒绝。
+- `watch`、`control-socket` 与 HTTP/HTTPS 监听地址集合属于启动配置；仅改变地址顺序允许，集合、Socket 路径或 watch 更改时 Reload 整体失败并提示重启。运行时线程和 TLS 基础协议设置固定于代码，没有可配置字段。`log-level`、`redirect-https`、`redirect-port`、可信代理和上游允许集合随快照热更新；P0 server 除本文列举字段外全部拒绝。
 - 相对 `import` 路径以声明它的文件目录解析。相对 `root`、`cert`、`key`、错误页路径也以其定义所在文件为基准；Profile/Snippet 展开不得改用引用者目录。文件来源使用解析后的实际文件路径确定基准；入口保留调用者提供的绝对路径，不固化符号链接目标，以便后续 Reload 能看到入口链接的更新。
 - glob 支持逐路径组件的 `*`、`?`、`[ab]`、`[a-z]`、`[!ab]`，不提供转义或递归目录语义；匹配路径按字节序排序。未匹配任何文件报错，避免拼写错误悄悄丢站。支持嵌套导入，基于实际文件身份检测循环，包括符号链接/硬链接别名；同一文件重复导入报错，不重复执行。
 - 配置只读取普通 UTF-8 文件。每文件最多 1 MiB，总计最多 8 MiB、512 文件；导入/Profile 嵌套最多 64 层，KDL 结构、块注释和连续 slashdash 注释嵌套最多 32 层，避免解析器栈溢出。加载中核对文件身份及修改元数据，变化时拒绝候选；不承诺替外部文件系统提供跨文件事务。
@@ -143,12 +143,27 @@ site "api.example.com" {
 - `websocket #false` 时显式拒绝 Upgrade，不能静默降为普通请求。仅支持 HTTP/1.1 GET WebSocket；禁用返回 403，非法握手返回 400，不支持的协议、CONNECT 和 H2 extended CONNECT 返回 501；框架可能提前拒绝非法 H2 消息。
 - request-timeout 从路由选择后开始计入连接、上传及等待最终响应头的总时间，最终响应头到达后不限制流式响应总时长；read-timeout 限制上游相邻读取，idle-timeout 用于下游读写及连接池闲置。连接/上游读取超时返回 504，拒绝连接返回 502；响应已开始后故障只中止连接，不追加第二份 HTTP 响应。
 
-## 7. P1 语法保留与兼容边界
+## 7. Snippet 与可选文件监听
 
-- 完整路由片段使用顶层 `snippet "name" { route ... }`，site 内使用 `use-snippet "name"`，不复用 Profile 的 use。Snippet 内仅允许完整 route，可在 site 中以 use-snippet 链式引用其他片段；不提供参数模板。展开后统一检测循环及路由冲突。
-- `server { watch #true }` 显式开启文件监听；默认关闭。watch 的 debounce/队列、日志与指标参数在各 P1 阶段补充，不影响 P0 必须拒绝未知字段的原则。
-- 自动监听范围包括入口、导入图及 glob 目录、当前证书与私钥；静态内容变化由缓存失效处理，不触发配置 Reload。
-- 预压缩、静态缓存、错误页、目录浏览、Metrics 和 OpenTelemetry 的具体调优参数由对应阶段在既定安全边界内补充。目录浏览、watch、Metrics 网络端点和追踪默认关闭；任何新增字段均须更新规范及合法/非法示例。
+顶层 `snippet "name" { ... }` 定义完整路由片段，site 使用 `use-snippet "name"`。每条引用恰好一个名称，可写多条；snippet 内只允许完整 `route` 和嵌套的 `use-snippet`，不允许空定义，不支持参数或模板。Snippet 名称在独立名称空间全局唯一，可前向引用；Profile 仍使用 `use`。所有定义包括未引用定义均检查未知引用和循环；展开后按普通路由规则检查冲突。相对路径以定义文件为基准，错误保留定义和引用两侧的有界去重来源链。整个配置的展开预算为深度 64、复制路由 4096、步骤 16384 和逻辑 payload 8 MiB，超限拒绝候选。
+
+多文件示例见 [`examples/reuse/config.kdl`](../examples/reuse/config.kdl)：两个站点共享路由并各有独立路由。它默认不启用 watch。下面是单独的显式启用形式，完整入口见 [`examples/reuse/watch.kdl`](../examples/reuse/watch.kdl)：
+
+```kdl
+server {
+    http "127.0.0.1:8080"
+    control-socket "/ADMIN_PRIVATE_0700_DIR/control.sock"
+    watch #true
+}
+```
+
+运行前须将占位路径替换为管理员准备的、服务 UID 所有且权限为 0700 的私有目录内路径。`watch` 默认 `#false`，是启动项，修改须重启；`check` 不启动监听。
+
+监听限 Linux 可信本地文件系统：追踪原始入口及符号链接、导入文件、分级 glob 目录、证书和私钥，普通静态内容变更不触发配置 Reload。远端文件系统或挂载变化的事件不保证被观察。监听活动依赖图和最新失败候选的部分图，不无限累积历史；依赖预算为 8192 逻辑项（含已消费绑定）、单路径 4096 字节及总计 4 MiB，每个 inotify FD 最多 2048 个监听目录。无法覆盖时进入有日志的 degraded 状态并持续有界重试；首次注册失败拒绝启动，候选失败保留旧服务。
+
+inotify 内核事件队列以 50 ms 间隔有界 drain、每次最多 32 批，不是文件轮询。事件去抖 250 ms，最长等待 2 秒；BUSY、资源变化和不可用恢复等按 1 秒退避。稳定的普通配置语法错误等待后续修复事件，不无条件重试。队列 overflow 或 watch 失效会记录日志并标记 dirty 重建。自动 Reload 与手动 Reload 共用完整验证、准备和单点提交；注册前后核对实际消费 FD 的指纹，不能将其理解为恶意文件系统上的跨文件事务保证。
+
+预压缩、静态缓存、错误页、目录浏览、Metrics 和 OpenTelemetry 的具体参数由对应后续阶段补充，不因本节而宣称已实现。
 
 ## 8. 原文示例逐项对照
 

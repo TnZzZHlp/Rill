@@ -13,7 +13,7 @@ use tokio::task::JoinSet;
 use tokio::time::timeout;
 
 use super::state::{HttpPreparer, RuntimeState};
-use crate::config::prepare::build;
+use crate::config::prepare::build_for_run;
 use crate::observability::logging::{Level, Logger};
 use crate::proxy::Handler;
 use crate::proxy::app::{App, Transport};
@@ -88,7 +88,7 @@ async fn endpoint_loop(
 }
 
 pub fn run(path: &Path) -> u8 {
-    let prepared = match build(path, &HttpPreparer) {
+    let (prepared, plan) = match build_for_run(path, &HttpPreparer) {
         Ok(prepared) => prepared,
         Err(error) => {
             Logger::new("info").event(
@@ -100,6 +100,9 @@ pub fn run(path: &Path) -> u8 {
         }
     };
     let state = RuntimeState::new(prepared);
+    if let Some(plan) = plan {
+        state.set_initial_plan(plan);
+    }
     let runtime = match tokio::runtime::Builder::new_multi_thread()
         .worker_threads(std::thread::available_parallelism().map_or(2, |count| count.get().min(8)))
         .max_blocking_threads(16)
@@ -123,6 +126,22 @@ pub fn run(path: &Path) -> u8 {
 pub async fn serve(state: Arc<RuntimeState>) -> u8 {
     let snapshot = state.snapshot();
     let logger = snapshot.logger.clone();
+    if state.watch_enabled() {
+        let Some(plan) = state.active_plan() else {
+            logger.event(Level::Error, "watch_setup_failed", &[("code", "INTERNAL")]);
+            return 1;
+        };
+        let watch = match super::watch::resources::WatchResources::prepare(&plan) {
+            Ok(watch) => watch,
+            Err(error) => {
+                logger.event(Level::Error, "watch_setup_failed", &[("code", error.code)]);
+                return 1;
+            }
+        };
+        if state.initialize_watch(plan, watch).is_err() {
+            return 1;
+        }
+    }
     let mut terminate =
         match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
             Ok(signal) => signal,
@@ -216,10 +235,17 @@ pub async fn serve(state: Arc<RuntimeState>) -> u8 {
     let mut workers = JoinSet::new();
     workers.spawn(crate::control::server::serve(
         control,
-        coordinator,
+        coordinator.clone(),
         state.clone(),
         receiver.clone(),
     ));
+    if state.watch_enabled() {
+        workers.spawn(super::watch::run(
+            state.clone(),
+            coordinator,
+            receiver.clone(),
+        ));
+    }
     for (endpoint, secure) in listeners {
         workers.spawn(endpoint_loop(
             endpoint,

@@ -14,6 +14,7 @@ pub fn parse(node: &KdlNode, origin: &Origin) -> Result<Server> {
         origin: origin.clone(),
         http: Vec::new(),
         https: Vec::new(),
+        watch: false,
         redirect_https: false,
         redirect_port: None,
         control_socket: "/run/rill/control.sock".into(),
@@ -118,6 +119,7 @@ pub fn parse(node: &KdlNode, origin: &Origin) -> Result<Server> {
             name => {
                 once(&mut seen, child, &origin, "server")?;
                 match name {
+                    "watch" => result.watch = boolean(child, &origin, "watch")?.value,
                     "redirect-https" => {
                         result.redirect_https = boolean(child, &origin, "redirect-https")?.value
                     }

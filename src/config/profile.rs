@@ -104,6 +104,7 @@ fn defaults(origin: &Origin) -> Parameters {
 }
 
 pub fn normalize(mut parsed: ParsedConfig) -> Result<NormalizedConfig> {
+    super::snippet::expand(&mut parsed)?;
     let server = parsed.server.ok_or_else(|| {
         ConfigError::new(
             "CONFIG_TYPE",

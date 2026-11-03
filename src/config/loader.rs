@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use kdl::{KdlDocument, KdlNode};
 
+use super::dependencies::{DependencyPlan, Fingerprint, PathFingerprint};
 use super::error::{ConfigError, Result};
 use super::glob;
 use super::source::{Origin, Source};
@@ -27,8 +28,8 @@ struct FileState {
     origin: Origin,
 }
 
-#[derive(Default)]
-struct Loader {
+struct Loader<'a> {
+    dependencies: &'a mut DependencyPlan,
     seen: HashMap<(u64, u64), Origin>,
     stack: Vec<(u64, u64)>,
     files: Vec<FileState>,
@@ -46,7 +47,7 @@ fn same_file(left: &Metadata, right: &Metadata) -> bool {
         && left.ctime_nsec() == right.ctime_nsec()
 }
 
-impl Loader {
+impl Loader<'_> {
     fn visit(&mut self, path: &Path, reference: &Origin, references: &[Origin]) -> Result<()> {
         if self.stack.len() >= 64 || self.files.len() >= 512 {
             return Err(ConfigError::new(
@@ -56,6 +57,8 @@ impl Loader {
                 reference,
             ));
         }
+        self.dependencies.track_path(path, reference)?;
+        let consumed_path = path.to_path_buf();
         let path = fs::canonicalize(path).map_err(|_| {
             ConfigError::new(
                 "RESOURCE_IO",
@@ -64,6 +67,7 @@ impl Loader {
                 reference,
             )
         })?;
+        self.dependencies.track_path(&path, reference)?;
         let before_open = fs::metadata(&path).map_err(|_| {
             ConfigError::new(
                 "RESOURCE_IO",
@@ -96,6 +100,20 @@ impl Loader {
                 reference,
             )
         })?;
+        if !same_file(&before_open, &metadata)
+            || (self.dependencies.enabled()
+                && self.dependencies.paths.get(&path)
+                    != Some(&PathFingerprint::Present(Fingerprint::from_metadata(
+                        &metadata,
+                    ))))
+        {
+            return Err(ConfigError::new(
+                "RESOURCE_CHANGED",
+                "import",
+                "configuration changed while opening",
+                reference,
+            ));
+        }
         if !metadata.is_file() {
             return Err(ConfigError::new(
                 "RESOURCE_IO",
@@ -104,6 +122,8 @@ impl Loader {
                 reference,
             ));
         }
+        self.dependencies
+            .record_consumed(&consumed_path, &metadata, reference)?;
         let identity = (metadata.dev(), metadata.ino());
         if let Some(first) = self.seen.get(&identity) {
             let code = if self.stack.contains(&identity) {
@@ -228,10 +248,11 @@ impl Loader {
                 let mut site = origin.clone();
                 site.references.clear();
                 chain.push(site);
-                for path in glob::expand(&imported, &origin)? {
+                for path in glob::expand_tracked(&imported, &origin, self.dependencies)? {
                     self.visit(&path, &origin, &chain)?;
                 }
             } else {
+                self.dependencies.track_tls_node(node, &origin)?;
                 self.nodes.push(LoadedNode {
                     node: node.clone(),
                     origin,
@@ -244,6 +265,10 @@ impl Loader {
 }
 
 pub fn load(entry: &Path) -> Result<LoadedConfig> {
+    load_tracked(entry, &mut DependencyPlan::disabled())
+}
+
+pub fn load_tracked(entry: &Path, dependencies: &mut DependencyPlan) -> Result<LoadedConfig> {
     let absolute = std::path::absolute(entry).map_err(|_| {
         ConfigError::new(
             "RESOURCE_IO",
@@ -252,7 +277,14 @@ pub fn load(entry: &Path) -> Result<LoadedConfig> {
             &Origin::file(entry),
         )
     })?;
-    let mut loader = Loader::default();
+    let mut loader = Loader {
+        dependencies,
+        seen: HashMap::new(),
+        stack: Vec::new(),
+        files: Vec::new(),
+        nodes: Vec::new(),
+        total_bytes: 0,
+    };
     loader.visit(&absolute, &Origin::file(&absolute), &[])?;
     for file in &loader.files {
         let metadata = fs::metadata(&file.path).map_err(|_| {

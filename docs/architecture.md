@@ -38,7 +38,7 @@ publish(prepared) -> Generation
 - `NormalizedConfig` 消除简写、应用继承，仍不包含 Pingora 对象。
 - `ValidatedConfig` 保证字段类型、域名与路径冲突、引用及安全策略一致；验证不是资源存在性的替代。
 - 完整服务的 `PreparedSnapshot` 必须持有路由、上游策略、root 句柄与已验证 TLS 材料，准备失败不产生发布副作用。005 以同形 PreparedRoute 区分 Proxy/Static，准备 root 和 PreparedTls。
-- `StartupSettings` 保存监听、控制 Socket、运行时线程和 TLS 基础协议设置；后两者固定于代码，没有可配置字段。HTTP/HTTPS 地址按集合比较，顺序重排允许。Reload 必须和启动值比较；任何需要重启的差异整体报错。
+- `StartupSettings` 保存监听、控制 Socket、watch 启动开关、运行时线程和 TLS 基础协议设置；后两者固定于代码，没有可配置字段。HTTP/HTTPS 地址按集合比较，顺序重排允许。Reload 必须和启动值比较；任何需要重启的差异整体报错。
 - 002 check 使用 build → load → parse → normalize → validate → ResourcePreparer，同一个入口供后续 run/reload 复用，不另写验证管线。check 不监听、不发请求、不发布。check 与 run 共用 root 和 TLS 准备；check 不检查 DNS、连接或上游 TLS 信任，不监听或写资源。证书资源检查与 run 共用 PreparedTls，不单独维护一套规则。
 - 新配置依赖的文件必须在本轮准备时读取并保持必要资源，不能发布后再懒加载证书或 root。
 - 文件读取过程中可能发生外部编辑；准备期检测所读取文件身份/元数据变化并拒绝不稳定候选。管理员需要跨文件内容事务时应先准备完整版本再触发 Reload，系统不承诺替外部文件系统提供事务。
@@ -54,6 +54,10 @@ RuntimeSnapshot 包含标准化配置、Router、准备好的代理或静态路�
 - 同代次的 SNI 证书集合、私钥及验证结果。
 
 `RuntimeState` 拥有唯一 `ArcSwap<RuntimeSnapshot>`。准备时不写活动状态，管理提交串行化：读取配置、准备全部资源、比较启动设置、赋代次、一次 store，随后返回成功。关闭和提交共用短暂的 std Mutex gate，store 前检查关闭状态和 30 秒期限；blocking closure 只构建，不能访问 state 或 store。代次 checked_add 防溢出。启动快照使用后释放，不永久持有第一代；运行期 App 日志读取当前快照。失败没有发布，因此所谓回滚是保留旧快照，而不是先局部更新再反向恢复。
+
+Snippet 在标准化时展开，定义和引用来源有界去重保留；引用深度、复制路由、步骤及逻辑 payload 使用全配置共享预算。具体限制见配置文档。
+
+watch 使用独立于快照的 inotify FD 生命周期，最多活动和候选各一个 FD，快照不持有 FD；切换时交接 dirty 事件。自动及手动 Reload 共用 admission/execution permits 和提交 gate，均经过完整候选准备和单点发布，不能绕过关闭或期限检查。注册前后核对实际消费 FD fingerprint；溢出、失效和不可覆盖分别触发有日志的重建或 degraded 有界重试。仅信任本地文件系统及既有 proc/namespace 边界，不承诺恶意或远端文件系统的事务及事件保证。
 
 只有管理提交路径可以串行化。HTTP 请求不持有全局管理互斥锁；通过 `load_full` 获取 Arc。路由、TLS、root 和上游不得各自维护独立活动指针。旧快照由持有者自然释放，不能在发布时关闭旧连接。
 
@@ -146,7 +150,7 @@ RuntimeSnapshot 包含标准化配置、Router、准备好的代理或静态路�
 | CONFIG_SYNTAX / CONFIG_TYPE / CONFIG_UNKNOWN | 语法、类型、未知字段 | 不发布 |
 | CONFIG_LIMIT / RESOURCE_CHANGED | 解析/导入资源限制，或加载期间文件变化 | 拒绝候选，不发布 |
 | CONFIG_UNSUPPORTED | 当前阶段不支持的配置或服务动作 | check 返回非零，不能假装完整成功 |
-| IMPORT_CYCLE / DUPLICATE / ROUTE_CONFLICT / PROFILE_REF | 结构或引用错误 | 不发布，保留来源链 |
+| IMPORT_CYCLE / DUPLICATE / ROUTE_CONFLICT / PROFILE_REF / SNIPPET_REF | 结构或引用错误 | 不发布，保留来源链 |
 | RESOURCE_IO / TLS_INVALID / UPSTREAM_DENIED | 目录、证书或上游策略失败 | 不发布，错误脱敏 |
 | RESTART_REQUIRED | 启动配置发生变化 | 整体拒绝，不部分应用 |
 | UNAUTHORIZED / PROTOCOL / BUSY | 管理身份、帧或容量错误 | 不启动候选构建 |
@@ -159,7 +163,7 @@ RuntimeSnapshot 包含标准化配置、Router、准备好的代理或静态路�
 
 - 使用 Rust Stable，edition 2024；KDL 6.7.1 声明最低 Rust 1.95，工程声明相同下限。实际已验证工具链和完整锁定版本以验证记录为准，不声称在未运行的旧工具链通过。
 - 直接使用 Pingora 0.9.0 的 openssl/proxy 功能，关闭默认可选功能；不接入 BoringSSL、rustls、ACME、负载均衡或网络缓存。
-- `arc-swap` 1.9.3；Tokio 提供测试及运行时所需异步能力；async-trait 用于 Pingora 回调；直接 openssl 依赖用于安全 ex_data 类型和内存证书验证。002 按用户明确要求添加 Clap 派生 CLI，锁定版本 4.6.7，复用已有传递依赖，未增加其他依赖或测试工具。003 经用户访谈明确批准直接使用既有 socket2 0.6.5，并显式开启 Tokio 的 net/signal 功能；没有其他新增依赖或测试框架。005 经批准直接依赖 nix 0.31.3（fs）和 httpdate 1.0.3；Tokio fs 虽获批但实现未使用、未开启。Cargo.lock 仅 rill 依赖列表变化，无新包升级或测试框架。007 经用户批准直接启用既有 serde 1.0.229 derive、serde_json 1.0.154（本地缓存新锁包 zmij 1.0.23）及 nix 0.31.3 user 功能，无其他依赖升级或新工具/测试框架。完整传递依赖固定在 Cargo.lock。
+- `arc-swap` 1.9.3；Tokio 提供测试及运行时所需异步能力；async-trait 用于 Pingora 回调；直接 openssl 依赖用于安全 ex_data 类型和内存证书验证。002 按用户明确要求添加 Clap 派生 CLI，锁定版本 4.6.7，复用已有传递依赖，未增加其他依赖或测试工具。003 经用户访谈明确批准直接使用既有 socket2 0.6.5，并显式开启 Tokio 的 net/signal 功能；没有其他新增依赖或测试框架。005 经批准直接依赖 nix 0.31.3（fs）和 httpdate 1.0.3；Tokio fs 虽获批但实现未使用、未开启。Cargo.lock 仅 rill 依赖列表变化，无新包升级或测试框架。007 经用户批准直接启用既有 serde 1.0.229 derive、serde_json 1.0.154（本地缓存新锁包 zmij 1.0.23）及 nix 0.31.3 user 功能，无其他依赖升级或新工具/测试框架。009 经批准启用既有 nix 0.31.3 的 inotify feature，不新增 crate；完整传递依赖固定在 Cargo.lock。
 - Debian 构建需要 Rust、C 工具链、make 和 Perl。Pingora 0.9.0 的 pingora-openssl 无条件启用 openssl 的 vendored 功能，因此本基线使用锁文件中的 openssl-src 构建 OpenSSL，而不是系统 openssl 命令对应的库。不要将两者版本混为一谈。未启用 OPENSSL_NO_VENDOR 覆盖；系统动态库方案须单独验证，008 部署说明必须以实际链接结果为准。001 不安装系统包、不引入测试框架或额外 dev-dependencies。
 - 001 必须通过 cargo fmt --check、cargo check --locked、cargo clippy --locked --all-targets -- -D warnings、cargo test --locked。测试不监听公网、不需要真实密钥或额外证书工具。
 - 003/004/005 验证真实监听、HTTP/2、优雅关闭；006 验证真实流式代理、WS/SSE；007 验证管理权限、真实 Reload 和并发原子性；008/012 补齐部署与性能门禁。不能用 001 的 TLS 字节流验证替代这些端到端验收。

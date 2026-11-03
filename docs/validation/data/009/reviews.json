@@ -1,0 +1,38 @@
+{
+  "scope": "009 Snippet 与可选自动 Reload；分缝静态复核及最终交付复审",
+  "reports": {
+    "snippet": {
+      "run": "cf83c2eb-dd27-4571-b7f1-9fbe244ff673",
+      "path": "/var/tmp/rill-009.L2km31/artifacts/reviews/snippet.md"
+    },
+    "dependencies": {
+      "run": "b831f2ac-9165-41c2-9f47-44057afe7b1c",
+      "path": "/var/tmp/rill-009.L2km31/artifacts/reviews/dependencies.md"
+    },
+    "runtime": {
+      "run": "39460872-7341-4003-ba6d-f4a56524b742",
+      "path": "/var/tmp/rill-009.L2km31/artifacts/reviews/runtime.md"
+    },
+    "tests": {
+      "run": "815cc011-b6c9-439f-a720-d86c33d0524d",
+      "path": "/var/tmp/rill-009.L2km31/artifacts/reviews/tests.md"
+    },
+    "delivery": {
+      "run": "26c07422-71ca-4745-b03e-d2a1df7b98b4",
+      "path": "/var/tmp/rill-009.L2km31/artifacts/reviews/delivery.md"
+    }
+  },
+  "resolutions": [
+    "Snippet 定义及展开阶段错误携带去重引用链，payload 与实际附链规则一致",
+    "消费路径关联实际 FD，覆盖 symlink 路径、非目录恢复、非 UTF-8 glob、注册前预算",
+    "失败计划注册后核对基线，FD 先置换再有界 drain，Unavailable 至少 1 秒退避",
+    "CLI worker 结束后写独有 gamma 版本，验证 watch-only 收敛",
+    "权限恢复测试同时约束实际重试下限及频率上限；追加下限后完整 131 项门禁通过"
+  ],
+  "delivery_remaining_blocking_high_medium": 0,
+  "limits": [
+    "静态复审未重跑项目",
+    "FD 峰值为采样证据并结合所有权约束",
+    "不承诺远端/恶意文件系统全事务或零 idle 开销"
+  ]
+}

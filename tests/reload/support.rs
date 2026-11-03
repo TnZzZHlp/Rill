@@ -45,12 +45,13 @@ impl Fixture {
         )
     }
     pub fn start(&mut self) -> Result {
+        let log = fs::File::create(self.dir.join("watch.log"))?;
         self.child = Some(
             Command::new(env!("CARGO_BIN_EXE_rill"))
                 .args(["run", "--config"])
                 .arg(&self.entry)
                 .stdout(Stdio::null())
-                .stderr(Stdio::null())
+                .stderr(Stdio::from(log))
                 .spawn()?,
         );
         let deadline = Instant::now() + Duration::from_secs(5);
@@ -123,6 +124,9 @@ impl Fixture {
         let mut body = vec![0; length];
         stream.read_exact(&mut body)?;
         Ok((status, headers, body))
+    }
+    pub fn log_bytes(&self) -> Result<Vec<u8>> {
+        Ok(fs::read(self.dir.join("watch.log"))?)
     }
     pub fn pid(&self) -> Result<u32> {
         Ok(self.child.as_ref().ok_or("missing child")?.id())

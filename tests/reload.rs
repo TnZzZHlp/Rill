@@ -4,4 +4,5 @@ mod reload {
     pub mod support;
     pub mod timeout;
     pub mod transactions;
+    pub mod watch;
 }

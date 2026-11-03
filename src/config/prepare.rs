@@ -3,9 +3,10 @@ use std::sync::{Arc, OnceLock};
 
 use tokio::sync::Semaphore;
 
-use super::error::Result;
+use super::dependencies::DependencyPlan;
+use super::error::{ConfigError, Result};
 use super::model::{Action, ValidatedConfig};
-use super::{load, normalize, parse, validate};
+use super::{load_tracked, normalize, parse, validate};
 
 #[derive(Debug)]
 pub struct PreparedSnapshot<R> {
@@ -17,6 +18,22 @@ pub trait ResourcePreparer {
     type Resources;
 
     fn prepare(&self, configuration: &ValidatedConfig) -> Result<Self::Resources>;
+
+    fn prepare_tracked(
+        &self,
+        configuration: &ValidatedConfig,
+        _dependencies: &mut DependencyPlan,
+    ) -> Result<Self::Resources> {
+        if !configuration.certificates.is_empty() {
+            return Err(ConfigError::new(
+                "INTERNAL",
+                "watch",
+                "resource preparer does not support tracked TLS",
+                &configuration.server.origin,
+            ));
+        }
+        self.prepare(configuration)
+    }
 }
 
 static STATIC_CAPACITY: OnceLock<Arc<Semaphore>> = OnceLock::new();
@@ -39,7 +56,28 @@ impl ResourcePreparer for ConfigurationOnly {
     type Resources = CheckResources;
 
     fn prepare(&self, configuration: &ValidatedConfig) -> Result<Self::Resources> {
-        let tls = crate::tls::cert::PreparedTls::prepare(configuration)?;
+        self.prepare_inner(configuration, None)
+    }
+
+    fn prepare_tracked(
+        &self,
+        configuration: &ValidatedConfig,
+        dependencies: &mut DependencyPlan,
+    ) -> Result<Self::Resources> {
+        self.prepare_inner(configuration, Some(dependencies))
+    }
+}
+
+impl ConfigurationOnly {
+    fn prepare_inner(
+        &self,
+        configuration: &ValidatedConfig,
+        dependencies: Option<&mut DependencyPlan>,
+    ) -> Result<CheckResources> {
+        let tls = match dependencies {
+            Some(plan) => crate::tls::cert::PreparedTls::prepare_tracked(configuration, plan)?,
+            None => crate::tls::cert::PreparedTls::prepare(configuration)?,
+        };
         let capacity = STATIC_CAPACITY
             .get_or_init(|| Arc::new(Semaphore::new(128)))
             .clone();
@@ -62,21 +100,107 @@ impl ResourcePreparer for ConfigurationOnly {
     }
 }
 
+#[derive(Debug)]
+pub struct TrackedSnapshot<R> {
+    pub prepared: PreparedSnapshot<R>,
+    pub dependencies: DependencyPlan,
+}
+
+#[derive(Debug)]
+pub struct BuildFailure {
+    pub error: ConfigError,
+    pub dependencies: DependencyPlan,
+}
+
 pub fn build<P: ResourcePreparer>(
     entry: &Path,
     preparer: &P,
 ) -> Result<PreparedSnapshot<P::Resources>> {
-    let configuration = validate(normalize(parse(load(entry)?)?)?)?;
-    let resources = preparer.prepare(&configuration)?;
-    Ok(PreparedSnapshot {
-        configuration,
-        resources,
-    })
+    build_inner(entry, preparer, false)
+        .map(|tracked| tracked.prepared)
+        .map_err(|failure| failure.error)
+}
+
+pub fn build_for_run<P: ResourcePreparer>(
+    entry: &Path,
+    preparer: &P,
+) -> Result<(PreparedSnapshot<P::Resources>, Option<DependencyPlan>)> {
+    let configuration = validate(normalize(parse(super::load(entry)?)?)?)?;
+    if !configuration.server.watch {
+        let resources = preparer.prepare(&configuration)?;
+        return Ok((
+            PreparedSnapshot {
+                configuration,
+                resources,
+            },
+            None,
+        ));
+    }
+    let tracked = build_tracked(entry, preparer).map_err(|failure| failure.error)?;
+    let plan = tracked
+        .prepared
+        .configuration
+        .server
+        .watch
+        .then_some(tracked.dependencies);
+    Ok((tracked.prepared, plan))
+}
+
+pub fn build_tracked<P: ResourcePreparer>(
+    entry: &Path,
+    preparer: &P,
+) -> std::result::Result<TrackedSnapshot<P::Resources>, Box<BuildFailure>> {
+    build_inner(entry, preparer, true)
+}
+
+fn build_inner<P: ResourcePreparer>(
+    entry: &Path,
+    preparer: &P,
+    tracked_resources: bool,
+) -> std::result::Result<TrackedSnapshot<P::Resources>, Box<BuildFailure>> {
+    let mut dependencies = if tracked_resources {
+        DependencyPlan::default()
+    } else {
+        DependencyPlan::disabled()
+    };
+    let result = (|| {
+        let loaded = load_tracked(entry, &mut dependencies)?;
+        let parsed = parse(loaded)?;
+        let configuration = validate(normalize(parsed)?)?;
+        let resources = if tracked_resources {
+            preparer.prepare_tracked(&configuration, &mut dependencies)?
+        } else {
+            preparer.prepare(&configuration)?
+        };
+        if tracked_resources && !dependencies.unchanged() {
+            return Err(ConfigError::new(
+                "RESOURCE_CHANGED",
+                "watch",
+                "dependency changed during preparation",
+                &super::source::Origin::file(entry),
+            ));
+        }
+        Ok(PreparedSnapshot {
+            configuration,
+            resources,
+        })
+    })();
+    match result {
+        Ok(prepared) => Ok(TrackedSnapshot {
+            prepared,
+            dependencies,
+        }),
+        Err(error) => Err(Box::new(BuildFailure {
+            error,
+            dependencies,
+        })),
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::load;
     use crate::config::source::{Located, Origin};
 
     #[tokio::test]

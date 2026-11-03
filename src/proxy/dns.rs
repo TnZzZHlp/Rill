@@ -127,6 +127,7 @@ mod tests {
             origin: origin.clone(),
             http: Vec::new(),
             https: Vec::new(),
+            watch: false,
             redirect_https: false,
             redirect_port: None,
             control_socket: Default::default(),

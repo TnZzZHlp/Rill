@@ -60,7 +60,12 @@ fn invalid(item: &'static str, reason: &'static str, origin: &Origin) -> ConfigE
     ConfigError::new("TLS_INVALID", item, reason, origin)
 }
 
-fn read(path: &Located<std::path::PathBuf>, limit: u64, item: &'static str) -> Result<Vec<u8>> {
+fn read(
+    path: &Located<std::path::PathBuf>,
+    limit: u64,
+    item: &'static str,
+    dependencies: Option<&mut crate::config::dependencies::DependencyPlan>,
+) -> Result<Vec<u8>> {
     let fail = || {
         ConfigError::new(
             "RESOURCE_IO",
@@ -76,6 +81,23 @@ fn read(path: &Located<std::path::PathBuf>, limit: u64, item: &'static str) -> R
     let before = file.metadata().map_err(|_| fail())?;
     if !before.is_file() {
         return Err(fail());
+    }
+    if let Some(dependencies) = dependencies {
+        use crate::config::dependencies::{Fingerprint, PathFingerprint};
+        let resolved = fs::canonicalize(&path.value).map_err(|_| fail())?;
+        if dependencies.paths.get(&resolved)
+            != Some(&PathFingerprint::Present(Fingerprint::from_metadata(
+                &before,
+            )))
+        {
+            return Err(ConfigError::new(
+                "RESOURCE_CHANGED",
+                item,
+                "PEM resource changed before reading",
+                &path.origin,
+            ));
+        }
+        dependencies.record_consumed(&path.value, &before, &path.origin)?;
     }
     let mut bytes = Vec::new();
     (&file)
@@ -162,11 +184,30 @@ fn covers(pattern: &str, domain: &str) -> bool {
 
 impl PreparedTls {
     pub fn prepare(configuration: &ValidatedConfig) -> Result<Self> {
+        Self::prepare_inner(configuration, None)
+    }
+
+    pub fn prepare_tracked(
+        configuration: &ValidatedConfig,
+        dependencies: &mut crate::config::dependencies::DependencyPlan,
+    ) -> Result<Self> {
+        Self::prepare_inner(configuration, Some(dependencies))
+    }
+
+    fn prepare_inner(
+        configuration: &ValidatedConfig,
+        mut dependencies: Option<&mut crate::config::dependencies::DependencyPlan>,
+    ) -> Result<Self> {
         let mut certificates = BTreeMap::new();
         for definition in configuration.certificates.values() {
             let fail = |reason| invalid("cert", reason, &definition.cert.origin);
             let mut parsed = chain(
-                &read(&definition.cert, 1024 * 1024, "cert")?,
+                &read(
+                    &definition.cert,
+                    1024 * 1024,
+                    "cert",
+                    dependencies.as_deref_mut(),
+                )?,
                 &definition.cert.origin,
             )?;
             let now = Asn1Time::days_from_now(0)
@@ -208,7 +249,12 @@ impl PreparedTls {
                 }
             }
             let leaf = parsed.remove(0);
-            let bytes = read(&definition.key, 64 * 1024, "key")?;
+            let bytes = read(
+                &definition.key,
+                64 * 1024,
+                "key",
+                dependencies.as_deref_mut(),
+            )?;
             let text = std::str::from_utf8(&bytes)
                 .map_err(|_| invalid("key", "private key must be PEM", &definition.key.origin))?
                 .trim();

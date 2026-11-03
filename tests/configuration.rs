@@ -539,3 +539,456 @@ fn check_reports_syntax_locations_and_cli_argument_exit_codes() -> TestResult {
     fs::remove_file(entry)?;
     Ok(())
 }
+
+#[test]
+fn snippet_nested_forward_reuse_keeps_paths_and_profile_precedence() -> TestResult {
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let dir = std::env::temp_dir().join(format!("rill-snippet-{}-{unique}", std::process::id()));
+    fs::create_dir_all(dir.join("defs/assets"))?;
+    let entry = dir.join("config.kdl");
+    fs::write(
+        dir.join("defs/snippets.kdl"),
+        "snippet \"shared\" { use-snippet \"inner\"; }\nsnippet \"inner\" { route \"/assets/*\" { root \"assets\"; use \"shared\"; read-timeout \"7s\"; } }\n",
+    )?;
+    fs::write(
+        &entry,
+        "server { http \"127.0.0.1:8080\"; }\nimport \"defs/snippets.kdl\"\nprofile \"shared\" { read-timeout \"4s\"; connect-timeout \"2s\"; }\nsite \"a.test\" { read-timeout \"1s\"; use-snippet \"shared\"; }\nsite \"b.test\" { read-timeout \"2s\"; use-snippet \"shared\"; }\n",
+    )?;
+    let config = validate(normalize(parse(load(&entry)?)?)?)?;
+    for site in &config.sites {
+        let route = &site.routes[0];
+        assert_eq!(
+            route
+                .parameters
+                .read_timeout
+                .as_ref()
+                .ok_or("timeout")?
+                .value,
+            Duration::from_secs(7)
+        );
+        assert_eq!(
+            route
+                .parameters
+                .connect_timeout
+                .as_ref()
+                .ok_or("timeout")?
+                .value,
+            Duration::from_secs(2)
+        );
+        let Action::Static { root, .. } = &route.action else {
+            return Err("expected static".into());
+        };
+        assert_eq!(
+            root.value,
+            fs::canonicalize(dir.join("defs"))?.join("assets")
+        );
+        assert!(root.origin.references.len() >= 2);
+    }
+    let result = Command::new(env!("CARGO_BIN_EXE_rill"))
+        .args(["check", "--config"])
+        .arg(&entry)
+        .output()?;
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    fs::remove_dir_all(dir)?;
+    Ok(())
+}
+
+#[test]
+fn snippet_invalid_definitions_and_conflicts_are_rejected() -> TestResult {
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let entry = std::env::temp_dir().join(format!(
+        "rill-snippet-invalid-{}-{unique}.kdl",
+        std::process::id()
+    ));
+    for (defs, site, code) in [
+        (
+            "snippet \"a\" { use-snippet \"missing\"; }",
+            "proxy \"http://127.0.0.1:3000\";",
+            "SNIPPET_REF",
+        ),
+        (
+            "snippet \"a\" { use-snippet \"b\"; }\nsnippet \"b\" { use-snippet \"a\"; }",
+            "proxy \"http://127.0.0.1:3000\";",
+            "SNIPPET_REF",
+        ),
+        (
+            "snippet \"a\" { route \"/*\" { proxy \"http://127.0.0.1:3000\"; } }\nsnippet \"a\" { route \"/*\" { proxy \"http://127.0.0.1:3000\"; } }",
+            "proxy \"http://127.0.0.1:3000\";",
+            "DUPLICATE",
+        ),
+        (
+            "snippet \"a\" {}",
+            "proxy \"http://127.0.0.1:3000\";",
+            "CONFIG_TYPE",
+        ),
+        (
+            "snippet \"a\" { use-snippet \"b\" \"c\"; }",
+            "proxy \"http://127.0.0.1:3000\";",
+            "CONFIG_TYPE",
+        ),
+        (
+            "snippet \"a\" { root \"x\"; }",
+            "proxy \"http://127.0.0.1:3000\";",
+            "CONFIG_UNKNOWN",
+        ),
+        (
+            "",
+            "route \"/*\" { use-snippet \"x\"; proxy \"http://127.0.0.1:3000\"; }",
+            "CONFIG_UNKNOWN",
+        ),
+        (
+            "profile \"a\" { use-snippet \"x\"; }",
+            "proxy \"http://127.0.0.1:3000\";",
+            "CONFIG_UNKNOWN",
+        ),
+        (
+            "snippet \"a\" { route \"/*\" { proxy \"http://127.0.0.1:3000\"; } }",
+            "use-snippet \"a\"; proxy \"http://127.0.0.1:3000\";",
+            "ROUTE_CONFLICT",
+        ),
+        (
+            "snippet \"a\" { route \"/*\" { proxy \"http://127.0.0.1:3000\"; } }",
+            "use-snippet \"a\"; use-snippet \"a\";",
+            "ROUTE_CONFLICT",
+        ),
+    ] {
+        fs::write(
+            &entry,
+            format!(
+                "server {{ http \"127.0.0.1:8080\"; }}\n{defs}\nsite \"a.test\" {{ {site} }}\n"
+            ),
+        )?;
+        let error = build(&entry, &ConfigurationOnly).expect_err("invalid snippet accepted");
+        assert_eq!(error.code, code, "{error}");
+        if matches!(code, "DUPLICATE" | "ROUTE_CONFLICT") {
+            assert!(!error.related.is_empty());
+        }
+        if code == "ROUTE_CONFLICT" {
+            assert!(error.to_string().matches("related:").count() >= 2);
+        }
+    }
+    fs::remove_file(entry)?;
+    Ok(())
+}
+
+#[test]
+fn snippet_expansion_limits_are_enforced() -> TestResult {
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let entry = std::env::temp_dir().join(format!(
+        "rill-snippet-limit-{}-{unique}.kdl",
+        std::process::id()
+    ));
+    let prefix = "server { http \"127.0.0.1:8080\"; }\n";
+    let route = "route \"/*\" { proxy \"http://127.0.0.1:3000\"; }";
+    let mut depth = String::new();
+    for i in 0..65 {
+        depth.push_str(&format!(
+            "snippet \"s{i}\" {{ {} }}\n",
+            if i == 64 {
+                route.to_string()
+            } else {
+                format!("use-snippet \"s{}\";", i + 1)
+            }
+        ));
+    }
+    for defs in [
+        depth,
+        format!(
+            "snippet \"s\" {{ {route} }}\n{}",
+            (0..4097)
+                .map(|i| format!("site \"s{i}.test\" {{ use-snippet \"s\"; }}\n"))
+                .collect::<String>()
+        ),
+    ] {
+        fs::write(
+            &entry,
+            format!("{prefix}{defs}\nsite \"end.test\" {{ proxy \"http://127.0.0.1:3000\"; }}\n"),
+        )?;
+        assert_eq!(
+            build(&entry, &ConfigurationOnly)
+                .expect_err("limit bypass")
+                .code,
+            "CONFIG_LIMIT"
+        );
+    }
+    for (count, succeeds) in [(8190, true), (8191, false)] {
+        let defs = format!(
+            "snippet \"a-wide\" {{ {} }}\nsnippet \"z-leaf\" {{ {route} }}\nsite \"a.test\" {{ proxy \"http://127.0.0.1:3000\"; }}",
+            "use-snippet \"z-leaf\";\n".repeat(count)
+        );
+        fs::write(&entry, format!("{prefix}{defs}"))?;
+        let result = build(&entry, &ConfigurationOnly);
+        if succeeds {
+            assert!(result.is_ok(), "{result:?}");
+        } else {
+            let error = result.expect_err("step limit bypass");
+            assert_eq!(error.code, "CONFIG_LIMIT");
+            assert_eq!(&*error.reason, "snippet step limit exceeded");
+        }
+    }
+    let long_pattern = format!("/{}", "a".repeat(6000));
+    let large = format!(
+        "snippet \"s\" {{ route \"{long_pattern}\" {{ proxy \"http://127.0.0.1:3000\"; }} }}\nsite \"a.test\" {{ {} }}",
+        "use-snippet \"s\"; ".repeat(2000)
+    );
+    fs::write(&entry, format!("{prefix}{large}"))?;
+    assert_eq!(
+        build(&entry, &ConfigurationOnly)
+            .expect_err("byte limit bypass")
+            .code,
+        "CONFIG_LIMIT"
+    );
+    fs::remove_file(entry)?;
+    Ok(())
+}
+
+#[test]
+fn snippet_reference_errors_keep_cross_file_call_chains() -> TestResult {
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let dir = std::env::temp_dir().join(format!(
+        "rill-snippet-chain-{}-{unique}",
+        std::process::id()
+    ));
+    fs::create_dir(&dir)?;
+    let entry = dir.join("entry.kdl");
+    fs::write(
+        &entry,
+        "server { http \"127.0.0.1:8080\"; }\nimport \"a.kdl\"\nimport \"b.kdl\"\nsite \"x.test\" { proxy \"http://127.0.0.1:3000\"; }\n",
+    )?;
+    fs::write(dir.join("a.kdl"), "snippet \"a\" { use-snippet \"b\"; }\n")?;
+    for (body, code) in [
+        (
+            "snippet \"b\" { use-snippet \"missing\"; }\n",
+            "SNIPPET_REF",
+        ),
+        ("snippet \"b\" { use-snippet \"a\"; }\n", "SNIPPET_REF"),
+    ] {
+        fs::write(dir.join("b.kdl"), body)?;
+        let error = build(&entry, &ConfigurationOnly).expect_err("reference accepted");
+        assert_eq!(error.code, code);
+        assert_eq!(
+            error.origin.source.path,
+            fs::canonicalize(dir.join("b.kdl"))?
+        );
+        assert_eq!(error.origin.position(), (1, 15));
+        assert!(error.origin.references.iter().any(|r| r.source.path
+            == fs::canonicalize(dir.join("a.kdl")).unwrap()
+            && r.position() == (1, 15)));
+    }
+    let mut definitions = String::new();
+    for i in 1..65 {
+        definitions.push_str(&format!(
+            "snippet \"b{i:02}\" {{ use-snippet \"{}\"; }}\n",
+            if i == 64 {
+                "last".to_string()
+            } else {
+                format!("b{:02}", i + 1)
+            }
+        ));
+    }
+    definitions
+        .push_str("snippet \"last\" { route \"/*\" { proxy \"http://127.0.0.1:3000\"; } }\n");
+    fs::write(
+        dir.join("a.kdl"),
+        "snippet \"a\" { use-snippet \"b01\"; }\n",
+    )?;
+    fs::write(dir.join("b.kdl"), definitions)?;
+    let error = build(&entry, &ConfigurationOnly).expect_err("depth accepted");
+    assert_eq!(error.code, "CONFIG_LIMIT");
+    assert!(error.origin.references.iter().any(|r| r.source.path
+        == fs::canonicalize(dir.join("a.kdl")).unwrap()
+        && r.position() == (1, 15)));
+    assert_eq!(
+        error
+            .origin
+            .references
+            .iter()
+            .filter(|r| r.source.path == fs::canonicalize(dir.join("b.kdl")).unwrap())
+            .count(),
+        62
+    );
+    fs::remove_dir_all(dir)?;
+    Ok(())
+}
+
+#[test]
+fn snippet_conflict_deduplicates_deep_import_and_reference_chains() -> TestResult {
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let dir = std::env::temp_dir().join(format!(
+        "rill-snippet-dedup-{}-{unique}",
+        std::process::id()
+    ));
+    fs::create_dir(&dir)?;
+    for i in 0..16 {
+        fs::write(
+            dir.join(format!("{i}.kdl")),
+            format!("import \"{}.kdl\"\n", i + 1),
+        )?;
+    }
+    let mut defs = String::new();
+    for i in 0..16 {
+        defs.push_str(&format!(
+            "snippet \"s{i:02}\" {{ {} }}\n",
+            if i == 15 {
+                "route \"/*\" { proxy \"http://127.0.0.1:3000\"; }".to_string()
+            } else {
+                format!("use-snippet \"s{:02}\";", i + 1)
+            }
+        ));
+    }
+    defs.push_str("server { http \"127.0.0.1:8080\"; }\nsite \"a.test\" { use-snippet \"s00\"; use-snippet \"s00\"; }\n");
+    fs::write(dir.join("16.kdl"), defs)?;
+    let error = build(&dir.join("0.kdl"), &ConfigurationOnly).expect_err("conflict accepted");
+    assert_eq!(error.code, "ROUTE_CONFLICT");
+    let text = error.to_string();
+    let lines: Vec<_> = text.lines().skip(1).collect();
+    let unique_lines: std::collections::BTreeSet<_> = lines.iter().collect();
+    assert_eq!(lines.len(), unique_lines.len());
+    assert!(lines.len() >= 33 && lines.len() <= 36, "{text}");
+    fs::remove_dir_all(dir)?;
+    Ok(())
+}
+
+#[test]
+fn snippet_payload_budget_deduplicates_imports_and_reports_nested_chain() -> TestResult {
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let dir = std::env::temp_dir().join(format!(
+        "rill-snippet-payload-{}-{unique}",
+        std::process::id()
+    ));
+    fs::create_dir(&dir)?;
+    for i in 0..20 {
+        fs::write(
+            dir.join(format!("{i}.kdl")),
+            format!("import \"{}.kdl\"\n", i + 1),
+        )?;
+    }
+    let definition = dir.join("20.kdl");
+    for (pattern_len, count, succeeds) in [(1, 300, true), (16000, 500, false)] {
+        let mut source = String::new();
+        for i in 0..20 {
+            let item = if i == 19 {
+                format!(
+                    "route \"/{}\" {{ proxy \"http://127.0.0.1:3000\"; }}",
+                    "a".repeat(pattern_len)
+                )
+            } else {
+                format!("use-snippet \"s{:02}\";", i + 1)
+            };
+            source.push_str(&format!("snippet \"s{i:02}\" {{ {item} }}\n"));
+        }
+        source.push_str("server { http \"127.0.0.1:8080\"; }\nsite \"a.test\" {\n");
+        source.push_str(&"use-snippet \"s00\";\n".repeat(count));
+        source.push_str("}\n");
+        fs::write(&definition, source)?;
+        let result = normalize(parse(load(&dir.join("0.kdl"))?)?);
+        if succeeds {
+            assert_eq!(result?.sites[0].routes.len(), count);
+        } else {
+            let error = result.expect_err("payload limit bypass");
+            assert_eq!(error.code, "CONFIG_LIMIT");
+            assert_eq!(error.origin.source.path, fs::canonicalize(&definition)?);
+            assert_eq!(error.origin.position(), (20, 17));
+            assert!(
+                error
+                    .origin
+                    .references
+                    .iter()
+                    .any(|r| r.source.path == error.origin.source.path && r.position() == (1, 17))
+            );
+            assert!(
+                error
+                    .origin
+                    .references
+                    .iter()
+                    .any(|r| r.source.path == error.origin.source.path
+                        && r.position().0 >= 23
+                        && r.position().1 == 1)
+            );
+        }
+    }
+    fs::remove_dir_all(dir)?;
+    Ok(())
+}
+
+#[test]
+fn watch_configuration_is_boolean_and_singleton() -> TestResult {
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let directory =
+        std::env::temp_dir().join(format!("rill-watch-config-{}-{unique}", std::process::id()));
+    fs::create_dir(&directory)?;
+    let entry = directory.join("config.kdl");
+    for (field, expected) in [
+        ("", Some(false)),
+        ("watch #true;", Some(true)),
+        ("watch #false;", Some(false)),
+        ("watch true;", None),
+        ("watch #true; watch #false;", None),
+        ("watch #true extra=1;", None),
+    ] {
+        fs::write(
+            &entry,
+            format!(
+                "server {{ http \"127.0.0.1:8080\"; {field} }}\nsite \"example.test\" {{ proxy \"http://127.0.0.1:3000\"; }}\n"
+            ),
+        )?;
+        let parsed = load(&entry).and_then(parse);
+        match expected {
+            Some(value) => assert_eq!(parsed?.server.ok_or("missing server")?.watch, value),
+            None => assert!(parsed.is_err(), "accepted {field}"),
+        }
+    }
+    fs::remove_dir_all(directory)?;
+    Ok(())
+}
+
+#[test]
+fn tracked_build_retains_glob_and_symlink_dependencies_on_failure() -> TestResult {
+    use rill::config::prepare::build_tracked;
+    use std::os::unix::fs::symlink;
+
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let directory =
+        std::env::temp_dir().join(format!("rill-watch-graph-{}-{unique}", std::process::id()));
+    fs::create_dir(&directory)?;
+    let actual = directory.join("actual.kdl");
+    let entry = directory.join("entry.kdl");
+    let imports = directory.join("imports");
+    fs::create_dir(&imports)?;
+    fs::write(
+        &actual,
+        "server { http \"127.0.0.1:8080\"; }\nimport \"imports/*/*.kdl\"\nsite \"example.test\" { proxy \"http://127.0.0.1:3000\"; }\n",
+    )?;
+    symlink(&actual, &entry)?;
+    let failure = build_tracked(&entry, &ConfigurationOnly).expect_err("empty glob must fail");
+    assert!(failure.dependencies.paths.contains_key(&entry));
+    assert!(failure.dependencies.paths.contains_key(&actual));
+    assert!(
+        failure
+            .dependencies
+            .glob_directories
+            .iter()
+            .any(|item| item.directory == imports && item.pattern == "*")
+    );
+    fs::create_dir(imports.join("new"))?;
+    assert!(!failure.dependencies.unchanged());
+    fs::write(
+        imports.join("new/profile.kdl"),
+        "profile \"base\" { read-timeout \"1s\"; }\n",
+    )?;
+    let tracked = build_tracked(&entry, &ConfigurationOnly).map_err(|failure| failure.error)?;
+    assert!(
+        tracked
+            .dependencies
+            .glob_directories
+            .iter()
+            .any(|item| item.directory == imports.join("new") && item.pattern == "*.kdl")
+    );
+    assert!(tracked.dependencies.unchanged());
+    fs::remove_dir_all(directory)?;
+    Ok(())
+}

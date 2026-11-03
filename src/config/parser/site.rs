@@ -6,7 +6,7 @@ use super::values::{
     argument, at, boolean, once, parameter, path, references, shape, string, unknown,
 };
 use crate::config::error::{ConfigError, Result};
-use crate::config::model::{Parameters, RawAction, RawRoute, RawSite};
+use crate::config::model::{Parameters, RawAction, RawRoute, RawSite, RouteItem};
 use crate::config::source::{Located, Origin};
 
 struct Scope {
@@ -16,7 +16,7 @@ struct Scope {
     spa: Option<Located<bool>>,
     cache_control: Option<Located<String>>,
     tls: Option<Located<String>>,
-    routes: Vec<RawRoute>,
+    items: Vec<RouteItem>,
 }
 
 fn scope(node: &KdlNode, origin: &Origin, site: bool) -> Result<Scope> {
@@ -27,7 +27,7 @@ fn scope(node: &KdlNode, origin: &Origin, site: bool) -> Result<Scope> {
         spa: None,
         cache_control: None,
         tls: None,
-        routes: Vec::new(),
+        items: Vec::new(),
     };
     let mut seen = BTreeSet::new();
     for child in node
@@ -42,25 +42,15 @@ fn scope(node: &KdlNode, origin: &Origin, site: bool) -> Result<Scope> {
                 continue;
             }
             "route" if site => {
-                shape(child, &origin, "route", 1..=1, true)?;
-                let pattern = argument(child, 0, &origin, "route")?;
-                let route = scope(child, &origin, false)?;
-                let action = route.action.ok_or_else(|| {
-                    ConfigError::new(
-                        "CONFIG_TYPE",
-                        "route",
-                        "route requires exactly one proxy or root action",
-                        &origin,
-                    )
-                })?;
-                result.routes.push(RawRoute {
-                    pattern,
-                    uses: route.uses,
-                    parameters: route.parameters,
-                    action,
-                    spa: route.spa,
-                    cache_control: route.cache_control,
-                });
+                result
+                    .items
+                    .push(RouteItem::Route(Box::new(route(child, &origin)?)));
+                continue;
+            }
+            "use-snippet" if site => {
+                result
+                    .items
+                    .push(RouteItem::Snippet(string(child, &origin, "use-snippet")?));
                 continue;
             }
             _ => {}
@@ -96,6 +86,28 @@ fn scope(node: &KdlNode, origin: &Origin, site: bool) -> Result<Scope> {
     Ok(result)
 }
 
+pub fn route(node: &KdlNode, origin: &Origin) -> Result<RawRoute> {
+    shape(node, origin, "route", 1..=1, true)?;
+    let pattern = argument(node, 0, origin, "route")?;
+    let scope = scope(node, origin, false)?;
+    let action = scope.action.ok_or_else(|| {
+        ConfigError::new(
+            "CONFIG_TYPE",
+            "route",
+            "route requires exactly one proxy or root action",
+            origin,
+        )
+    })?;
+    Ok(RawRoute {
+        pattern,
+        uses: scope.uses,
+        parameters: scope.parameters,
+        action,
+        spa: scope.spa,
+        cache_control: scope.cache_control,
+    })
+}
+
 pub fn parse(node: &KdlNode, origin: &Origin) -> Result<RawSite> {
     shape(node, origin, "site", 1..=128, true)?;
     let domains = (0..node.entries().len())
@@ -103,7 +115,7 @@ pub fn parse(node: &KdlNode, origin: &Origin) -> Result<RawSite> {
         .collect::<Result<Vec<_>>>()?;
     let mut scope = scope(node, origin, true)?;
     if let Some(action) = scope.action {
-        scope.routes.push(RawRoute {
+        scope.items.push(RouteItem::Route(Box::new(RawRoute {
             pattern: Located::new(
                 "/*".into(),
                 match &action {
@@ -116,7 +128,7 @@ pub fn parse(node: &KdlNode, origin: &Origin) -> Result<RawSite> {
             action,
             spa: scope.spa,
             cache_control: scope.cache_control,
-        });
+        })));
     } else if scope.spa.is_some() || scope.cache_control.is_some() {
         return Err(ConfigError::new(
             "CONFIG_TYPE",
@@ -125,7 +137,7 @@ pub fn parse(node: &KdlNode, origin: &Origin) -> Result<RawSite> {
             origin,
         ));
     }
-    if scope.routes.is_empty() {
+    if scope.items.is_empty() {
         return Err(ConfigError::new(
             "CONFIG_TYPE",
             "site",
@@ -138,7 +150,8 @@ pub fn parse(node: &KdlNode, origin: &Origin) -> Result<RawSite> {
         tls: scope.tls,
         uses: scope.uses,
         parameters: scope.parameters,
-        routes: scope.routes,
+        routes: Vec::new(),
+        items: scope.items,
         origin: origin.clone(),
     })
 }

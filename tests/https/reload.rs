@@ -482,3 +482,330 @@ fn tls_websocket_survives_successful_and_failed_reload() -> TestResult {
     assert_eq!(proxy.finish()?.0, 0);
     Ok(())
 }
+
+#[test]
+fn watch_tls_websocket_survives_reloads_and_certificate_failure_without_fd_leak() -> TestResult {
+    use std::io::{BufRead, BufReader};
+    use std::net::TcpListener;
+    use std::sync::Mutex;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::thread;
+    use std::time::Instant;
+
+    const MASKED: &[u8] = &[0x81, 0x82, 1, 2, 3, 4, b'h' ^ 1, b'i' ^ 2];
+    const CLOSE: &[u8] = &[0x88, 0x80, 1, 2, 3, 4];
+
+    struct StopSampler {
+        stop: Arc<AtomicBool>,
+        thread: Option<thread::JoinHandle<TestResult>>,
+    }
+    impl Drop for StopSampler {
+        fn drop(&mut self) {
+            self.stop.store(true, Ordering::Relaxed);
+            if let Some(thread) = self.thread.take() {
+                let _ = thread.join();
+            }
+        }
+    }
+    fn count_inotify(pid: u32) -> TestResult<usize> {
+        let mut count = 0;
+        for entry in fs::read_dir(format!("/proc/{pid}/fd"))? {
+            match fs::read_link(entry?.path()) {
+                Ok(path) if path == Path::new("anon_inode:inotify") => count += 1,
+                Ok(_) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error.into()),
+            }
+        }
+        Ok(count)
+    }
+    fn wait(mut condition: impl FnMut() -> TestResult<bool>) -> TestResult {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            if condition()? {
+                return Ok(());
+            }
+            if Instant::now() >= deadline {
+                return Err("watch TLS observation timed out".into());
+            }
+            thread::sleep(Duration::from_millis(30));
+        }
+    }
+
+    let directory = Directory::new()?;
+    let control = directory.0.join("control");
+    fs::create_dir(&control)?;
+    fs::set_permissions(&control, fs::Permissions::from_mode(0o700))?;
+    let socket = control.join("rill.sock");
+    let site = directory.0.join("site.kdl");
+    let root = directory.0.join("static");
+    fs::create_dir(&root)?;
+    fs::write(root.join("file"), b"static")?;
+    let ca = Certificate::issue(&[], None, true, (-60, 3600))?;
+    let first = Certificate::issue(&["app.test"], Some(&ca), false, (-60, 3600))?;
+    let second = Certificate::issue(&["app.test"], Some(&ca), false, (-60, 3600))?;
+    first.save(&directory.0, "default", &[])?;
+    second.save(&directory.0, "second", &[])?;
+    let backend_a = TcpListener::bind("127.0.0.1:0")?;
+    let backend_b = TcpListener::bind("127.0.0.1:0")?;
+    let a = backend_a.local_addr()?;
+    let b = backend_b.local_addr()?;
+    let proxy_site =
+        |backend| format!("site \"app.test\" {{ tls \"default\"; proxy \"http://{backend}\"; }}\n");
+    let static_site = format!(
+        "site \"app.test\" {{ tls \"default\"; root \"{}\"; cache-control \"max-age=20\"; }}\n",
+        root.display()
+    );
+    fs::write(&site, proxy_site(a))?;
+    let address = vacant()?;
+    let config = format!(
+        "server {{ https \"{address}\"; control-socket \"{}\"; watch #true; }}\ntls \"default\" {{ cert \"{}\"; key \"{}\"; }}\nimport \"{}\"\n",
+        socket.display(),
+        directory.0.join("default.pem").display(),
+        directory.0.join("default.key").display(),
+        site.display()
+    );
+    let mut proxy = Proxy::start(address, &config)?;
+    let pid = proxy.child.id();
+    wait(|| Ok(count_inotify(pid)? == 1))?;
+    let log = Arc::new(Mutex::new(String::new()));
+    let output = Arc::clone(&log);
+    let stderr = proxy.child.stderr.take().ok_or("missing proxy stderr")?;
+    let logger = thread::spawn(move || -> TestResult {
+        let mut reader = BufReader::new(stderr);
+        loop {
+            let mut line = String::new();
+            if reader.read_line(&mut line)? == 0 {
+                return Ok(());
+            }
+            output
+                .lock()
+                .map_err(|_| "log lock poisoned")?
+                .push_str(&line);
+        }
+    });
+    let stop = Arc::new(AtomicBool::new(false));
+    let peak = Arc::new(AtomicUsize::new(0));
+    let sampler_stop = Arc::clone(&stop);
+    let sampler_peak = Arc::clone(&peak);
+    let sampler = thread::spawn(move || -> TestResult {
+        let deadline = Instant::now() + Duration::from_secs(120);
+        while !sampler_stop.load(Ordering::Relaxed) {
+            if Instant::now() >= deadline {
+                return Err("FD sampler timed out".into());
+            }
+            sampler_peak.fetch_max(count_inotify(pid)?, Ordering::Relaxed);
+            thread::sleep(Duration::from_millis(1));
+        }
+        Ok(())
+    });
+    let mut sampler = StopSampler {
+        stop,
+        thread: Some(sampler),
+    };
+    let backend_stop = Arc::new(AtomicBool::new(false));
+    let backend_finished = Arc::clone(&backend_stop);
+    backend_b.set_nonblocking(true)?;
+    let worker_b = thread::spawn(move || -> TestResult {
+        let deadline = Instant::now() + Duration::from_secs(120);
+        while !backend_finished.load(Ordering::Relaxed) {
+            if Instant::now() >= deadline {
+                return Err("HTTP backend timed out".into());
+            }
+            match backend_b.accept() {
+                Ok((mut stream, _)) => {
+                    stream.set_read_timeout(Some(Duration::from_secs(5)))?;
+                    stream.set_write_timeout(Some(Duration::from_secs(5)))?;
+                    let request = head(&mut stream)?;
+                    if !request.starts_with("GET /file ") {
+                        return Err("unexpected backend request".into());
+                    }
+                    stream.write_all(
+                        b"HTTP/1.1 200 OK\r\nContent-Length: 3\r\nConnection: close\r\n\r\nnew",
+                    )?;
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    thread::sleep(Duration::from_millis(10))
+                }
+                Err(error) => return Err(error.into()),
+            }
+        }
+        Ok(())
+    });
+    let mut backend_guard = StopSampler {
+        stop: backend_stop,
+        thread: Some(worker_b),
+    };
+    let worker_a = thread::spawn(move || -> TestResult {
+        let mut stream = accept(&backend_a)?;
+        stream.set_read_timeout(Some(Duration::from_secs(15)))?;
+        let request = head(&mut stream)?.to_ascii_lowercase();
+        assert!(request.contains("sec-websocket-key: dghlihnhbxbszsbub25jzq=="));
+        stream.write_all(b"HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=\r\n\r\n")?;
+        for _ in 0..9 {
+            let mut frame = [0; 8];
+            stream.read_exact(&mut frame)?;
+            assert_eq!(&frame, MASKED);
+            stream.write_all(b"\x81\x02hi")?;
+        }
+        let mut frame = [0; 6];
+        stream.read_exact(&mut frame)?;
+        assert_eq!(&frame, CLOSE);
+        stream.write_all(b"\x88\x00")?;
+        Ok(())
+    });
+    let mut ws = tls_connect(address, "app.test", &[&ca], true)?;
+    assert_eq!(
+        ws.ssl()
+            .peer_certificate()
+            .ok_or("missing certificate")?
+            .to_der()?,
+        first.cert.to_der()?
+    );
+    ws.write_all(b"GET / HTTP/1.1\r\nHost: app.test\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n")?;
+    assert!(head(&mut ws)?.starts_with("HTTP/1.1 101 "));
+    let exchange = |stream: &mut SslStream<TcpStream>| -> TestResult {
+        stream.write_all(MASKED)?;
+        let mut frame = [0; 4];
+        stream.read_exact(&mut frame)?;
+        assert_eq!(&frame, b"\x81\x02hi");
+        Ok(())
+    };
+    exchange(&mut ws)?;
+    fs::copy(
+        directory.0.join("second.pem"),
+        directory.0.join("default.pem"),
+    )?;
+    fs::copy(
+        directory.0.join("second.key"),
+        directory.0.join("default.key"),
+    )?;
+    for round in 0..6 {
+        let expected: &[u8] = if round % 2 == 0 { b"new" } else { b"static" };
+        fs::write(
+            &site,
+            if round % 2 == 0 {
+                proxy_site(b)
+            } else {
+                static_site.clone()
+            },
+        )?;
+        wait(|| {
+            let mut client = tls_connect(address, "app.test", &[&ca], true)?;
+            let cert = client
+                .ssl()
+                .peer_certificate()
+                .ok_or("missing certificate")?
+                .to_der()?;
+            if cert != second.cert.to_der()? {
+                return Ok(false);
+            }
+            let Ok((status, headers, body)) = tls_request(&mut client, "app.test", "/file") else {
+                return Ok(false);
+            };
+            Ok(status == 200
+                && body == expected
+                && (expected != b"static" || headers.to_ascii_lowercase().contains("max-age=20")))
+        })?;
+        exchange(&mut ws)?;
+        wait(|| Ok(count_inotify(pid)? == 1))?;
+    }
+    assert_eq!(
+        ws.ssl()
+            .peer_certificate()
+            .ok_or("missing old certificate")?
+            .to_der()?,
+        first.cert.to_der()?
+    );
+    first.save(&directory.0, "first", &[])?;
+    let failures = log
+        .lock()
+        .map_err(|_| "log lock poisoned")?
+        .lines()
+        .filter(|line| line.contains("watch_reload_failed") && line.contains("TLS_INVALID"))
+        .count();
+    fs::copy(
+        directory.0.join("first.key"),
+        directory.0.join("default.key"),
+    )?;
+    wait(|| {
+        Ok(log
+            .lock()
+            .map_err(|_| "log lock poisoned")?
+            .lines()
+            .filter(|line| line.contains("watch_reload_failed") && line.contains("TLS_INVALID"))
+            .count()
+            > failures)
+    })?;
+    let mut client = tls_connect(address, "app.test", &[&ca], true)?;
+    assert_eq!(
+        client
+            .ssl()
+            .peer_certificate()
+            .ok_or("missing certificate")?
+            .to_der()?,
+        second.cert.to_der()?
+    );
+    assert_eq!(tls_request(&mut client, "app.test", "/file")?.2, b"static");
+    exchange(&mut ws)?;
+    let successes = log
+        .lock()
+        .map_err(|_| "log lock poisoned")?
+        .matches("watch_reload_succeeded")
+        .count();
+    fs::copy(
+        directory.0.join("second.key"),
+        directory.0.join("default.key"),
+    )?;
+    wait(|| {
+        Ok(log
+            .lock()
+            .map_err(|_| "log lock poisoned")?
+            .matches("watch_reload_succeeded")
+            .count()
+            > successes)
+    })?;
+    let mut repaired = tls_connect(address, "app.test", &[&ca], true)?;
+    assert_eq!(
+        repaired
+            .ssl()
+            .peer_certificate()
+            .ok_or("missing certificate")?
+            .to_der()?,
+        second.cert.to_der()?
+    );
+    assert_eq!(
+        tls_request(&mut repaired, "app.test", "/file")?.2,
+        b"static"
+    );
+    exchange(&mut ws)?;
+    wait(|| Ok(count_inotify(pid)? == 1))?;
+    sampler.stop.store(true, Ordering::Relaxed);
+    sampler
+        .thread
+        .take()
+        .ok_or("missing sampler")?
+        .join()
+        .map_err(|_| "sampler panicked")??;
+    assert!(peak.load(Ordering::Relaxed) <= 2);
+    ws.write_all(CLOSE)?;
+    let mut close = [0; 2];
+    ws.read_exact(&mut close)?;
+    assert_eq!(&close, b"\x88\x00");
+    drop((ws, client, repaired));
+    worker_a
+        .join()
+        .map_err(|_| "websocket backend panicked")??;
+    backend_guard.stop.store(true, Ordering::Relaxed);
+    backend_guard
+        .thread
+        .take()
+        .ok_or("missing HTTP backend")?
+        .join()
+        .map_err(|_| "HTTP backend panicked")??;
+    proxy.signal()?;
+    assert_eq!(proxy.finish()?.0, 0);
+    logger.join().map_err(|_| "log reader panicked")??;
+    assert!(!socket.exists());
+    Ok(())
+}

@@ -8,7 +8,7 @@ use kdl::KdlNode;
 
 use super::error::{ConfigError, Result};
 use super::loader::LoadedConfig;
-use super::model::{Certificate, Parameters, ParsedConfig, Profile};
+use super::model::{Certificate, Parameters, ParsedConfig, Profile, RouteItem, Snippet};
 use super::source::Origin;
 use values::{argument, at, once, parameter, path, references, shape, unknown};
 
@@ -36,6 +36,33 @@ fn profile(node: &KdlNode, origin: &Origin) -> Result<Profile> {
         }
     }
     Ok(result)
+}
+
+fn snippet(node: &KdlNode, origin: &Origin) -> Result<Snippet> {
+    shape(node, origin, "snippet", 1..=1, true)?;
+    let name = argument(node, 0, origin, "snippet")?;
+    let mut items = Vec::new();
+    for child in node
+        .children()
+        .into_iter()
+        .flat_map(|document| document.nodes())
+    {
+        let origin = at(child, origin);
+        items.push(match child.name().value() {
+            "route" => RouteItem::Route(Box::new(site::route(child, &origin)?)),
+            "use-snippet" => RouteItem::Snippet(values::string(child, &origin, "use-snippet")?),
+            _ => return Err(unknown(child, &origin)),
+        });
+    }
+    if items.is_empty() {
+        return Err(ConfigError::new(
+            "CONFIG_TYPE",
+            "snippet",
+            "snippet must not be empty",
+            origin,
+        ));
+    }
+    Ok(Snippet { name, items })
 }
 
 fn certificate(node: &KdlNode, origin: &Origin) -> Result<Certificate> {
@@ -73,6 +100,7 @@ pub fn parse(loaded: LoadedConfig) -> Result<ParsedConfig> {
         entry: loaded.entry,
         server: None,
         profiles: BTreeMap::new(),
+        snippets: BTreeMap::new(),
         certificates: BTreeMap::new(),
         sites: Vec::new(),
     };
@@ -105,6 +133,19 @@ pub fn parse(loaded: LoadedConfig) -> Result<ParsedConfig> {
                     .related(&first.name.origin));
                 }
                 result.profiles.insert(profile.name.value.clone(), profile);
+            }
+            "snippet" => {
+                let snippet = snippet(node, origin)?;
+                if let Some(first) = result.snippets.get(&snippet.name.value) {
+                    return Err(ConfigError::new(
+                        "DUPLICATE",
+                        "snippet",
+                        "snippet name already defined",
+                        origin,
+                    )
+                    .related(&first.name.origin));
+                }
+                result.snippets.insert(snippet.name.value.clone(), snippet);
             }
             "tls" => {
                 let certificate = certificate(node, origin)?;

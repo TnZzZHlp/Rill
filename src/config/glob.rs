@@ -1,6 +1,11 @@
 use std::fs;
+use std::os::fd::AsRawFd;
+
+use nix::fcntl::{OFlag, open};
+use nix::sys::stat::Mode;
 use std::path::{Component, Path, PathBuf};
 
+use super::dependencies::DependencyPlan;
 use super::error::{ConfigError, Result};
 use super::source::Origin;
 
@@ -107,6 +112,14 @@ fn matches(tokens: &[Token], name: &[u8]) -> bool {
 }
 
 pub fn expand(path: &Path, origin: &Origin) -> Result<Vec<PathBuf>> {
+    expand_tracked(path, origin, &mut DependencyPlan::disabled())
+}
+
+pub fn expand_tracked(
+    path: &Path,
+    origin: &Origin,
+    dependencies: &mut DependencyPlan,
+) -> Result<Vec<PathBuf>> {
     let mut paths = vec![PathBuf::new()];
     if path.components().count() > 64 {
         return Err(ConfigError::new(
@@ -132,10 +145,44 @@ pub fn expand(path: &Path, origin: &Origin) -> Result<Vec<PathBuf>> {
             }
             continue;
         }
+        let pattern_text = name;
         let pattern = tokens(name, origin)?;
         let mut expanded = Vec::new();
         for directory in paths {
-            let entries = fs::read_dir(&directory).map_err(|_| {
+            dependencies.track_glob(&directory, name, origin)?;
+            let directory_fd = if dependencies.enabled() {
+                let fd = open(
+                    directory.as_path(),
+                    OFlag::O_RDONLY | OFlag::O_DIRECTORY | OFlag::O_CLOEXEC,
+                    Mode::empty(),
+                )
+                .map_err(|_| {
+                    ConfigError::new(
+                        "RESOURCE_IO",
+                        "import",
+                        "cannot open import directory",
+                        origin,
+                    )
+                })?;
+                let file = fs::File::from(fd);
+                let metadata = file.metadata().map_err(|_| {
+                    ConfigError::new(
+                        "RESOURCE_IO",
+                        "import",
+                        "cannot inspect import directory",
+                        origin,
+                    )
+                })?;
+                dependencies.record_consumed(&directory, &metadata, origin)?;
+                Some(file)
+            } else {
+                None
+            };
+            let enumeration_path = directory_fd.as_ref().map_or_else(
+                || directory.clone(),
+                |file| PathBuf::from(format!("/proc/self/fd/{}", file.as_raw_fd())),
+            );
+            let entries = fs::read_dir(&enumeration_path).map_err(|_| {
                 ConfigError::new(
                     "RESOURCE_IO",
                     "import",
@@ -162,7 +209,15 @@ pub fn expand(path: &Path, origin: &Origin) -> Result<Vec<PathBuf>> {
                     )
                 })?;
                 if matches(&pattern, name.as_bytes()) {
-                    expanded.push(entry.path());
+                    dependencies.track_glob_match(
+                        &directory,
+                        pattern_text,
+                        entry.file_name().as_os_str(),
+                        origin,
+                    )?;
+                    let matched_path = directory.join(entry.file_name());
+                    dependencies.track_path(&matched_path, origin)?;
+                    expanded.push(matched_path);
                     if expanded.len() > 512 {
                         return Err(ConfigError::new(
                             "CONFIG_LIMIT",
@@ -186,4 +241,8 @@ pub fn expand(path: &Path, origin: &Origin) -> Result<Vec<PathBuf>> {
         ));
     }
     Ok(paths)
+}
+
+pub fn matches_component(pattern: &str, name: &str, origin: &Origin) -> Result<bool> {
+    Ok(matches(&tokens(pattern, origin)?, name.as_bytes()))
 }

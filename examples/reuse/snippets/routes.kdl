@@ -1,0 +1,5 @@
+snippet "shared" {
+    route "/shared.txt" {
+        root "../www"
+    }
+}

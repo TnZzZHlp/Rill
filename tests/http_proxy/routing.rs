@@ -177,3 +177,32 @@ fn exact_domains_override_single_label_wildcards() -> TestResult {
     worker.join().map_err(|_| "backend panicked")??;
     Ok(())
 }
+
+#[test]
+fn snippet_routes_serve_both_hosts_without_sharing_other_routes() -> TestResult {
+    let backend = TcpListener::bind("127.0.0.1:0")?;
+    let upstream = backend.local_addr()?;
+    let address = vacant()?;
+    let worker = thread::spawn(move || -> TestResult {
+        for _ in 0..2 {
+            let mut stream = accept(&backend)?;
+            let _ = head(&mut stream)?;
+            reply(&mut stream, b"shared", true)?;
+        }
+        Ok(())
+    });
+    let config = format!(
+        "server {{ http \"{address}\"; }}\nsnippet \"shared\" {{ route \"/shared\" {{ proxy \"http://{upstream}\"; }} }}\nsite \"a.test\" {{ use-snippet \"shared\"; route \"/only-a\" {{ proxy \"http://{upstream}\"; }} }}\nsite \"b.test\" {{ use-snippet \"shared\"; }}\n"
+    );
+    let mut proxy = Proxy::start(address, &config)?;
+    for host in ["a.test", "b.test"] {
+        let (status, _, body) = send(proxy.address, host, "/shared")?;
+        assert_eq!(status, 200);
+        assert_eq!(body, b"shared");
+    }
+    assert_eq!(send(proxy.address, "b.test", "/only-a")?.0, 404);
+    proxy.signal()?;
+    assert_eq!(proxy.finish()?.0, 0);
+    worker.join().map_err(|_| "backend panic")??;
+    Ok(())
+}

@@ -1,0 +1,42 @@
+rill 0.1.0
+{
+  "example_validation": "passed",
+  "results": [
+    {
+      "example": "config.kdl",
+      "check": 0
+    },
+    {
+      "example": "config.kdl",
+      "two_sites": true,
+      "independent_routes": true,
+      "inotify": 0
+    },
+    {
+      "example": "config.kdl",
+      "exit": 0,
+      "socket_removed": true
+    },
+    {
+      "example": "watch.kdl",
+      "check": 0
+    },
+    {
+      "example": "watch.kdl",
+      "two_sites": true,
+      "independent_routes": true,
+      "inotify": 1
+    },
+    {
+      "example": "watch.kdl",
+      "atomic_snippet_update": "both_sites_observed"
+    },
+    {
+      "example": "watch.kdl",
+      "exit": 0,
+      "socket_removed": true
+    }
+  ]
+}
+{"artifact": "rill", "bytes": 19054072, "sha256": "06cf6d52a48e8f6450e8682e3d2359f0417b8a03c762b10c9932db367353dcf8"}
+RELEASE_EXAMPLES_EXIT=0

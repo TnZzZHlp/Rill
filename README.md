@@ -1,6 +1,6 @@
 # Rill
 
-Rill 是 Linux 上的 HTTP/HTTPS 反向代理和静态文件服务器，支持多域名、KDL 配置及通过本地控制 Socket 执行配置和证书 Reload。
+Rill 是 Linux 上的 HTTP/HTTPS 反向代理和静态文件服务器，支持多域名、KDL 配置、Snippet 路由复用，以及通过本地控制 Socket 执行配置和证书 Reload。自动文件监听可显式启用，默认关闭。
 
 ## 构建
 
@@ -30,11 +30,13 @@ rill reload --socket /run/rill/control.sock --timeout 35s
 
 systemd 部署推荐 `systemctl reload rill`，也可使用 `sudo -u rill rill reload --socket /run/rill/control.sock --timeout 35s`。客户端只信任自身 UID 或 root 的服务端；root CLI 连接非 root 服务会拒绝其 peer，不能假定 `sudo rill reload` 可用。
 
-`check` 验证配置及本地资源，但不监听、不联系运行实例，也不验证 DNS、上游连接或上游 TLS 信任。Reload 重新读取实例启动时的配置入口并等待实际结果；成功输出请求 ID 和代次。监听地址或控制 Socket 路径改变需要重启。
+`check` 验证配置及本地资源，但不监听、不联系运行实例，也不验证 DNS、上游连接或上游 TLS 信任。Reload 重新读取实例启动时的配置入口并等待实际结果；成功输出请求 ID 和代次。监听地址、控制 Socket 路径或 watch 启动设置改变需要重启。
 
 退出码 0 表示成功，1 表示配置、准备或服务端明确失败，2 表示命令参数错误，3 表示管理通信失败、超时或结果未知。结果未知不等于操作未发生；不要自动重试，应先检查日志和实际服务状态。
 
 服务通过 SIGTERM 或 SIGINT 停止接受新连接并最多排空 30 秒；Reload 不是 SIGHUP 或重启。管理 Socket 目录须由服务有效 UID 拥有且权限为 0700，Socket 为 0600；服务端协议只允许服务 UID 和 root，但客户端还会验证服务端 UID。不要向不可信用户开放服务 UID 或 Socket。
+
+复用示例 `examples/reuse/config.kdl` 使用本地静态文件，不启用 watch；`examples/reuse/watch.kdl` 单独展示显式启用。运行前将其 Socket 占位路径改为管理员准备的服务 UID 所有、权限为 0700 的私有目录中的路径。
 
 HTTPS 示例 `examples/deploy/https.kdl` 需要管理员自行提供证书及私钥，不要将私钥提交到仓库。默认使用高端口，由外部组件转发低端口。
 

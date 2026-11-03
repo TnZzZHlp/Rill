@@ -45,7 +45,9 @@ P0 包含原文全部必需服务、配置、安全、可观测性和交付要�
 
 007 已实现原子 Reload 和本地管理，隔离门禁 106 项通过，最终新上下文独立复审 No issues found、Merge verdict OK；详见 [007 验证记录](../../validation/007-atomic-reload.md)。独立完成提交为 321aed0。
 
-008 已完成 P0 逐项补测、部署及基准交付；经用户确认修复 TCP_NODELAY，红色回归复现、绿色 111 项及 release 门禁通过。systemd/Podman 实测及修复前后各 108 轮标准基准通过独立复核，原始结果独立保留，明确 C8 闭环、客户端瓶颈和部署 override 边界；见 [008 验证记录](../../validation/008-p0-validation-deployment.md)。独立完成提交见 Git 历史；009 未开始。
+008 已完成 P0 逐项补测、部署及基准交付；经用户确认修复 TCP_NODELAY，红色回归复现、绿色 111 项及 release 门禁通过。systemd/Podman 实测及修复前后各 108 轮标准基准通过独立复核，原始结果独立保留，明确 C8 闭环、客户端瓶颈和部署 override 边界；见 [008 验证记录](../../validation/008-p0-validation-deployment.md)。独立完成提交为 2059f15。
+
+009 已实现独立 Snippet 复用和默认关闭的 inotify 自动 Reload，所有事件仍复用既有事务管线；最终 131 项隔离门禁、release 和示例实际运行通过，独立源码/测试及交付复审关闭。见 [009 验证记录](../../validation/009-config-reuse-watch.md)。009 独立完成提交见 Git 历史，010/011 未开始。
 
 ## 目标与成功标准
 
@@ -72,7 +74,7 @@ P0 包含原文全部必需服务、配置、安全、可观测性和交付要�
 - [ ] **G06：P1 增强可配置且不破坏核心保证**
   - 009–011 交付所有增强；默认关闭的功能不暗中开启，缓存/导出/监听资源有界。
   - 计划验证：各阶段组合失败路径、权限边界、缓存一致性和开销检查。
-  - 验证证据：未执行。
+  - 验证证据：009 的 Snippet 与自动 Reload 已通过 131 项门禁、release、示例实测及独立复审，见 docs/validation/009-config-reuse-watch.md；010/011 未开始，G06 整体仍未验收。
 - [ ] **G07：完整版本交付闭环**
   - P0/P1 综合回归通过、文档和部署可复现，所有完成阶段有独立完成提交及真实证据。
   - 计划验证：012 最终门禁、环境复现和证据索引。
@@ -172,7 +174,7 @@ Q01–Q04 已解决：KDL v2、rill 命名、一级通配及完整路径 root �
 | 006 | [完整代理、流式连接与安全边界](subplans/006-proxy-streaming-safety.md) | 补齐 HTTPS 上游、WebSocket、SSE 及完整代理安全和资源约束。 | 004 | 已完成（2ba0636） |
 | 007 | [原子 Reload 与本地管理](subplans/007-atomic-reload.md) | 通过受权限保护的本地控制面提供有实际结果反馈的事务性热更新。 | 004、005、006 | 已验收（独立完成提交见 Git 历史） |
 | 008 | [P0 验收、性能基线与部署](subplans/008-p0-validation-deployment.md) | 形成可部署的完整 P0 版本，补齐原文验收和交付证据。 | 007 | 已验收（独立完成提交见 Git 历史） |
-| 009 | [Snippet 与可选自动 Reload](subplans/009-config-reuse-watch.md) | 提供可复用路由片段和显式启用的文件变更重载。 | 008 | 未开始 |
+| 009 | [Snippet 与可选自动 Reload](subplans/009-config-reuse-watch.md) | 提供可复用路由片段和显式启用的文件变更重载。 | 008 | 已验收（独立完成提交见 Git 历史） |
 | 010 | [静态文件可选增强](subplans/010-static-enhancements.md) | 在不放宽目录约束的前提下提供预压缩、可控缓存、自定义错误页和可选目录浏览。 | 008 | 未开始 |
 | 011 | [日志、指标与可选链路追踪](subplans/011-observability.md) | 提供 Access Log、Prometheus 和可选 OpenTelemetry，保持热路径开销可控。 | 008 | 未开始 |
 | 012 | [完整发布验收与性能收口](subplans/012-release-validation.md) | 收口 P0/P1 集成、部署和同环境性能证据，形成最终交付版本。 | 009、010、011 | 未开始 |

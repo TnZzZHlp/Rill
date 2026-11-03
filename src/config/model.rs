@@ -44,7 +44,20 @@ pub struct RawSite {
     pub uses: Vec<Located<String>>,
     pub parameters: Parameters,
     pub routes: Vec<RawRoute>,
+    pub items: Vec<RouteItem>,
     pub origin: Origin,
+}
+
+#[derive(Clone, Debug)]
+pub enum RouteItem {
+    Route(Box<RawRoute>),
+    Snippet(Located<String>),
+}
+
+#[derive(Clone, Debug)]
+pub struct Snippet {
+    pub name: Located<String>,
+    pub items: Vec<RouteItem>,
 }
 
 #[derive(Clone, Debug)]
@@ -59,6 +72,7 @@ pub struct Server {
     pub origin: Origin,
     pub http: Vec<Located<SocketAddr>>,
     pub https: Vec<Located<SocketAddr>>,
+    pub watch: bool,
     pub redirect_https: bool,
     pub redirect_port: Option<u16>,
     pub control_socket: PathBuf,
@@ -100,6 +114,7 @@ pub struct ParsedConfig {
     pub entry: PathBuf,
     pub server: Option<Server>,
     pub profiles: BTreeMap<String, Profile>,
+    pub snippets: BTreeMap<String, Snippet>,
     pub certificates: BTreeMap<String, Certificate>,
     pub sites: Vec<RawSite>,
 }

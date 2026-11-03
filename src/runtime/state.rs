@@ -4,6 +4,8 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use super::watch::resources::WatchResources;
+use crate::config::dependencies::DependencyPlan;
 use crate::config::model::ValidatedConfig;
 use crate::config::prepare::{CheckedRoute, ConfigurationOnly, PreparedSnapshot, ResourcePreparer};
 use crate::config::source::Origin;
@@ -55,7 +57,28 @@ impl ResourcePreparer for HttpPreparer {
     type Resources = HttpResources;
 
     fn prepare(&self, configuration: &ValidatedConfig) -> Result<HttpResources> {
-        let checked = ConfigurationOnly.prepare(configuration)?;
+        self.prepare_inner(configuration, None)
+    }
+
+    fn prepare_tracked(
+        &self,
+        configuration: &ValidatedConfig,
+        dependencies: &mut crate::config::dependencies::DependencyPlan,
+    ) -> Result<HttpResources> {
+        self.prepare_inner(configuration, Some(dependencies))
+    }
+}
+
+impl HttpPreparer {
+    fn prepare_inner(
+        &self,
+        configuration: &ValidatedConfig,
+        dependencies: Option<&mut crate::config::dependencies::DependencyPlan>,
+    ) -> Result<HttpResources> {
+        let checked = match dependencies {
+            Some(plan) => ConfigurationOnly.prepare_tracked(configuration, plan)?,
+            None => ConfigurationOnly.prepare(configuration)?,
+        };
         let routes = checked
             .routes
             .into_iter()
@@ -94,6 +117,7 @@ pub struct StartupSettings {
     pub http: BTreeSet<SocketAddr>,
     pub https: BTreeSet<SocketAddr>,
     pub control_socket: PathBuf,
+    pub watch: bool,
 }
 
 impl StartupSettings {
@@ -112,6 +136,7 @@ impl StartupSettings {
                 .map(|address| address.value)
                 .collect(),
             control_socket: configuration.server.control_socket.clone(),
+            watch: configuration.server.watch,
         }
     }
 }
@@ -129,12 +154,22 @@ impl RuntimeSnapshot {
     }
 }
 
+#[derive(Debug, Default)]
+struct Gate {
+    closed: bool,
+    watch: Option<WatchResources>,
+    active_plan: Option<DependencyPlan>,
+    failed_plan: Option<DependencyPlan>,
+    dirty: bool,
+    recovery: bool,
+}
+
 #[derive(Debug)]
 pub struct RuntimeState {
     active: ArcSwap<RuntimeSnapshot>,
     entry: PathBuf,
     startup: StartupSettings,
-    closed: Mutex<bool>,
+    closed: Mutex<Gate>,
     shutdown: watch::Sender<bool>,
 }
 
@@ -148,7 +183,7 @@ impl RuntimeState {
             active: ArcSwap::from_pointee(snapshot),
             entry,
             startup,
-            closed: Mutex::new(false),
+            closed: Mutex::new(Gate::default()),
             shutdown,
         })
     }
@@ -162,7 +197,8 @@ impl RuntimeState {
             .closed
             .lock()
             .unwrap_or_else(|error| error.into_inner());
-        *closed = true;
+        closed.closed = true;
+        closed.watch.take();
         self.shutdown.send_replace(true);
     }
 
@@ -178,6 +214,133 @@ impl RuntimeState {
         ConfigError::new(code, "reload", reason, &Origin::file(&self.entry))
     }
 
+    pub(crate) fn watch_enabled(&self) -> bool {
+        self.startup.watch
+    }
+
+    pub(crate) fn set_initial_plan(&self, plan: DependencyPlan) {
+        self.closed
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .active_plan = Some(plan);
+    }
+
+    pub(crate) fn initialize_watch(
+        &self,
+        plan: DependencyPlan,
+        watch: WatchResources,
+    ) -> Result<()> {
+        let mut gate = self
+            .closed
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        if gate.closed {
+            return Err(self.error("SHUTTING_DOWN", "runtime is shutting down"));
+        }
+        gate.active_plan = Some(plan);
+        gate.watch = Some(watch);
+        Ok(())
+    }
+
+    pub(crate) fn active_plan(&self) -> Option<DependencyPlan> {
+        self.closed
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .active_plan
+            .clone()
+    }
+
+    pub(crate) fn poll_watch(&self) -> (bool, bool, Option<&'static str>) {
+        let mut gate = self
+            .closed
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let outcome = gate
+            .watch
+            .as_mut()
+            .map(WatchResources::drain)
+            .unwrap_or_default();
+        gate.dirty |= outcome.dirty;
+        gate.recovery |= outcome.needs_rebuild;
+        let dirty = std::mem::take(&mut gate.dirty);
+        (dirty, gate.recovery, outcome.code)
+    }
+
+    pub(crate) fn install_failure(
+        &self,
+        plan: DependencyPlan,
+        replacement: Option<WatchResources>,
+        deadline: Instant,
+    ) {
+        let mut gate = self
+            .closed
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        if gate.closed || Instant::now() >= deadline {
+            return;
+        }
+        gate.failed_plan = Some(plan);
+        if let Some(replacement) = replacement {
+            let mut old = gate.watch.replace(replacement);
+            if let Some(watch) = gate.watch.as_mut() {
+                let outcome = watch.drain();
+                gate.dirty |= outcome.dirty;
+                gate.recovery = outcome.needs_rebuild;
+            }
+            if let Some(old) = old.as_mut() {
+                let outcome = old.drain();
+                gate.dirty |= outcome.dirty || outcome.needs_rebuild;
+            }
+        } else {
+            gate.recovery = true;
+        }
+    }
+
+    pub(crate) fn publish_tracked(
+        &self,
+        prepared: PreparedSnapshot<HttpResources>,
+        plan: DependencyPlan,
+        watch: WatchResources,
+        deadline: Instant,
+    ) -> Result<u64> {
+        let startup = StartupSettings::from_configuration(&prepared.configuration);
+        let mut candidate = RuntimeSnapshot::from_prepared(prepared, 0);
+        let mut gate = self
+            .closed
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        if gate.closed {
+            return Err(self.error("SHUTTING_DOWN", "runtime is shutting down"));
+        }
+        if Instant::now() >= deadline {
+            return Err(self.error("PREPARE_TIMEOUT", "reload preparation timed out"));
+        }
+        if startup != self.startup {
+            return Err(self.error("RESTART_REQUIRED", "startup settings changed"));
+        }
+        let generation = self
+            .active
+            .load()
+            .generation
+            .checked_add(1)
+            .ok_or_else(|| self.error("CONFIG_LIMIT", "generation limit exceeded"))?;
+        candidate.generation = generation;
+        self.active.store(Arc::new(candidate));
+        gate.active_plan = Some(plan);
+        gate.failed_plan = None;
+        let mut old = gate.watch.replace(watch);
+        if let Some(watch) = gate.watch.as_mut() {
+            let outcome = watch.drain();
+            gate.dirty |= outcome.dirty;
+            gate.recovery = outcome.needs_rebuild;
+        }
+        if let Some(old) = old.as_mut() {
+            let outcome = old.drain();
+            gate.dirty |= outcome.dirty || outcome.needs_rebuild;
+        }
+        Ok(generation)
+    }
+
     pub(crate) fn publish(
         &self,
         prepared: PreparedSnapshot<HttpResources>,
@@ -189,7 +352,7 @@ impl RuntimeState {
             .closed
             .lock()
             .unwrap_or_else(|error| error.into_inner());
-        if *closed {
+        if closed.closed {
             return Err(self.error("SHUTTING_DOWN", "runtime is shutting down"));
         }
         if Instant::now() >= deadline {
