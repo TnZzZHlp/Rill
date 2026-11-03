@@ -143,7 +143,7 @@ fn short_budget_proxy_rejection_sends_only_one_response() -> TestResult {
     let mut response = String::new();
     stream.read_to_string(&mut response)?;
     assert!(
-        response.starts_with("HTTP/1.1 501 ") || response.starts_with("HTTP/1.1 504 "),
+        response.starts_with("HTTP/1.1 400 ") || response.starts_with("HTTP/1.1 504 "),
         "{response}"
     );
     assert_eq!(response.matches("HTTP/1.1 ").count(), 1);

@@ -3,7 +3,7 @@ use pingora::{Error, ErrorType, Result};
 
 use super::request::Forwarding;
 
-const HOP_HEADERS: &[&str] = &[
+pub(super) const HOP_HEADERS: &[&str] = &[
     "connection",
     "keep-alive",
     "proxy-connection",

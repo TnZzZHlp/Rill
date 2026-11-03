@@ -64,7 +64,7 @@ publish(prepared) -> Generation
 - 全局 1024 个接受容量槽位（包括保留待接受槽位），单监听 backlog 1024。SIGTERM/SIGINT 先停止接受并通知 Pingora cleanup，最多 30 秒排空；超期取消连接任务并退出 1。
 - App 在每请求外层维护 Ingress/Headers/Streaming 预算。首请求头总期限 60 秒，后续头部期限用上一请求路由的 idle-timeout；request-timeout 包含连接、上传和最终响应头等待，不能由慢速滴入不断延后。最终响应头后只保留流式读写/空闲限制。
 - SharedStream 的锁只属于单个连接、只在一次 poll 内持有，不跨 await。预算到期先取消原代理请求，再安全写入有限错误响应，不因取得错误响应能力引入全局互斥或后台请求继续执行。
-- DNS 候选在准备期全部校验并固定，连接不重新解析域名；已建立连接的失败不重放请求，仅连接建立失败可尝试后续已批准地址。自动 DNS 更新策略留给 006。
+- DNS 应用缓存由请求触发 60 秒刷新，不代表真实 DNS TTL；失败不返回过期地址，失败退避 1 秒。全部候选检查去重且不超过 64 个，任何禁止候选拒绝整次解析。每请求固定 Arc 候选，最多 8 次建立连接失败尝试，已建连或已发送请求后不重放。每路由 Mutex 只串行刷新，不以全局锁串行热路径；最多 16 个实际阻塞 resolver，许可由真实 spawn_blocking 任务持有，取消等待不发布迟到结果。
 
 ## 4. 握手、请求、连接的代次
 
@@ -96,13 +96,13 @@ publish(prepared) -> Generation
 
 - 客户端不能决定上游 URL。仅允许管理员配置的固定 HTTP/HTTPS origin；拒绝 userinfo、fragment、查询串和非根 base path，不隐式重写路径。
 - Host 只用于选择站点，不能直接成为连接目标。默认向上游发送已验证的原始 authority/Host，HTTPS 上游 SNI 和证书验证名称则来自上游 URL；两者不可混淆。HTTP/2 `:authority` 与 Host 的一致性由统一适配层处理。
-- HTTPS 上游必须验证系统信任链、主机名和有效期，不提供静默跳过验证。自签后端需要显式受信 CA，相关扩展须更新规范。
+- HTTPS 连接只使用已校验 SocketAddr，信任标准系统 OpenSSL 路径，管理员进程环境的 SSL_CERT_FILE/SSL_CERT_DIR 可影响信任。DNS 名使用框架链及主机名校验，不设置替代 CN。IP 启用链验证并设置非空 sni 以避免框架禁验证，OpenSSL 对 IP 不发送 SNI；仅替换框架的错误 DNS 名检查，以 hook 严格匹配 iPAddress SAN 字节，connected_to_upstream 在新建及复用连接发送任何 HTTP 字节前核验具体 IP，缺失或不符返回 502，不入池、不重试。上游固定 HTTP/1，入站仍支持 HTTP/1 和 HTTP/2。
 - 上游仅允许已批准的解析目标。默认允许配置显式指定的 loopback、RFC1918、IPv6 ULA 和合法公网单播；永远拒绝 unspecified、multicast、link-local（包括云元数据地址）、IPv4-mapped 绕过及非单播特殊地址。IPv4-mapped IPv6 先折叠为 IPv4 再检查，正常映射地址按对应 IPv4 策略判断。
 - `server` 可用重复 `upstream-allow "CIDR"` 收窄允许集合；显式提供时替换默认允许集合，不覆盖强制拒绝项。域名需检查全部候选解析地址，建立连接时只能使用通过检查的地址；重新解析也要检查，不能校验后再按域名二次连接产生 DNS 竞态。
 - URL、地址和 CA 检查在配置准备和实际地址更新时执行。内网后端属于明确需求，不一概禁用；受保护元数据服务仍禁止。
 - 默认不信任任何转发代理。删除客户端 Forwarded、X-Forwarded-For/Host/Proto/Port 后，根据已验证 Host、真实对端和当前 TLS 状态重新生成。
 - 如使用 `server { trusted-proxy "CIDR" }`，仅当直接对端在允许集合内才解析其 X-Forwarded-For；从右到左移除可信跳点，首个不可信地址为客户地址。格式无效则拒绝请求，不能保留原始字符串。重新生成 Forwarded/X-Forwarded-*；Proto 只允许可信直接对端给出的单值 http/https，Host 始终以已验证 authority 为准。
-- 清理标准 Hop-by-Hop 字段及 Connection 指定字段；Upgrade 仅在允许的 WebSocket 路径显式处理，003 暂明确返回 501/403。报文长度冲突和协议解析依赖 Pingora，复核框架行为，不另写宽松解析器。CL+TE 会规范化为 chunked 并强制关闭客户端连接，应用不能为设置超时重新启用已被框架禁用的复用。
+- 清理标准 Hop-by-Hop 字段及 Connection 指定字段；Upgrade 仅在已验证的 WebSocket 路径显式恢复握手头。仅 HTTP/1.1 GET、规范 16 字节 base64 key、version 13、Connection Upgrade 且无请求体；禁用 403，坏字段 400，不支持协议、CONNECT 和 H2 extended CONNECT 为 501，非法 H2 消息可能被框架提前拒绝。不提议扩展，拒绝上游未提议扩展；子协议必须是提议内单选。101 必须通过 Accept、Upgrade、Connection 和 framing 校验，意外 101 拒绝。报文长度冲突和协议解析依赖 Pingora，复核框架行为，不另写宽松解析器。CL+TE 会规范化为 chunked 并强制关闭客户端连接，应用不能为设置超时重新启用已被框架禁用的复用。
 - 流式背压、有界头/体缓冲、有限连接/读取/空闲超时是 P0。默认不自动重试已发送到上游的请求，尤其不能重复执行非幂等写入。
 
 ## 6. 静态文件边界
@@ -144,7 +144,7 @@ publish(prepared) -> Generation
 | --- | --- | --- |
 | CONFIG_SYNTAX / CONFIG_TYPE / CONFIG_UNKNOWN | 语法、类型、未知字段 | 不发布 |
 | CONFIG_LIMIT / RESOURCE_CHANGED | 解析/导入资源限制，或加载期间文件变化 | 拒绝候选，不发布 |
-| CONFIG_UNSUPPORTED | 当前阶段缺少 HTTPS 上游等实现 | check 返回非零，不能假装完整成功 |
+| CONFIG_UNSUPPORTED | 当前阶段不支持的配置或服务动作 | check 返回非零，不能假装完整成功 |
 | IMPORT_CYCLE / DUPLICATE / ROUTE_CONFLICT / PROFILE_REF | 结构或引用错误 | 不发布，保留来源链 |
 | RESOURCE_IO / TLS_INVALID / UPSTREAM_DENIED | 目录、证书或上游策略失败 | 不发布，错误脱敏 |
 | RESTART_REQUIRED | 启动配置发生变化 | 整体拒绝，不部分应用 |
@@ -165,4 +165,6 @@ publish(prepared) -> Generation
 
 ## 10. 重要限制
 
-001 解除技术机制可行性阻塞，002 提供配置语义检查，003 提供 HTTP/1.x run 和基础代理，004 提供真实 HTTPS/SNI、HTTP/2、证书检查及安全重定向。005 已准备静态 root；check 仍不宣称 DNS、连通性或上游 TLS 信任已验证；run 的 HttpPreparer 会准备 HTTP DNS/地址策略，但拒绝 HTTPS 上游和未支持的服务动作。尚无生产 Reload，也未执行独立安全审计或生产性能测试。合同如需改变通配层级、路径映射、Host/SNI 或快照代次边界，必须先更新计划并获得确认。
+001 解除技术机制可行性阻塞，002 提供配置语义检查，003 提供 HTTP/1.x run 和基础代理，004 提供真实 HTTPS/SNI、HTTP/2、证书检查及安全重定向。005 已准备静态 root；006 支持 HTTPS 上游和 WS/SSE。check 仍不宣称 DNS、连通性或上游 TLS 信任已验证。尚无生产 Reload，也未执行独立安全审计或生产性能测试。合同如需改变通配层级、路径映射、Host/SNI 或快照代次边界，必须先更新计划并获得确认。
+
+006 的合法 101 是最终响应头，先检查请求头总期限再进入 Streaming；SSE 在普通最终头后逐段流式传输，不聚合且无响应总时长限制。read-timeout 为上游相邻读取期限，idle-timeout 用于下游读写和连接池；不承诺单向数据刷新共享双向 idle，也不承诺通用 TCP 半关闭。响应头后故障仅中止，不追加 HTTP；保留既有 30 秒排空。

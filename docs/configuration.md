@@ -1,8 +1,8 @@
 # 配置与 CLI 契约
 
-本文以 001 确认的配置语义为基线。002 已实现配置管线与 Clap 驱动的 `rill check`；003 增加 HTTP 服务、路由与流式代理；004 增加 HTTPS、SNI、HTTP/2、证书准备和 HTTPS 重定向。005 增加安全静态文件；生产 Reload 仍由后续阶段实现。原始需求保留在 [writing-block.md](../writing-block.md)。
+本文以 001 确认的配置语义为基线。002 已实现配置管线与 Clap 驱动的 `rill check`；003 增加 HTTP 服务、路由与流式代理；004 增加 HTTPS、SNI、HTTP/2、证书准备和 HTTPS 重定向。005 增加安全静态文件；006 增加 HTTPS 上游和 WS/SSE；生产 Reload 仍由后续阶段实现。原始需求保留在 [writing-block.md](../writing-block.md)。
 
-当前可运行 `cargo run --locked -- check --config examples/config.kdl`，或使用 `examples/multi/config.kdl` 检查多文件示例。`cargo run --locked -- run --config examples/config.kdl` 启动 HTTP 服务，需自行提供配置的后端；多文件示例含 HTTPS 上游，只能做阶段性 check，尚不能 run。成功表示配置、TLS 证书、静态 root 及字面量上游地址策略通过；check 不验证 DNS、连接或上游 TLS 信任，也不监听或写资源。证书读取或验证失败分别报告 `RESOURCE_IO`、`TLS_INVALID` 等定位错误，不能将阶段性检查视为完整资源验证。
+当前可运行 `cargo run --locked -- check --config examples/config.kdl`，或使用 `examples/multi/config.kdl` 检查多文件示例。`cargo run --locked -- run --config examples/config.kdl` 启动 HTTP 服务，需自行提供配置的后端；多文件示例含 HTTPS 上游，run 需要可连接且证书受信的后端。成功表示配置、TLS 证书、静态 root 及字面量上游地址策略通过；check 不验证 DNS、连接或上游 TLS 信任，也不监听或写资源。证书读取或验证失败分别报告 `RESOURCE_IO`、`TLS_INVALID` 等定位错误，不能将阶段性检查视为完整资源验证。
 
 ## 1. 格式与兼容
 
@@ -29,7 +29,8 @@ rill reload --socket /run/rill/control.sock --timeout 30s
 - 成功退出码 0；配置或准备失败 1；命令参数错误 2；管理通信失败、超时或结果未知 3。服务端明确返回失败时退出码 1。
 - `reload` 等待真实结果，成功输出请求 ID 与配置代次；超时不承诺操作没有发生，不自动重试。`--timeout` 必须为有限正时长，默认 30 秒。
 - 日志写标准错误，成功结果写标准输出，错误不得打印私钥、凭据或完整敏感配置。run 输出受 log-level 过滤的 JSON 行日志；check 保留配置位置诊断文本。
-- 003 run 在启动前完成 HTTP 上游 DNS 解析并验证全部地址，连接只使用批准的具体地址，最多尝试 8 个候选；当前地址固定到进程退出。DNS 更新策略留给 006，Reload 留给 007。run 的 HTTPS 上游暂报 CONFIG_UNSUPPORTED，不静默降级。
+- HTTPS 上游的身份来自配置 URL，转发 Host 仍保留客户端已验证 authority；采用系统 OpenSSL 信任路径及管理员指定的 SSL_CERT_FILE/SSL_CERT_DIR，不提供跳过验证。DNS 名校验链和主机名，IP 校验链并在发送请求前严格核对 iPAddress SAN，复用连接也必须核验。上游使用 HTTP/1，入站可使用 HTTP/1 或 HTTP/2。
+- run 在启动前解析并检查上游地址；请求触发 60 秒应用缓存刷新（并非 DNS TTL），失败不返回过期地址，失败退避 1 秒。全部候选检查、去重且不超过 64 个；任一禁止地址拒绝整次解析。单请求固定候选，最多尝试 8 个建立连接失败的地址，已建连或已发送请求后失败不重放。Reload 留给 007。
 - HTTP/HTTPS 监听为 IPv4/IPv6 独立绑定，IPv6 设置 IPv6-only，可同端口双栈部署；任一监听绑定失败即启动失败，不继续提供部分站点。SIGTERM/SIGINT 都停止接受并等待最多 30 秒排空；正常退出 0，超期中止并退出 1。
 - HTTP/1.x 初始请求头总期限为 60 秒，复用连接下一请求的头部总期限使用上一请求路由的 idle-timeout；总期限不会随每次读取重新计时。已解析请求头最多 64 KiB；HTTP/1.x 框架解析本身仍有约 1 MiB 硬边界。全局最多 1024 个接受容量槽位，包含等待接受的保留槽位。
 - TLS 至少 1.2，握手期限 10 秒，ALPN 优先 h2，其次 http/1.1。协商 h2 后，客户端 24 字节前言另有 10 秒总期限，滴入不重置；读齐即解除，不限制合法长流。HTTP/2 使用 Pingora 默认 100 个并发流和 64 KiB 解码头部限制，连接无活跃流时 60 秒关闭。每流独立执行 request-timeout 总响应头预算；预算耗尽取消该流，不关闭兄弟流、不伪造已发送 504 的日志。HTTP/1.x 对应预算耗尽时尝试返回 504。
@@ -139,7 +140,7 @@ site "api.example.com" {
 - 允许复用的字段仅为 `connect-timeout`、`read-timeout`、`request-timeout`、`idle-timeout`、`websocket`。禁止复用 TLS、root、proxy、监听、域名、路由和控制权限字段。
 - Profile 可引用 Profile，循环及未知引用报错。site 合并后的参数为路由默认值，route 的 use 覆盖 site 默认，再以 route 显式值覆盖。
 - 默认 connect-timeout 5s；read-timeout 60s，为上游相邻读取间隔，不是响应总时长；request-timeout 300s，为开始代理到收到响应头的期限，不限制合法流式响应总长度；idle-timeout 60s，为连接无活动期限。WebSocket 默认允许且使用明确配置的 idle-timeout，可按路由调大，不允许无限时长。
-- `websocket #false` 时显式拒绝 Upgrade，不能静默降为普通请求。003 中允许的 Upgrade 暂返回 501，显式禁用返回 403；完整 WebSocket 支持归 006。
+- `websocket #false` 时显式拒绝 Upgrade，不能静默降为普通请求。仅支持 HTTP/1.1 GET WebSocket；禁用返回 403，非法握手返回 400，不支持的协议、CONNECT 和 H2 extended CONNECT 返回 501；框架可能提前拒绝非法 H2 消息。
 - request-timeout 从路由选择后开始计入连接、上传及等待最终响应头的总时间，最终响应头到达后不限制流式响应总时长；read-timeout 限制上游相邻读取，idle-timeout 用于下游读写及连接池闲置。连接/上游读取超时返回 504，拒绝连接返回 502；响应已开始后故障只中止连接，不追加第二份 HTTP 响应。
 
 ## 7. P1 语法保留与兼容边界

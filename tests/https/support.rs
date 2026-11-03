@@ -1,6 +1,6 @@
 use std::fs;
 use std::io::Write;
-use std::net::{SocketAddr, TcpStream};
+use std::net::{IpAddr, SocketAddr, TcpStream};
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -25,6 +25,20 @@ pub struct Certificate {
 impl Certificate {
     pub fn issue(
         names: &[&str],
+        issuer: Option<&Self>,
+        ca: bool,
+        validity: (i64, i64),
+    ) -> TestResult<Self> {
+        Self::issue_inner(names, None, issuer, ca, validity)
+    }
+
+    pub fn issue_ip(ip: IpAddr, issuer: &Self, validity: (i64, i64)) -> TestResult<Self> {
+        Self::issue_inner(&[], Some(ip), Some(issuer), false, validity)
+    }
+
+    fn issue_inner(
+        names: &[&str],
+        ip: Option<IpAddr>,
         issuer: Option<&Self>,
         ca: bool,
         validity: (i64, i64),
@@ -73,10 +87,13 @@ impl Certificate {
         if !ca {
             builder.append_extension(ExtendedKeyUsage::new().server_auth().build()?)?;
         }
-        if !names.is_empty() {
+        if !names.is_empty() || ip.is_some() {
             let mut san = SubjectAlternativeName::new();
             for name in names {
                 san.dns(name);
+            }
+            if let Some(ip) = ip {
+                san.ip(&ip.to_string());
             }
             let san = san
                 .build(&builder.x509v3_context(issuer.map(|issuer| issuer.cert.as_ref()), None))?;

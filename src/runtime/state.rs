@@ -13,7 +13,7 @@ use arc_swap::ArcSwap;
 
 #[derive(Debug)]
 pub enum PreparedRoute {
-    Proxy(PreparedPeer),
+    Proxy(Box<PreparedPeer>),
     Static(Arc<PreparedStatic>),
 }
 
@@ -61,7 +61,7 @@ impl ResourcePreparer for HttpPreparer {
                     .zip(&site.routes)
                     .map(|(checked, route)| match checked {
                         CheckedRoute::Proxy => PreparedPeer::prepare(route, &configuration.server)
-                            .map(PreparedRoute::Proxy),
+                            .map(|peer| PreparedRoute::Proxy(Box::new(peer))),
                         CheckedRoute::Static(prepared) => Ok(PreparedRoute::Static(prepared)),
                     })
                     .collect::<Result<Vec<_>>>()

@@ -91,12 +91,21 @@ pub struct Proxy {
 
 impl Proxy {
     pub fn start(address: SocketAddr, configuration: &str) -> TestResult<Self> {
+        Self::start_env(address, configuration, &[])
+    }
+
+    pub fn start_env(
+        address: SocketAddr,
+        configuration: &str,
+        env: &[(&str, &std::ffi::OsStr)],
+    ) -> TestResult<Self> {
         let directory = Directory::new()?;
         let file = directory.0.join("config.kdl");
         fs::write(&file, configuration)?;
         let child = Command::new(env!("CARGO_BIN_EXE_rill"))
             .args(["run", "--config"])
             .arg(&file)
+            .envs(env.iter().copied())
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
             .spawn()?;

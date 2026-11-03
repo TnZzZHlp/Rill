@@ -1,9 +1,12 @@
 use std::any::Any;
+use std::net::SocketAddr;
+use std::os::unix::io::RawFd;
 use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
 use pingora::http::{RequestHeader, ResponseHeader};
+use pingora::protocols::Digest;
 use pingora::proxy::{FailToProxy, ProxyHttp, Session};
 use pingora::upstreams::peer::HttpPeer;
 use pingora::{Error, ErrorType, Result};
@@ -25,6 +28,8 @@ pub struct Context {
     forwarding: Option<Forwarding>,
     connection_names: Vec<String>,
     attempt: usize,
+    addresses: Option<Arc<Vec<SocketAddr>>>,
+    websocket: Option<super::websocket::Handshake>,
     budget: Option<watch::Sender<Phase>>,
     idle: Duration,
     response_started: bool,
@@ -128,6 +133,8 @@ impl ProxyHttp for Handler {
             forwarding: None,
             connection_names: Vec::new(),
             attempt: 0,
+            addresses: None,
+            websocket: None,
             budget: None,
             idle: Duration::from_secs(60),
             response_started: false,
@@ -242,8 +249,9 @@ impl ProxyHttp for Handler {
             .and_then(|routes| routes.get(route))
             .ok_or_else(|| Error::explain(ErrorType::InternalError, "route not prepared"))?;
         ctx.idle = prepared.idle();
+        let deadline = Instant::now() + prepared.request();
         if let Some(budget) = &ctx.budget {
-            budget.send_replace(Phase::Headers(Instant::now() + prepared.request()));
+            budget.send_replace(Phase::Headers(deadline));
         }
         if session.get_keepalive().is_some() {
             session.set_keepalive(Some(
@@ -262,14 +270,16 @@ impl ProxyHttp for Handler {
             return Ok(true);
         }
         let request = session.req_header();
-        if request.headers.contains_key("upgrade") || names.iter().any(|name| name == "upgrade") {
-            let allowed = ctx.snapshot.configuration.sites[site].routes[route]
-                .parameters
-                .websocket
-                .as_ref()
-                .is_none_or(|value| value.value);
-            return reject(session, ctx, if allowed { 501 } else { 403 }).await;
-        }
+        let allowed = ctx.snapshot.configuration.sites[site].routes[route]
+            .parameters
+            .websocket
+            .as_ref()
+            .is_none_or(|value| value.value);
+        let handshake =
+            match super::websocket::request(request, session.is_http2(), &names, allowed) {
+                Ok(value) => value,
+                Err(status) => return reject(session, ctx, status).await,
+            };
         let peer = session
             .client_addr()
             .and_then(|address| address.as_inet())
@@ -290,6 +300,23 @@ impl ProxyHttp for Handler {
             Ok(value) => value,
             Err(status) => return reject(session, ctx, status).await,
         };
+        let proxy = prepared
+            .as_proxy()
+            .ok_or_else(|| Error::explain(ErrorType::InternalError, "proxy route not prepared"))?;
+        let addresses = tokio::time::timeout_at(deadline, proxy.addresses())
+            .await
+            .map_err(|_| {
+                Error::explain(
+                    ErrorType::HTTPStatus(504),
+                    "upstream resolution deadline exceeded",
+                )
+                .into_up()
+            })?
+            .map_err(|_| {
+                Error::explain(ErrorType::HTTPStatus(502), "upstream resolution failed").into_up()
+            })?;
+        ctx.addresses = Some(addresses);
+        ctx.websocket = handshake;
         ctx.selected = Some((site, route));
         ctx.forwarding = Some(forwarding);
         ctx.connection_names = names;
@@ -305,7 +332,7 @@ impl ProxyHttp for Handler {
             .get(site)
             .and_then(|routes| routes.get(route))
             .and_then(PreparedRoute::as_proxy)
-            .and_then(|peer| peer.peer(ctx.attempt))
+            .and_then(|peer| peer.peer(ctx.addresses.as_deref()?, ctx.attempt))
             .map(Box::new)
             .ok_or_else(|| Error::explain(ErrorType::ConnectError, "no upstream address").into_up())
     }
@@ -322,7 +349,26 @@ impl ProxyHttp for Handler {
             ctx.forwarding.as_ref().ok_or_else(|| {
                 Error::explain(ErrorType::InternalError, "forwarding policy not selected")
             })?,
-        )
+        )?;
+        if let Some(handshake) = &ctx.websocket {
+            super::websocket::request_headers(handshake, request)?;
+        }
+        Ok(())
+    }
+
+    async fn connected_to_upstream(
+        &self,
+        _: &mut Session,
+        _: bool,
+        peer: &HttpPeer,
+        _: RawFd,
+        digest: Option<&Digest>,
+        _: &mut Context,
+    ) -> Result<()> {
+        super::upstream_tls::verify(peer, digest).map_err(|mut error| {
+            error.set_retry(false);
+            error
+        })
     }
 
     async fn response_filter(
@@ -331,8 +377,14 @@ impl ProxyHttp for Handler {
         response: &mut ResponseHeader,
         ctx: &mut Context,
     ) -> Result<()> {
-        super::headers::response(response)?;
-        if response.status.as_u16() >= 200
+        if response.status.as_u16() == 101
+            && let Some(handshake) = &ctx.websocket
+        {
+            super::websocket::response(handshake, response)?;
+        } else {
+            super::headers::response(response)?;
+        }
+        if (response.status.as_u16() == 101 || response.status.as_u16() >= 200)
             && let Some(budget) = &ctx.budget
         {
             if matches!(*budget.borrow(), Phase::Headers(deadline) if Instant::now() >= deadline) {
@@ -355,14 +407,10 @@ impl ProxyHttp for Handler {
         mut error: Box<Error>,
     ) -> Box<Error> {
         ctx.attempt += 1;
-        let retry = ctx.selected.is_some_and(|(site, route)| {
-            ctx.snapshot
-                .routes
-                .get(site)
-                .and_then(|routes| routes.get(route))
-                .and_then(PreparedRoute::as_proxy)
-                .is_some_and(|peer| ctx.attempt < peer.addresses.len().min(8))
-        });
+        let retry = ctx
+            .addresses
+            .as_ref()
+            .is_some_and(|addresses| ctx.attempt < addresses.len().min(8));
         error.set_retry(retry);
         error
     }

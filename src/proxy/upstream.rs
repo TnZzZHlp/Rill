@@ -1,14 +1,20 @@
-use std::net::{SocketAddr, ToSocketAddrs};
+use std::net::SocketAddr;
+use std::sync::Arc;
 use std::time::Duration;
 
-use pingora::upstreams::peer::HttpPeer;
+use pingora::upstreams::peer::{ALPN, HttpPeer};
+
+use super::dns::{self, Dns};
+use super::upstream_tls;
 
 use crate::config::model::{Action, Route, Server};
-use crate::config::{ConfigError, Result, check_ip};
+use crate::config::{ConfigError, Result};
 
 #[derive(Debug)]
 pub struct PreparedPeer {
-    pub addresses: Vec<SocketAddr>,
+    dns: Dns,
+    pub urlhost: String,
+    pub tls: bool,
     pub connect: Duration,
     pub read: Duration,
     pub request: Duration,
@@ -19,56 +25,24 @@ impl PreparedPeer {
     pub fn prepare(route: &Route, server: &Server) -> Result<Self> {
         let Action::Proxy(upstream) = &route.action else {
             return Err(ConfigError::new(
-                "CONFIG_UNSUPPORTED",
-                "root",
-                "static service is unavailable until stage 005",
+                "INTERNAL",
+                "proxy",
+                "proxy action required",
                 &route.action_origin,
             ));
         };
-        if upstream.tls {
-            return Err(ConfigError::new(
-                "CONFIG_UNSUPPORTED",
-                "proxy",
-                "HTTPS upstreams are unavailable until stage 006",
-                &route.action_origin,
-            ));
-        }
-        let resolved = (upstream.host.as_str(), upstream.port)
-            .to_socket_addrs()
-            .map_err(|_| {
-                ConfigError::new(
-                    "RESOURCE_IO",
-                    "proxy",
-                    "cannot resolve upstream hostname",
-                    &route.action_origin,
-                )
-            })?;
-        let mut addresses = Vec::new();
-        for address in resolved {
-            check_ip(address.ip(), server, &route.action_origin)?;
-            if !addresses.contains(&address) {
-                addresses.push(address);
-            }
-            if addresses.len() > 64 {
-                return Err(ConfigError::new(
-                    "CONFIG_LIMIT",
-                    "proxy",
-                    "upstream resolved to more than 64 addresses",
-                    &route.action_origin,
-                ));
-            }
-        }
-        if addresses.is_empty() {
-            return Err(ConfigError::new(
-                "RESOURCE_IO",
-                "proxy",
-                "upstream hostname has no addresses",
-                &route.action_origin,
-            ));
-        }
+        let addresses = dns::resolve(&upstream.host, upstream.port, server, &route.action_origin)?;
         let parameters = &route.parameters;
         Ok(Self {
-            addresses,
+            dns: Dns::new(
+                upstream.host.clone(),
+                upstream.port,
+                server,
+                &route.action_origin,
+                addresses,
+            ),
+            urlhost: upstream.host.clone(),
+            tls: upstream.tls,
             connect: parameters
                 .connect_timeout
                 .as_ref()
@@ -88,8 +62,32 @@ impl PreparedPeer {
         })
     }
 
-    pub fn peer(&self, attempt: usize) -> Option<HttpPeer> {
-        let mut peer = HttpPeer::new(*self.addresses.get(attempt)?, false, String::new());
+    pub async fn addresses(
+        &self,
+    ) -> std::result::Result<Arc<Vec<SocketAddr>>, dns::ResolutionFailed> {
+        self.dns.addresses().await
+    }
+
+    pub fn peer(&self, addresses: &[SocketAddr], attempt: usize) -> Option<HttpPeer> {
+        let mut peer = HttpPeer::new(
+            *addresses.get(attempt)?,
+            self.tls,
+            if self.tls {
+                self.urlhost.clone()
+            } else {
+                String::new()
+            },
+        );
+        peer.options.verify_cert = true;
+        peer.options.verify_hostname = true;
+        peer.options.alternative_cn = None;
+        peer.options.alpn = ALPN::H1;
+        if self.tls
+            && let Ok(ip) = self.urlhost.parse()
+        {
+            peer.options.verify_hostname = false;
+            peer.options.upstream_tls_handshake_complete_hook = Some(upstream_tls::ip_hook(ip));
+        }
         peer.options.connection_timeout = Some(self.connect);
         peer.options.total_connection_timeout = Some(self.connect);
         peer.options.read_timeout = Some(self.read);

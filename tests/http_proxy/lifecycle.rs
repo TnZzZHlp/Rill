@@ -112,7 +112,6 @@ fn invalid_or_unavailable_startup_configuration_never_leaves_a_running_service()
     for configuration in [
         "server { http \"127.0.0.1:8080\"; }\nsite \"app.test\" { proxy \"file:///etc/shadow\"; }\n".to_string(),
         format!("server {{ http \"{}\"; }}\nsite \"app.test\" {{ proxy \"http://127.0.0.1:3000\"; }}\n", occupied.local_addr()?),
-        "server { http \"127.0.0.1:8080\"; }\nsite \"app.test\" { proxy \"https://localhost:3000\"; }\n".to_string(),
     ] {
         fs::write(&entry, configuration)?;
         let output = Command::new(env!("CARGO_BIN_EXE_rill")).args(["run", "--config"]).arg(&entry).stdin(Stdio::null()).output()?;
