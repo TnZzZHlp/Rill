@@ -12,6 +12,7 @@ import tempfile
 import time
 from collections import Counter
 
+import container
 import streams
 import traffic
 
@@ -24,6 +25,11 @@ def atomic_config(source, target):
             out.write(data)
             out.flush()
             os.fsync(out.fileno())
+        # The container runs as a non-root UID and must be able to read the
+        # replacement, so the temporary file cannot keep mkstemp's 0600.
+        os.chmod(path, 0o644)
+        if os.geteuid() == 0:
+            os.chown(path, 10001, 10001)
         os.replace(path, target)
     finally:
         if os.path.exists(path):
@@ -74,42 +80,34 @@ async def observe(age, ca):
     raise TimeoutError('observation_timeout')
 
 
-async def apply(args, name, work, server, age, ca):
+async def apply(args, target, work, server, age, ca):
     start = time.monotonic()
-    suffix = 'kdl' if name == 'rill' else 'conf'
-    target = work / f'{name}-active.{suffix}'
-    template = work / f'{name}-{"a" if age == 10 else "b"}.{suffix}'
+    config = target.active(work)
+    template = target.template(work, 'a' if age == 10 else 'b')
     result = {'start': start, 'sent': None, 'observed': None, 'end': None, 'target_age': age,
               'returncode': None, 'generation': None, 'error': None,
-              'check_seconds': None, 'signal_seconds': None, 'observation_seconds': None, 'config_sha256': None}
+              'check_seconds': None, 'signal_seconds': None, 'observation_seconds': None,
+              'config_sha256': None, 'mechanism': target.name}
     try:
-        if server.poll() is not None:
+        if not container.running(server):
             raise RuntimeError('server_exited')
-        result['config_sha256'] = atomic_config(template, target)
-        if name == 'rill':
-            result['sent'] = time.monotonic()
-            rc, stdout, _ = await command([args.rill, 'reload', '--socket', str(work / 'control/control.sock'), '--timeout', '35s'], 40)
-            result['returncode'] = rc
-            if rc != 0:
-                raise RuntimeError('reload_failed')
-            match = re.search(rb'(?:^|\s)generation=([0-9]+)(?:\s|$)', stdout)
-            if match:
-                result['generation'] = int(match.group(1))
-        else:
-            begin = time.monotonic()
-            rc, _, _ = await command([args.nginx_loader, '--library-path', '/reference/lib:/reference/usr/lib', args.nginx, '-e', 'stderr', '-t', '-p', str(work) + '/', '-c', str(target)], 40)
-            result['check_seconds'] = time.monotonic() - begin
-            result['returncode'] = rc
-            if rc != 0 or server.poll() is not None:
-                raise RuntimeError('nginx_check_failed')
-            begin = time.monotonic()
-            os.kill(server.pid, signal.SIGHUP)
-            result['sent'] = begin
-            result['signal_seconds'] = time.monotonic() - begin
+        os.chmod(work, 0o711)
+        result['config_sha256'] = atomic_config(template, config)
+        begin = time.monotonic()
+        rc, stdout, stderr = await target.reload(work, config, server)
+        result['returncode'] = rc
+        result['signal_seconds'] = time.monotonic() - begin
+        if rc != 0:
+            result['error_output'] = (stdout + stderr).decode('utf-8', 'replace')[:800]
+            raise RuntimeError('reload_failed')
+        result['sent'] = begin
+        match = re.search(rb'(?:^|\s)generation=([0-9]+)(?:\s|$)', stdout)
+        if match:
+            result['generation'] = int(match.group(1))
         begin = time.monotonic()
         result['observed'] = await observe(age, ca)
         result['observation_seconds'] = result['observed'] - begin
-    except (OSError, ValueError, RuntimeError, asyncio.TimeoutError, TimeoutError) as exc:
+    except (OSError, ValueError, RuntimeError, asyncio.TimeoutError, TimeoutError, container.ContainerError) as exc:
         result['error'] = type(exc).__name__
     result['end'] = time.monotonic()
     result['latency_seconds'] = result['end'] - start
@@ -201,10 +199,11 @@ async def probe(ca, stop):
     return {'samples': count, 'closed_reconnects': reconnects, 'errors': dict(errors), 'valid': count > 0 and not errors}
 
 
-async def run(args, name, work, output, label, server, ca, current_age):
+async def run(args, target, work, output, label, server, ca, current_age):
     setup = None
+    name = target.name
     if current_age != 10:
-        setup = await apply(args, name, work, server, 10, ca)
+        setup = await apply(args, target, work, server, 10, ca)
         (output / f'{label}-setup.json').write_text(json.dumps(setup, indent=2))
         if setup['error']:
             return {'valid': False, 'setup': setup, 'error': 'setup_failed'}, current_age
@@ -230,7 +229,9 @@ async def run(args, name, work, output, label, server, ca, current_age):
         cache_probe = asyncio.create_task(probe(ca, stop))
         tasks += [load, cache_probe]
         with (output / f'{label}-reloads.csv').open('x', newline='') as raw:
-            fields = ['start', 'sent', 'observed', 'end', 'latency_seconds', 'target_age', 'returncode', 'generation', 'check_seconds', 'signal_seconds', 'observation_seconds', 'config_sha256', 'error']
+            fields = ['start', 'sent', 'observed', 'end', 'latency_seconds', 'target_age', 'returncode',
+                      'generation', 'check_seconds', 'signal_seconds', 'observation_seconds',
+                      'config_sha256', 'error', 'mechanism', 'error_output']
             rows = csv.DictWriter(raw, fieldnames=fields)
             rows.writeheader()
             for i in range(args.reload_count):
@@ -239,9 +240,9 @@ async def run(args, name, work, output, label, server, ca, current_age):
                 if time.monotonic() >= deadline:
                     break
                 age = 20 if i % 2 == 0 else 10
-                result = await apply(args, name, work, server, age, ca)
+                result = await apply(args, target, work, server, age, ca)
                 calls.append(result)
-                rows.writerow(result)
+                rows.writerow({key: result.get(key) for key in fields})
                 raw.flush()
                 if result['error']:
                     break
@@ -251,17 +252,26 @@ async def run(args, name, work, output, label, server, ca, current_age):
         ws_result, sse_result, probe_result, load_result = await asyncio.gather(ws, sse, cache_probe, load)
         first = calls[0]['start'] if calls else 0
         intervals = windows(output / f'{label}-requests.csv.gz', calls)
+        # A stream disconnect is reported separately: retiring a configuration may
+        # legitimately close WebSockets, which is not a logical reload failure.
+        streams_ok = ws_result['connections_established'] == 10 and sse_result['connections_established'] == 10
         valid = (len(calls) == args.reload_count and all(not item['error'] for item in calls)
-                 and ws_result['valid'] and sse_result['valid'] and probe_result['valid'] and load_result['valid']
+                 and streams_ok and probe_result['valid'] and load_result['valid']
                  and ws_result['measurement_start_monotonic'] < first and sse_result['measurement_start_monotonic'] < first
                  and all(item['end'] <= deadline for item in calls)
                  and all(w['samples'] > 0 and w['errors'] == 0 for w in intervals['per_reload'])
-                 and server.poll() is None)
+                 and container.running(server))
         summary = {'valid': valid, 'setup': setup, 'calls': calls, 'phase_start': start + 2,
                    'phase_deadline': deadline, 'wall_seconds': time.monotonic() - start_wall,
                    'http_load': load_result, 'ws': ws_result, 'sse': sse_result, 'warm_cache_probe': probe_result,
                    'reload_latency': distribution([c['latency_seconds'] for c in calls]), 'http_windows': intervals,
                    'window_definition': 'request start in [reload start, observed or failure end + 1s]',
+                   'reload_mechanism': target.name,
+                   'stream_disconnects': {
+                       'ws': ws_result['unexpected_disconnects'],
+                       'sse': sse_result['unexpected_disconnects'],
+                       'policy': 'reported separately from logical errors; a disconnect does not invalidate the round',
+                   },
                    'error': None if valid else 'invalid_reload_round'}
         return summary, current_age
     finally:
