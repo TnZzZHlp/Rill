@@ -1,0 +1,121 @@
+{
+  "kind": "ws",
+  "connections_requested": 10,
+  "connections_established": 10,
+  "measurement_start_monotonic": 1063212.763888847,
+  "measurement_deadline_monotonic": 1063272.763888847,
+  "samples": 5950,
+  "message_rtt": {
+    "samples": 5950,
+    "p50_ms": 0.653,
+    "p95_ms": 0.967,
+    "p99_ms": 1.145
+  },
+  "first_event": {
+    "samples": 0,
+    "p50_ms": null,
+    "p95_ms": null,
+    "p99_ms": null
+  },
+  "event_interval": {
+    "samples": 0,
+    "p50_ms": null,
+    "p95_ms": null,
+    "p99_ms": null
+  },
+  "handshake": {
+    "samples": 10,
+    "p50_ms": 1.735,
+    "p95_ms": 1.832,
+    "p99_ms": 1.832
+  },
+  "close_handshake": {
+    "samples": 10,
+    "p50_ms": 0.668,
+    "p95_ms": 0.833,
+    "p99_ms": 0.833
+  },
+  "expected_closes": 10,
+  "unexpected_disconnects": 0,
+  "events_per_connection": {
+    "2067028": 595,
+    "2067031": 595,
+    "2067024": 595,
+    "2067027": 595,
+    "2067025": 595,
+    "2067030": 595,
+    "2067032": 595,
+    "2067033": 595,
+    "2067026": 595,
+    "2067029": 595
+  },
+  "progress_by_connection": {
+    "2067028": {
+      "last_progress_age_at_end": 0.06133706704713404,
+      "max_inactive_gap_seconds": 0.10218251799233258
+    },
+    "2067031": {
+      "last_progress_age_at_end": 0.061313615180552006,
+      "max_inactive_gap_seconds": 0.10209359508007765
+    },
+    "2067024": {
+      "last_progress_age_at_end": 0.06118689104914665,
+      "max_inactive_gap_seconds": 0.10211082198657095
+    },
+    "2067027": {
+      "last_progress_age_at_end": 0.06121081509627402,
+      "max_inactive_gap_seconds": 0.10214080684818327
+    },
+    "2067025": {
+      "last_progress_age_at_end": 0.06136165210045874,
+      "max_inactive_gap_seconds": 0.10214402107521892
+    },
+    "2067030": {
+      "last_progress_age_at_end": 0.061235705157741904,
+      "max_inactive_gap_seconds": 0.10213848995044827
+    },
+    "2067032": {
+      "last_progress_age_at_end": 0.06129053817130625,
+      "max_inactive_gap_seconds": 0.10215434501878917
+    },
+    "2067033": {
+      "last_progress_age_at_end": 0.061387819005176425,
+      "max_inactive_gap_seconds": 0.10218247305601835
+    },
+    "2067026": {
+      "last_progress_age_at_end": 0.06112246308475733,
+      "max_inactive_gap_seconds": 0.10206971294246614
+    },
+    "2067029": {
+      "last_progress_age_at_end": 0.06142322113737464,
+      "max_inactive_gap_seconds": 0.10210873582400382
+    }
+  },
+  "errors": {},
+  "valid": true,
+  "event_loop_lag_max_seconds": 0.0022810150403529406,
+  "percentile_method": "nearest rank; milliseconds",
+  "sample_limit": 2000000,
+  "scenario": "nginx-ws-10-3",
+  "resource_peaks": {
+    "server": {
+      "cpu_percent": 0.9984758625313342,
+      "rss_bytes": 20545536,
+      "hwm_sum_bytes": 22872064,
+      "pss_bytes": null
+    },
+    "backend": {
+      "cpu_percent": 1.996036115820059,
+      "rss_bytes": 28659712,
+      "hwm_sum_bytes": 28659712,
+      "pss_bytes": null
+    },
+    "client": {
+      "cpu_percent": 2.992652702263264,
+      "rss_bytes": 48721920,
+      "hwm_sum_bytes": 69681152,
+      "pss_bytes": null
+    }
+  },
+  "client_limit_warning": false
+}

@@ -1,0 +1,442 @@
+{
+  "valid": true,
+  "setup": {
+    "start": 1069429.88350647,
+    "sent": 1069429.883644643,
+    "observed": 1069429.887457673,
+    "end": 1069429.887510866,
+    "target_age": 10,
+    "returncode": 0,
+    "generation": 7,
+    "error": null,
+    "check_seconds": null,
+    "signal_seconds": null,
+    "observation_seconds": 0.0004413600545376539,
+    "config_sha256": "f8833b63d075ff609372fb40f4be7c488b40e23dd11641a7581f118b2e156a4d",
+    "latency_seconds": 0.00400439603254199
+  },
+  "calls": [
+    {
+      "start": 1069441.893534242,
+      "sent": 1069441.893725787,
+      "observed": 1069441.901244633,
+      "end": 1069441.901609958,
+      "target_age": 20,
+      "returncode": 0,
+      "generation": 8,
+      "error": null,
+      "check_seconds": null,
+      "signal_seconds": null,
+      "observation_seconds": 0.0019798059947788715,
+      "config_sha256": "6a90f3a85e0209cb58b82a05e0bb0c4ed937acf9e9206e6cbd42653bc1fa5862",
+      "latency_seconds": 0.008075715973973274
+    },
+    {
+      "start": 1069451.893509244,
+      "sent": 1069451.893711319,
+      "observed": 1069451.901524571,
+      "end": 1069451.901892576,
+      "target_age": 10,
+      "returncode": 0,
+      "generation": 9,
+      "error": null,
+      "check_seconds": null,
+      "signal_seconds": null,
+      "observation_seconds": 0.001397283049300313,
+      "config_sha256": "f8833b63d075ff609372fb40f4be7c488b40e23dd11641a7581f118b2e156a4d",
+      "latency_seconds": 0.008383331820368767
+    },
+    {
+      "start": 1069461.893550229,
+      "sent": 1069461.893739965,
+      "observed": 1069461.899663516,
+      "end": 1069461.900117319,
+      "target_age": 20,
+      "returncode": 0,
+      "generation": 10,
+      "error": null,
+      "check_seconds": null,
+      "signal_seconds": null,
+      "observation_seconds": 0.001728647155687213,
+      "config_sha256": "6a90f3a85e0209cb58b82a05e0bb0c4ed937acf9e9206e6cbd42653bc1fa5862",
+      "latency_seconds": 0.00656709005124867
+    },
+    {
+      "start": 1069471.893458471,
+      "sent": 1069471.893657475,
+      "observed": 1069471.899732755,
+      "end": 1069471.900142392,
+      "target_age": 10,
+      "returncode": 0,
+      "generation": 11,
+      "error": null,
+      "check_seconds": null,
+      "signal_seconds": null,
+      "observation_seconds": 0.0014646640047430992,
+      "config_sha256": "f8833b63d075ff609372fb40f4be7c488b40e23dd11641a7581f118b2e156a4d",
+      "latency_seconds": 0.006683920975774527
+    },
+    {
+      "start": 1069481.893557318,
+      "sent": 1069481.89374542,
+      "observed": 1069481.900467471,
+      "end": 1069481.900825087,
+      "target_age": 20,
+      "returncode": 0,
+      "generation": 12,
+      "error": null,
+      "check_seconds": null,
+      "signal_seconds": null,
+      "observation_seconds": 0.0015140820760279894,
+      "config_sha256": "6a90f3a85e0209cb58b82a05e0bb0c4ed937acf9e9206e6cbd42653bc1fa5862",
+      "latency_seconds": 0.007267768960446119
+    }
+  ],
+  "phase_start": 1069431.893103719,
+  "phase_deadline": 1069491.893103719,
+  "wall_seconds": 67.17026180610992,
+  "http_load": {
+    "samples": 1109995,
+    "issue_window_samples": 1109995,
+    "successes": 1109995,
+    "measurement_seconds": 60,
+    "completed_within_window": 1109987,
+    "bytes_within_window": 1136626688,
+    "completed_rps_nominal": 18499.783333333333,
+    "completed_bytes_per_second_nominal": 18943778.133333333,
+    "cohort_rps_including_drain": 18499.733806353262,
+    "drain_seconds": 0.0005930690094828606,
+    "late_completions": 8,
+    "warmup_boundary_excluded_completions": 8,
+    "bytes": 1136634880,
+    "error_rate": 0.0,
+    "p50_ms": 0.403,
+    "p95_ms": 0.574,
+    "p99_ms": 0.741,
+    "errors": {},
+    "measured_reused_requests": 1109995,
+    "measured_reuse_ratio": 1.0,
+    "connect_events": 0,
+    "reconnects": 0,
+    "idle_close_reconnects": 0,
+    "header_reset_retries": 0,
+    "physical_attempts": 1109995,
+    "retry_policy": "GET only; at most one fresh connection retry after empty headers or header-phase reset on an existing warm connection; never retry body failures",
+    "event_loop_lag_max_seconds": 0.001646501012146473,
+    "valid": true,
+    "sample_limit": 2000000,
+    "percentile_method": "nearest rank on successful issue cohort"
+  },
+  "ws": {
+    "kind": "ws",
+    "connections_requested": 10,
+    "connections_established": 10,
+    "measurement_start_monotonic": 1069429.893305862,
+    "measurement_deadline_monotonic": 1069491.893305862,
+    "samples": 6113,
+    "message_rtt": {
+      "samples": 6113,
+      "p50_ms": 1.389,
+      "p95_ms": 1.95,
+      "p99_ms": 2.542
+    },
+    "first_event": {
+      "samples": 0,
+      "p50_ms": null,
+      "p95_ms": null,
+      "p99_ms": null
+    },
+    "event_interval": {
+      "samples": 0,
+      "p50_ms": null,
+      "p95_ms": null,
+      "p99_ms": null
+    },
+    "handshake": {
+      "samples": 10,
+      "p50_ms": 3.041,
+      "p95_ms": 3.851,
+      "p99_ms": 3.851
+    },
+    "close_handshake": {
+      "samples": 10,
+      "p50_ms": 0.705,
+      "p95_ms": 1.038,
+      "p99_ms": 1.038
+    },
+    "expected_closes": 10,
+    "unexpected_disconnects": 0,
+    "events_per_connection": {
+      "1017495": 611,
+      "1017496": 611,
+      "1017491": 611,
+      "1017497": 611,
+      "1017493": 611,
+      "1017494": 611,
+      "1017489": 612,
+      "1017492": 611,
+      "1017488": 612,
+      "1017490": 612
+    },
+    "progress_by_connection": {
+      "1017495": {
+        "last_progress_age_at_end": 0.08272317401133478,
+        "max_inactive_gap_seconds": 0.1046809779945761
+      },
+      "1017496": {
+        "last_progress_age_at_end": 0.08525816700421274,
+        "max_inactive_gap_seconds": 0.10444620694033802
+      },
+      "1017491": {
+        "last_progress_age_at_end": 0.09714523702859879,
+        "max_inactive_gap_seconds": 0.10422423691488802
+      },
+      "1017497": {
+        "last_progress_age_at_end": 0.07801024918444455,
+        "max_inactive_gap_seconds": 0.10469627799466252
+      },
+      "1017493": {
+        "last_progress_age_at_end": 0.09090969804674387,
+        "max_inactive_gap_seconds": 0.1044988539069891
+      },
+      "1017494": {
+        "last_progress_age_at_end": 0.08719475916586816,
+        "max_inactive_gap_seconds": 0.10474434611387551
+      },
+      "1017489": {
+        "last_progress_age_at_end": 0.0033241789788007736,
+        "max_inactive_gap_seconds": 0.1044334399048239
+      },
+      "1017492": {
+        "last_progress_age_at_end": 0.09297643112950027,
+        "max_inactive_gap_seconds": 0.10418030899018049
+      },
+      "1017488": {
+        "last_progress_age_at_end": 0.01079426403157413,
+        "max_inactive_gap_seconds": 0.10429625399410725
+      },
+      "1017490": {
+        "last_progress_age_at_end": 0,
+        "max_inactive_gap_seconds": 0.10477107297629118
+      }
+    },
+    "errors": {},
+    "valid": true,
+    "event_loop_lag_max_seconds": 0.001650210004299879,
+    "percentile_method": "nearest rank; milliseconds",
+    "sample_limit": 2000000
+  },
+  "sse": {
+    "kind": "sse",
+    "connections_requested": 10,
+    "connections_established": 10,
+    "measurement_start_monotonic": 1069429.893335931,
+    "measurement_deadline_monotonic": 1069491.893335931,
+    "samples": 610,
+    "message_rtt": {
+      "samples": 0,
+      "p50_ms": null,
+      "p95_ms": null,
+      "p99_ms": null
+    },
+    "first_event": {
+      "samples": 10,
+      "p50_ms": 1001.894,
+      "p95_ms": 1002.128,
+      "p99_ms": 1002.128
+    },
+    "event_interval": {
+      "samples": 600,
+      "p50_ms": 1000.868,
+      "p95_ms": 1001.966,
+      "p99_ms": 1002.517
+    },
+    "handshake": {
+      "samples": 10,
+      "p50_ms": 3.913,
+      "p95_ms": 4.337,
+      "p99_ms": 4.337
+    },
+    "close_handshake": {
+      "samples": 10,
+      "p50_ms": 0.0,
+      "p95_ms": 0.0,
+      "p99_ms": 0.0
+    },
+    "expected_closes": 10,
+    "unexpected_disconnects": 0,
+    "events_per_connection": {
+      "1017507": 61,
+      "1017501": 61,
+      "1017500": 61,
+      "1017502": 61,
+      "1017504": 61,
+      "1017506": 61,
+      "1017503": 61,
+      "1017505": 61,
+      "1017499": 61,
+      "1017498": 61
+    },
+    "progress_by_connection": {
+      "1017507": {
+        "last_progress_age_at_end": 0.9467947040684521,
+        "max_inactive_gap_seconds": 1.002823208924383
+      },
+      "1017501": {
+        "last_progress_age_at_end": 0.9468198099639267,
+        "max_inactive_gap_seconds": 1.0026876670308411
+      },
+      "1017500": {
+        "last_progress_age_at_end": 0.9471869510598481,
+        "max_inactive_gap_seconds": 1.002918125828728
+      },
+      "1017502": {
+        "last_progress_age_at_end": 0.9468468129634857,
+        "max_inactive_gap_seconds": 1.002835457911715
+      },
+      "1017504": {
+        "last_progress_age_at_end": 0.9472138499841094,
+        "max_inactive_gap_seconds": 1.0022958740592003
+      },
+      "1017506": {
+        "last_progress_age_at_end": 0.9468762311153114,
+        "max_inactive_gap_seconds": 1.0026852749288082
+      },
+      "1017503": {
+        "last_progress_age_at_end": 0.9472466818988323,
+        "max_inactive_gap_seconds": 1.0025050390977412
+      },
+      "1017505": {
+        "last_progress_age_at_end": 0.9469113780651242,
+        "max_inactive_gap_seconds": 1.0027007181197405
+      },
+      "1017499": {
+        "last_progress_age_at_end": 0.947284233989194,
+        "max_inactive_gap_seconds": 1.002516740001738
+      },
+      "1017498": {
+        "last_progress_age_at_end": 0.9475241620093584,
+        "max_inactive_gap_seconds": 1.00249393703416
+      }
+    },
+    "errors": {},
+    "valid": true,
+    "event_loop_lag_max_seconds": 0.001019560033455491,
+    "percentile_method": "nearest rank; milliseconds",
+    "sample_limit": 2000000
+  },
+  "warm_cache_probe": {
+    "samples": 309,
+    "closed_reconnects": 0,
+    "errors": {},
+    "valid": true
+  },
+  "reload_latency": {
+    "samples": 5,
+    "p50_ms": 7.268,
+    "p95_ms": 8.383,
+    "p99_ms": 8.383,
+    "max_ms": 8.383331820368767
+  },
+  "http_windows": {
+    "total_samples": 1109995,
+    "total_errors": 0,
+    "aggregate_value_limit": 14000000,
+    "whole_phase": {
+      "samples": 1109995,
+      "p50_ms": 0.403,
+      "p95_ms": 0.574,
+      "p99_ms": 0.741,
+      "max_ms": 3.324
+    },
+    "union": {
+      "samples": 93199,
+      "p50_ms": 0.402,
+      "p95_ms": 0.575,
+      "p99_ms": 0.793,
+      "max_ms": 2.662,
+      "errors": 0
+    },
+    "per_reload": [
+      {
+        "start": 1069441.893534242,
+        "end": 1069442.901244633,
+        "errors": 0,
+        "invalid_reason": null,
+        "samples": 18842,
+        "p50_ms": 0.404,
+        "p95_ms": 0.52,
+        "p99_ms": 0.655,
+        "max_ms": 2.041
+      },
+      {
+        "start": 1069451.893509244,
+        "end": 1069452.901524571,
+        "errors": 0,
+        "invalid_reason": null,
+        "samples": 19240,
+        "p50_ms": 0.397,
+        "p95_ms": 0.51,
+        "p99_ms": 0.638,
+        "max_ms": 1.653
+      },
+      {
+        "start": 1069461.893550229,
+        "end": 1069462.899663516,
+        "errors": 0,
+        "invalid_reason": null,
+        "samples": 17952,
+        "p50_ms": 0.409,
+        "p95_ms": 0.641,
+        "p99_ms": 0.854,
+        "max_ms": 2.662
+      },
+      {
+        "start": 1069471.893458471,
+        "end": 1069472.899732755,
+        "errors": 0,
+        "invalid_reason": null,
+        "samples": 18959,
+        "p50_ms": 0.4,
+        "p95_ms": 0.535,
+        "p99_ms": 0.657,
+        "max_ms": 1.668
+      },
+      {
+        "start": 1069481.893557318,
+        "end": 1069482.900467471,
+        "errors": 0,
+        "invalid_reason": null,
+        "samples": 18206,
+        "p50_ms": 0.402,
+        "p95_ms": 0.646,
+        "p99_ms": 0.884,
+        "max_ms": 1.737
+      }
+    ]
+  },
+  "window_definition": "request start in [reload start, observed or failure end + 1s]",
+  "error": null,
+  "scenario": "rill-reload-2",
+  "resource_peaks": {
+    "server": {
+      "cpu_percent": 173.75275680402066,
+      "rss_bytes": 30138368,
+      "hwm_sum_bytes": 30822400,
+      "pss_bytes": null
+    },
+    "backend": {
+      "cpu_percent": 1.9970776161762942,
+      "rss_bytes": 28581888,
+      "hwm_sum_bytes": 28581888,
+      "pss_bytes": null
+    },
+    "client": {
+      "cpu_percent": 96.86183058700911,
+      "rss_bytes": 81526784,
+      "hwm_sum_bytes": 98992128,
+      "pss_bytes": null
+    }
+  },
+  "client_limit_warning": true
+}

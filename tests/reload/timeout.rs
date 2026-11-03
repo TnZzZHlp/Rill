@@ -94,7 +94,13 @@ fn assert_stable(f: &Fixture) -> Result {
 }
 
 fn assert_busy(output: Output) {
-    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert!(String::from_utf8_lossy(&output.stderr).contains("BUSY"));
 }
 
@@ -144,6 +150,20 @@ fn timed_out_prepare_keeps_admission_and_never_publishes_late() -> Result {
         }
         for (answer, peer) in pending {
             socket.send_to(&answer, peer)?;
+        }
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while Instant::now() < deadline {
+            match socket.recv_from(&mut buf) {
+                Ok((length, peer)) => {
+                    socket.send_to(&dns_answer(&buf[..length])?, peer)?;
+                }
+                Err(e)
+                    if matches!(
+                        e.kind(),
+                        io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut
+                    ) => {}
+                Err(e) => return Err(e.into()),
+            }
         }
         Ok(())
     });

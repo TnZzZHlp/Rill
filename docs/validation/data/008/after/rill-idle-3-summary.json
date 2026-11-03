@@ -1,0 +1,29 @@
+{
+  "scenario": "rill-idle-3",
+  "valid": true,
+  "samples": 60,
+  "resource_peaks": {
+    "server": {
+      "cpu_percent": 0.9982345424134911,
+      "rss_bytes": 30355456,
+      "hwm_sum_bytes": 30822400,
+      "pss_bytes": null
+    },
+    "backend": {
+      "cpu_percent": 0,
+      "rss_bytes": 28581888,
+      "hwm_sum_bytes": 28581888,
+      "pss_bytes": null
+    },
+    "client": {
+      "cpu_percent": 0.998262860875542,
+      "rss_bytes": 47767552,
+      "hwm_sum_bytes": 65990656,
+      "pss_bytes": null
+    }
+  },
+  "server_max_threads": 4,
+  "server_max_fds": 15,
+  "latency": null,
+  "throughput": null
+}

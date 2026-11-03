@@ -1,5 +1,6 @@
 use super::support::{Fixture, TestResult, header};
 use std::fs::{self, File};
+use std::io::Write;
 use std::time::{Duration, SystemTime};
 
 #[test]
@@ -121,13 +122,12 @@ fn spa_fallback_requires_navigation() -> TestResult {
     fs::write(f.root.join("index.html"), b"index")?;
     fs::create_dir(f.root.join("directory"))?;
     f.start("spa #true;")?;
-    for method in ["GET", "HEAD"] {
-        assert_eq!(
-            f.request(method, "/route", "Accept: text/html;q=0.5\r\n")?
-                .0,
-            200
-        );
-    }
+    let (status, _, body) = f.request("GET", "/route", "Accept: text/html;q=0.5\r\n")?;
+    assert_eq!(status, 200);
+    assert_eq!(body, b"index");
+    let (status, _, body) = f.request("HEAD", "/route", "Accept: text/html;q=0.5\r\n")?;
+    assert_eq!(status, 200);
+    assert!(body.is_empty());
     for (path, headers, status) in [
         ("/route", "Accept: text/html;q=0\r\n", 404),
         ("/route", "", 404),
@@ -140,5 +140,28 @@ fn spa_fallback_requires_navigation() -> TestResult {
     ] {
         assert_eq!(f.request("GET", path, headers)?.0, status, "{path}");
     }
+    Ok(())
+}
+
+#[test]
+fn large_file_range_crosses_block_boundary() -> TestResult {
+    let mut f = Fixture::new()?;
+    let mut file = File::create(f.root.join("large"))?;
+    for block in 0..256u16 {
+        let data = vec![block as u8; 65536];
+        file.write_all(&data)?;
+    }
+    drop(file);
+    f.start("")?;
+    let (status, headers, body) = f.request("GET", "/large", "Range: bytes=1048583-1114118\r\n")?;
+    assert_eq!(status, 206);
+    assert_eq!(
+        header(&headers, "content-range"),
+        Some("bytes 1048583-1114118/16777216")
+    );
+    assert_eq!(header(&headers, "content-length"), Some("65536"));
+    assert_eq!(body.len(), 65536);
+    assert!(body[..65529].iter().all(|&byte| byte == 16));
+    assert!(body[65529..].iter().all(|&byte| byte == 17));
     Ok(())
 }

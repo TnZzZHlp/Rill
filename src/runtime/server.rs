@@ -25,6 +25,7 @@ fn bind(address: SocketAddr) -> std::io::Result<Listener> {
         Some(Protocol::TCP),
     )?;
     socket.set_reuse_address(true)?;
+    socket.set_tcp_nodelay(true)?;
     if address.is_ipv6() {
         socket.set_only_v6(true)?;
     }
@@ -277,4 +278,24 @@ pub async fn serve(state: Arc<RuntimeState>) -> u8 {
         .logger
         .event(Level::Info, "stopped", &[("status", &status.to_string())]);
     status
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn bind_accepted_socket_inherits_tcp_nodelay() -> Result<(), Box<dyn std::error::Error>> {
+        let Listener::Tcp(listener) = bind("127.0.0.1:0".parse()?)? else {
+            panic!("expected TCP listener");
+        };
+        let _client = timeout(
+            Duration::from_secs(2),
+            tokio::net::TcpStream::connect(listener.local_addr()?),
+        )
+        .await??;
+        let (accepted, _) = timeout(Duration::from_secs(2), listener.accept()).await??;
+        assert!(accepted.nodelay()?);
+        Ok(())
+    }
 }

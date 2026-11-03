@@ -1,0 +1,428 @@
+{
+  "valid": true,
+  "setup": null,
+  "calls": [
+    {
+      "start": 1069374.80476035,
+      "sent": 1069374.805021541,
+      "observed": 1069374.812366439,
+      "end": 1069374.812803844,
+      "target_age": 20,
+      "returncode": 0,
+      "generation": 2,
+      "error": null,
+      "check_seconds": null,
+      "signal_seconds": null,
+      "observation_seconds": 0.0014352200087159872,
+      "config_sha256": "6a90f3a85e0209cb58b82a05e0bb0c4ed937acf9e9206e6cbd42653bc1fa5862",
+      "latency_seconds": 0.008043494075536728
+    },
+    {
+      "start": 1069384.804650516,
+      "sent": 1069384.804860369,
+      "observed": 1069384.810894619,
+      "end": 1069384.811251974,
+      "target_age": 10,
+      "returncode": 0,
+      "generation": 3,
+      "error": null,
+      "check_seconds": null,
+      "signal_seconds": null,
+      "observation_seconds": 0.0014201980084180832,
+      "config_sha256": "f8833b63d075ff609372fb40f4be7c488b40e23dd11641a7581f118b2e156a4d",
+      "latency_seconds": 0.006601457949727774
+    },
+    {
+      "start": 1069394.804665912,
+      "sent": 1069394.804858868,
+      "observed": 1069394.811153252,
+      "end": 1069394.811522987,
+      "target_age": 20,
+      "returncode": 0,
+      "generation": 4,
+      "error": null,
+      "check_seconds": null,
+      "signal_seconds": null,
+      "observation_seconds": 0.001325781922787428,
+      "config_sha256": "6a90f3a85e0209cb58b82a05e0bb0c4ed937acf9e9206e6cbd42653bc1fa5862",
+      "latency_seconds": 0.0068570750299841166
+    },
+    {
+      "start": 1069404.804678907,
+      "sent": 1069404.804867194,
+      "observed": 1069404.811335288,
+      "end": 1069404.81171324,
+      "target_age": 10,
+      "returncode": 0,
+      "generation": 5,
+      "error": null,
+      "check_seconds": null,
+      "signal_seconds": null,
+      "observation_seconds": 0.0014839079231023788,
+      "config_sha256": "f8833b63d075ff609372fb40f4be7c488b40e23dd11641a7581f118b2e156a4d",
+      "latency_seconds": 0.007034333189949393
+    },
+    {
+      "start": 1069414.80476355,
+      "sent": 1069414.804961699,
+      "observed": 1069414.81289542,
+      "end": 1069414.813268421,
+      "target_age": 20,
+      "returncode": 0,
+      "generation": 6,
+      "error": null,
+      "check_seconds": null,
+      "signal_seconds": null,
+      "observation_seconds": 0.0014581349678337574,
+      "config_sha256": "6a90f3a85e0209cb58b82a05e0bb0c4ed937acf9e9206e6cbd42653bc1fa5862",
+      "latency_seconds": 0.008504871046170592
+    }
+  ],
+  "phase_start": 1069364.804236096,
+  "phase_deadline": 1069424.804236096,
+  "wall_seconds": 67.08490792405792,
+  "http_load": {
+    "samples": 1122217,
+    "issue_window_samples": 1122217,
+    "successes": 1122217,
+    "measurement_seconds": 60,
+    "completed_within_window": 1122209,
+    "bytes_within_window": 1149142016,
+    "completed_rps_nominal": 18703.483333333334,
+    "completed_bytes_per_second_nominal": 19152366.933333334,
+    "cohort_rps_including_drain": 18703.444296675974,
+    "drain_seconds": 0.0005529569461941719,
+    "late_completions": 8,
+    "warmup_boundary_excluded_completions": 8,
+    "bytes": 1149150208,
+    "error_rate": 0.0,
+    "p50_ms": 0.401,
+    "p95_ms": 0.551,
+    "p99_ms": 0.721,
+    "errors": {},
+    "measured_reused_requests": 1122217,
+    "measured_reuse_ratio": 1.0,
+    "connect_events": 0,
+    "reconnects": 0,
+    "idle_close_reconnects": 0,
+    "header_reset_retries": 0,
+    "physical_attempts": 1122217,
+    "retry_policy": "GET only; at most one fresh connection retry after empty headers or header-phase reset on an existing warm connection; never retry body failures",
+    "event_loop_lag_max_seconds": 0.0011260590981692076,
+    "valid": true,
+    "sample_limit": 2000000,
+    "percentile_method": "nearest rank on successful issue cohort"
+  },
+  "ws": {
+    "kind": "ws",
+    "connections_requested": 10,
+    "connections_established": 10,
+    "measurement_start_monotonic": 1069362.80447452,
+    "measurement_deadline_monotonic": 1069424.80447452,
+    "samples": 6119,
+    "message_rtt": {
+      "samples": 6119,
+      "p50_ms": 1.377,
+      "p95_ms": 1.774,
+      "p99_ms": 2.284
+    },
+    "first_event": {
+      "samples": 0,
+      "p50_ms": null,
+      "p95_ms": null,
+      "p99_ms": null
+    },
+    "event_interval": {
+      "samples": 0,
+      "p50_ms": null,
+      "p95_ms": null,
+      "p99_ms": null
+    },
+    "handshake": {
+      "samples": 10,
+      "p50_ms": 3.509,
+      "p95_ms": 3.734,
+      "p99_ms": 3.734
+    },
+    "close_handshake": {
+      "samples": 10,
+      "p50_ms": 0.665,
+      "p95_ms": 0.869,
+      "p99_ms": 0.869
+    },
+    "expected_closes": 10,
+    "unexpected_disconnects": 0,
+    "events_per_connection": {
+      "1017457": 612,
+      "1017460": 612,
+      "1017456": 612,
+      "1017461": 611,
+      "1017462": 612,
+      "1017458": 612,
+      "1017459": 612,
+      "1017455": 612,
+      "1017453": 612,
+      "1017454": 612
+    },
+    "progress_by_connection": {
+      "1017457": {
+        "last_progress_age_at_end": 0.015517312102019787,
+        "max_inactive_gap_seconds": 0.10377894900739193
+      },
+      "1017460": {
+        "last_progress_age_at_end": 0.004643104039132595,
+        "max_inactive_gap_seconds": 0.10417066398076713
+      },
+      "1017456": {
+        "last_progress_age_at_end": 0.019104457926005125,
+        "max_inactive_gap_seconds": 0.10390971507877111
+      },
+      "1017461": {
+        "last_progress_age_at_end": 0.0987966270186007,
+        "max_inactive_gap_seconds": 0.10512999794445932
+      },
+      "1017462": {
+        "last_progress_age_at_end": 0.0008102790452539921,
+        "max_inactive_gap_seconds": 0.10402254294604063
+      },
+      "1017458": {
+        "last_progress_age_at_end": 0.011141357012093067,
+        "max_inactive_gap_seconds": 0.1032865981105715
+      },
+      "1017459": {
+        "last_progress_age_at_end": 0.00753185898065567,
+        "max_inactive_gap_seconds": 0.10310348984785378
+      },
+      "1017455": {
+        "last_progress_age_at_end": 0.02175524295307696,
+        "max_inactive_gap_seconds": 0.10337007720954716
+      },
+      "1017453": {
+        "last_progress_age_at_end": 0.028541062958538532,
+        "max_inactive_gap_seconds": 0.10394064104184508
+      },
+      "1017454": {
+        "last_progress_age_at_end": 0.025056248996406794,
+        "max_inactive_gap_seconds": 0.10347173386253417
+      }
+    },
+    "errors": {},
+    "valid": true,
+    "event_loop_lag_max_seconds": 0.001560538075864315,
+    "percentile_method": "nearest rank; milliseconds",
+    "sample_limit": 2000000
+  },
+  "sse": {
+    "kind": "sse",
+    "connections_requested": 10,
+    "connections_established": 10,
+    "measurement_start_monotonic": 1069362.804506697,
+    "measurement_deadline_monotonic": 1069424.804506697,
+    "samples": 610,
+    "message_rtt": {
+      "samples": 0,
+      "p50_ms": null,
+      "p95_ms": null,
+      "p99_ms": null
+    },
+    "first_event": {
+      "samples": 10,
+      "p50_ms": 1001.695,
+      "p95_ms": 1002.322,
+      "p99_ms": 1002.322
+    },
+    "event_interval": {
+      "samples": 600,
+      "p50_ms": 1000.777,
+      "p95_ms": 1001.898,
+      "p99_ms": 1002.776
+    },
+    "handshake": {
+      "samples": 10,
+      "p50_ms": 3.779,
+      "p95_ms": 3.858,
+      "p99_ms": 3.858
+    },
+    "close_handshake": {
+      "samples": 10,
+      "p50_ms": 0.0,
+      "p95_ms": 0.0,
+      "p99_ms": 0.0
+    },
+    "expected_closes": 10,
+    "unexpected_disconnects": 0,
+    "events_per_connection": {
+      "1017463": 61,
+      "1017466": 61,
+      "1017469": 61,
+      "1017465": 61,
+      "1017471": 61,
+      "1017464": 61,
+      "1017472": 61,
+      "1017470": 61,
+      "1017468": 61,
+      "1017467": 61
+    },
+    "progress_by_connection": {
+      "1017463": {
+        "last_progress_age_at_end": 0.9536133171059191,
+        "max_inactive_gap_seconds": 1.0030245899688452
+      },
+      "1017466": {
+        "last_progress_age_at_end": 0.9530674940906465,
+        "max_inactive_gap_seconds": 1.002614701166749
+      },
+      "1017469": {
+        "last_progress_age_at_end": 0.9528033509850502,
+        "max_inactive_gap_seconds": 1.0026024591643363
+      },
+      "1017465": {
+        "last_progress_age_at_end": 0.9530979918781668,
+        "max_inactive_gap_seconds": 1.0028125389944762
+      },
+      "1017471": {
+        "last_progress_age_at_end": 0.9525094199925661,
+        "max_inactive_gap_seconds": 1.0028793609235436
+      },
+      "1017464": {
+        "last_progress_age_at_end": 0.9536460170056671,
+        "max_inactive_gap_seconds": 1.0028456579893827
+      },
+      "1017472": {
+        "last_progress_age_at_end": 0.9528385100420564,
+        "max_inactive_gap_seconds": 1.0028340218123049
+      },
+      "1017470": {
+        "last_progress_age_at_end": 0.9525445750914514,
+        "max_inactive_gap_seconds": 1.0026012978050858
+      },
+      "1017468": {
+        "last_progress_age_at_end": 0.9531365588773042,
+        "max_inactive_gap_seconds": 1.0028910010587424
+      },
+      "1017467": {
+        "last_progress_age_at_end": 0.9537057930137962,
+        "max_inactive_gap_seconds": 1.0027760758530349
+      }
+    },
+    "errors": {},
+    "valid": true,
+    "event_loop_lag_max_seconds": 0.0012046238407492638,
+    "percentile_method": "nearest rank; milliseconds",
+    "sample_limit": 2000000
+  },
+  "warm_cache_probe": {
+    "samples": 309,
+    "closed_reconnects": 0,
+    "errors": {},
+    "valid": true
+  },
+  "reload_latency": {
+    "samples": 5,
+    "p50_ms": 7.034,
+    "p95_ms": 8.505,
+    "p99_ms": 8.505,
+    "max_ms": 8.504871046170592
+  },
+  "http_windows": {
+    "total_samples": 1122217,
+    "total_errors": 0,
+    "aggregate_value_limit": 14000000,
+    "whole_phase": {
+      "samples": 1122217,
+      "p50_ms": 0.401,
+      "p95_ms": 0.551,
+      "p99_ms": 0.721,
+      "max_ms": 4.274
+    },
+    "union": {
+      "samples": 93028,
+      "p50_ms": 0.403,
+      "p95_ms": 0.571,
+      "p99_ms": 0.794,
+      "max_ms": 4.274,
+      "errors": 0
+    },
+    "per_reload": [
+      {
+        "start": 1069374.80476035,
+        "end": 1069375.812366439,
+        "errors": 0,
+        "invalid_reason": null,
+        "samples": 18619,
+        "p50_ms": 0.399,
+        "p95_ms": 0.586,
+        "p99_ms": 0.836,
+        "max_ms": 2.07
+      },
+      {
+        "start": 1069384.804650516,
+        "end": 1069385.810894619,
+        "errors": 0,
+        "invalid_reason": null,
+        "samples": 18464,
+        "p50_ms": 0.404,
+        "p95_ms": 0.594,
+        "p99_ms": 0.817,
+        "max_ms": 1.877
+      },
+      {
+        "start": 1069394.804665912,
+        "end": 1069395.811153252,
+        "errors": 0,
+        "invalid_reason": null,
+        "samples": 19137,
+        "p50_ms": 0.399,
+        "p95_ms": 0.5,
+        "p99_ms": 0.611,
+        "max_ms": 1.887
+      },
+      {
+        "start": 1069404.804678907,
+        "end": 1069405.811335288,
+        "errors": 0,
+        "invalid_reason": null,
+        "samples": 18238,
+        "p50_ms": 0.405,
+        "p95_ms": 0.607,
+        "p99_ms": 0.859,
+        "max_ms": 1.762
+      },
+      {
+        "start": 1069414.80476355,
+        "end": 1069415.81289542,
+        "errors": 0,
+        "invalid_reason": null,
+        "samples": 18570,
+        "p50_ms": 0.405,
+        "p95_ms": 0.547,
+        "p99_ms": 0.747,
+        "max_ms": 4.274
+      }
+    ]
+  },
+  "window_definition": "request start in [reload start, observed or failure end + 1s]",
+  "error": null,
+  "scenario": "rill-reload-1",
+  "resource_peaks": {
+    "server": {
+      "cpu_percent": 173.80901901674113,
+      "rss_bytes": 30355456,
+      "hwm_sum_bytes": 30822400,
+      "pss_bytes": null
+    },
+    "backend": {
+      "cpu_percent": 1.9968381985932704,
+      "rss_bytes": 28581888,
+      "hwm_sum_bytes": 28581888,
+      "pss_bytes": null
+    },
+    "client": {
+      "cpu_percent": 96.89353358979247,
+      "rss_bytes": 89509888,
+      "hwm_sum_bytes": 89509888,
+      "pss_bytes": null
+    }
+  },
+  "client_limit_warning": true
+}

@@ -1,0 +1,12 @@
+server {
+    https "0.0.0.0:8443"
+    control-socket "/run/rill/control.sock"
+}
+tls "default" {
+    cert "/etc/rill/certs/fullchain.pem"
+    key "/etc/rill/certs/privkey.pem"
+}
+site "example.test" {
+    tls "default"
+    root "/srv/rill/www"
+}

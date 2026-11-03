@@ -1,0 +1,29 @@
+{
+  "scenario": "nginx-idle-1",
+  "valid": true,
+  "samples": 60,
+  "resource_peaks": {
+    "server": {
+      "cpu_percent": 0,
+      "rss_bytes": 21114880,
+      "hwm_sum_bytes": 23277568,
+      "pss_bytes": null
+    },
+    "backend": {
+      "cpu_percent": 0,
+      "rss_bytes": 28606464,
+      "hwm_sum_bytes": 28606464,
+      "pss_bytes": null
+    },
+    "client": {
+      "cpu_percent": 0.9982336354901016,
+      "rss_bytes": 55422976,
+      "hwm_sum_bytes": 99291136,
+      "pss_bytes": null
+    }
+  },
+  "server_max_threads": 3,
+  "server_max_fds": 32,
+  "latency": null,
+  "throughput": null
+}

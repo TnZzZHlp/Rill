@@ -4,7 +4,7 @@
 
 - 总计划：[Rill Web 服务器实施计划](../README.md)
 - 阶段 ID：008
-- 实施状态：未开始
+- 实施状态：已验收（独立完成提交见 Git 历史）
 - 依赖：007
 - 目标引用：G05
 - 决策引用：总计划 D01–D08，具体契约以 001 交付并确认的版本为准。
@@ -24,68 +24,69 @@
 
 - 拟议目标路径：tests/、examples/、deploy/systemd/、deploy/podman/、scripts/bench/、README.md、docs/。
 - 验收以真实进程和本地后端交互为主，核心纯逻辑只添加必要测试。部署文档和示例在此阶段实现；性能只报告环境一致的实测数据，不承诺预设 RPS。
+- 执行期间经用户确认，将 `src/runtime/server.rs` 的 TCP_NODELAY 最小修复及一条实际 accepted socket 回归纳入本阶段，并重新执行完整标准基准。原始请求/事件数据独立保留，Git 仅交付摘要、资源记录及校验清单。
 - main/CLI 仅编排，不持有业务规则；模块通过明确接口通信，不直接改写其他模块内部状态。
 - 外部错误必须可恢复、可定位并脱敏。所有配置更新复用统一验证与准备流程，禁止绕过运行时事务边界。
 
 ## 实施任务
 
-- [ ] **008-T01：执行 P0 全量验收与针对性安全复核**
+- [x] **008-T01：执行 P0 全量验收与针对性安全复核**
   - 依赖：007。
   - 目标路径：tests/、examples/、deploy/systemd/、deploy/podman/、scripts/bench/、README.md、docs/；仅修改本任务相关模块。
   - 行动：汇总 T01–T18 和补充 P0 场景，补齐遗漏的必要集成验证；复核路径访问、转发头、控制权限、TLS 和 Reload 失败路径。新增测试工具/依赖、独立审计委托需另获批准。
   - 预期交付物：逐项结果及失败修复记录。
   - 验收引用：008-AC01。
   - 计划验证：任何必需项失败都阻止 P0 完成，不以测试数量替代结果。
-  - 完成证据：未完成；检查未执行。
+  - 完成证据：T01–T18 与补充控制权限、TLS WebSocket、Range、并发 Reload 均通过；最终隔离门禁 111 项通过，独立复审关闭。见 docs/validation/008-p0-validation-deployment.md。
 
-- [ ] **008-T02：建立性能和资源基线**
+- [x] **008-T02：建立性能和资源基线**
   - 依赖：008-T01。
   - 目标路径：tests/、examples/、deploy/systemd/、deploy/podman/、scripts/bench/、README.md、docs/；仅修改本任务相关模块。
   - 行动：提供可重复脚本与环境说明；同机同条件对照 Nginx/Caddy/Pingap 中至少一个，测 HTTP/HTTPS、大小文件、WS/SSE、Reload 和空闲资源。记录 CPU、RSS、p50/p95/p99、吞吐、错误率和断连数中适用指标。
   - 预期交付物：基准脚本、原始结果及分析。
   - 验收引用：008-AC02。
   - 计划验证：区分冷/热连接、TLS、样本量和负载参数；没有环境时保持未验收，不编造对比结论。
-  - 完成证据：未完成；检查未执行。
+  - 完成证据：修复前后各完整 108 轮标准基准及全部原始请求/事件/窗口/资源/哈希独立核验通过；原始目录独立保留，Git 交付摘要、资源和清单。C8 闭环和客户端限制均明确披露，见 docs/validation/008-performance-baseline.md。
 
-- [ ] **008-T03：提供 systemd 与 Podman 部署**
+- [x] **008-T03：提供 systemd 与 Podman 部署**
   - 依赖：008-T02。
   - 目标路径：tests/、examples/、deploy/systemd/、deploy/podman/、scripts/bench/、README.md、docs/；仅修改本任务相关模块。
   - 行动：提供服务/容器配置、构建步骤和最小权限示例，明确低端口能力、证书只读挂载、root 和 Socket 权限、重启与 Reload 差异。单二进制不等于静态链接，说明 OpenSSL 运行依赖。
   - 预期交付物：可复现 Debian、systemd 和 Podman 部署示例。
   - 验收引用：008-AC03。
   - 计划验证：按示例启动、check、reload、停止和排空；非管理员身份不能越权调用管理接口。
-  - 完成证据：未完成；检查未执行。
+  - 完成证据：新 release 的 systemd 隔离 fixture 与 Podman rootful 非 root 部署启动/check/HTTPS/Reload/失败回滚/权限/16 MiB 排空均通过且清理；明确模板 override、未运行正式账户安装及未验证 rootless。见 docs/validation/008-deployment.md。
 
-- [ ] **008-T04：完成 P0 文档及质量检查**
+- [x] **008-T04：完成 P0 文档及质量检查**
   - 依赖：008-T03。
   - 目标路径：tests/、examples/、deploy/systemd/、deploy/podman/、scripts/bench/、README.md、docs/；仅修改本任务相关模块。
   - 行动：交付配置规范、CLI、示例、架构和故障排查；确保 Cargo.lock 纳入交付。执行 cargo fmt --check、cargo clippy、cargo test 与生产构建，记录实际环境。
   - 预期交付物：P0 交付清单和完整验收报告。
   - 验收引用：008-AC04。
   - 计划验证：原文第 13 节逐项有产物；无法执行的检查标为阻塞，不勾选阶段完成。
-  - 完成证据：未完成；检查未执行。
+  - 完成证据：第 13 节交付清单已逐项记录；fmt/check/clippy/111 tests/release 与独立交付复审通过。最终唯一生产变更为用户批准的 TCP_NODELAY 最小修复，未开始 009。见 docs/validation/008-p0-validation-deployment.md。
 
 ## 验收标准
 
-- [ ] **008-AC01：逐项结果及失败修复记录已交付且对应行为通过检查**
+- [x] **008-AC01：逐项结果及失败修复记录已交付且对应行为通过检查**
   - 验证步骤与判定：任何必需项失败都阻止 P0 完成，不以测试数量替代结果。
   - 证据要求：记录输入或配置、实际命令/操作、预期与实际结果、日志或报告路径。
-  - 验证证据：未执行。
+  - 验证证据：T01–T18 与补充控制权限、TLS WebSocket、Range、并发 Reload 均通过；最终隔离门禁 111 项通过，独立复审关闭。见 docs/validation/008-p0-validation-deployment.md。
 
-- [ ] **008-AC02：基准脚本、原始结果及分析已交付且对应行为通过检查**
+- [x] **008-AC02：基准脚本、原始结果及分析已交付且对应行为通过检查**
   - 验证步骤与判定：区分冷/热连接、TLS、样本量和负载参数；没有环境时保持未验收，不编造对比结论。
   - 证据要求：记录输入或配置、实际命令/操作、预期与实际结果、日志或报告路径。
-  - 验证证据：未执行。
+  - 验证证据：修复前后各完整 108 轮标准基准及全部原始请求/事件/窗口/资源/哈希独立核验通过；原始目录独立保留，Git 交付摘要、资源和清单。C8 闭环和客户端限制均明确披露，见 docs/validation/008-performance-baseline.md。
 
-- [ ] **008-AC03：可复现 Debian、systemd 和 Podman 部署示例已交付且对应行为通过检查**
+- [x] **008-AC03：可复现 Debian、systemd 和 Podman 部署示例已交付且对应行为通过检查**
   - 验证步骤与判定：按示例启动、check、reload、停止和排空；非管理员身份不能越权调用管理接口。
   - 证据要求：记录输入或配置、实际命令/操作、预期与实际结果、日志或报告路径。
-  - 验证证据：未执行。
+  - 验证证据：新 release 的 systemd 隔离 fixture 与 Podman rootful 非 root 部署启动/check/HTTPS/Reload/失败回滚/权限/16 MiB 排空均通过且清理；明确模板 override、未运行正式账户安装及未验证 rootless。见 docs/validation/008-deployment.md。
 
-- [ ] **008-AC04：P0 交付清单和完整验收报告已交付且对应行为通过检查**
+- [x] **008-AC04：P0 交付清单和完整验收报告已交付且对应行为通过检查**
   - 验证步骤与判定：原文第 13 节逐项有产物；无法执行的检查标为阻塞，不勾选阶段完成。
   - 证据要求：记录输入或配置、实际命令/操作、预期与实际结果、日志或报告路径。
-  - 验证证据：未执行。
+  - 验证证据：第 13 节交付清单已逐项记录；fmt/check/clippy/111 tests/release 与独立交付复审通过。最终唯一生产变更为用户批准的 TCP_NODELAY 最小修复，未开始 009。见 docs/validation/008-p0-validation-deployment.md。
 
 ## 风险与缓解
 

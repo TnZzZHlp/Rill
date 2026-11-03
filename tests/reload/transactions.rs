@@ -309,3 +309,79 @@ fn concurrent_reload_generations_are_contiguous_and_snapshots_complete() -> Resu
     );
     Ok(())
 }
+
+#[test]
+fn alternating_reloads_keep_concurrent_reader_snapshots_consistent() -> Result {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::mpsc;
+
+    let mut f = Fixture::new()?;
+    let a = f.dir.join("a");
+    let b = f.dir.join("b");
+    fs::create_dir(&a)?;
+    fs::create_dir(&b)?;
+    fs::write(a.join("file"), b"alpha")?;
+    fs::write(b.join("file"), b"beta")?;
+    fs::write(&f.entry, f.config(&a, "max-age=10"))?;
+    f.start()?;
+    let stop = Arc::new(AtomicBool::new(false));
+    let reader_stop = Arc::clone(&stop);
+    let address = f.address;
+    let (tx, rx) = mpsc::sync_channel(1);
+    let reader = thread::spawn(move || -> Result {
+        let deadline = Instant::now() + Duration::from_secs(90);
+        while !reader_stop.load(Ordering::Relaxed) && Instant::now() < deadline {
+            let mut stream = TcpStream::connect_timeout(&address, Duration::from_secs(2))?;
+            stream.set_read_timeout(Some(Duration::from_secs(5)))?;
+            stream.set_write_timeout(Some(Duration::from_secs(5)))?;
+            let (status, headers, body) = Fixture::request(&mut stream, "/file")?;
+            let headers = headers.to_ascii_lowercase();
+            if status != 200
+                || !((body == b"alpha" && headers.contains("cache-control: max-age=10"))
+                    || (body == b"beta" && headers.contains("cache-control: max-age=20")))
+            {
+                return Err("inconsistent snapshot".into());
+            }
+            let _ = tx.try_send(body == b"beta");
+        }
+        Ok(())
+    });
+    let result = (|| -> Result {
+        assert!(!rx.recv_timeout(Duration::from_secs(10))?);
+        for round in 0..6 {
+            let (root, cache) = if round % 2 == 0 {
+                (&b, "max-age=20")
+            } else {
+                (&a, "max-age=10")
+            };
+            fs::write(&f.entry, f.config(root, cache))?;
+            let response = f.reload()?;
+            assert_eq!(response.status, "ok");
+            assert_eq!(response.generation, Some(round + 2));
+            let deadline = Instant::now() + Duration::from_secs(10);
+            loop {
+                let remaining = deadline.saturating_duration_since(Instant::now());
+                if remaining.is_zero() {
+                    return Err("reader did not observe committed snapshot".into());
+                }
+                if rx.recv_timeout(remaining)? == (round % 2 == 0) {
+                    break;
+                }
+            }
+        }
+        let mut stream = f.connect()?;
+        let (status, headers, body) = Fixture::request(&mut stream, "/file")?;
+        assert_eq!(status, 200);
+        assert_eq!(body, b"alpha");
+        assert!(
+            headers
+                .to_ascii_lowercase()
+                .contains("cache-control: max-age=10")
+        );
+        Ok(())
+    })();
+    stop.store(true, Ordering::Relaxed);
+    let reader_result = reader.join().map_err(|_| "reader panicked")?;
+    result?;
+    reader_result
+}

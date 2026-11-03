@@ -1,0 +1,54 @@
+{
+  "samples": 383423,
+  "issue_window_samples": 383423,
+  "successes": 383423,
+  "measurement_seconds": 30,
+  "completed_within_window": 383415,
+  "bytes_within_window": 392616960,
+  "completed_rps_nominal": 12780.5,
+  "completed_bytes_per_second_nominal": 13087232.0,
+  "cohort_rps_including_drain": 12780.486045922145,
+  "drain_seconds": 0.0006587090902030468,
+  "late_completions": 8,
+  "warmup_boundary_excluded_completions": 8,
+  "bytes": 392625152,
+  "error_rate": 0.0,
+  "p50_ms": 0.581,
+  "p95_ms": 0.783,
+  "p99_ms": 1.115,
+  "errors": {},
+  "measured_reused_requests": 383039,
+  "measured_reuse_ratio": 0.9989984951346164,
+  "connect_events": 384,
+  "reconnects": 384,
+  "idle_close_reconnects": 0,
+  "header_reset_retries": 0,
+  "physical_attempts": 383423,
+  "retry_policy": "GET only; at most one fresh connection retry after empty headers or header-phase reset on an existing warm connection; never retry body failures",
+  "event_loop_lag_max_seconds": 0.001987486844882369,
+  "valid": true,
+  "sample_limit": 2000000,
+  "percentile_method": "nearest rank on successful issue cohort",
+  "resource_peaks": {
+    "server": {
+      "cpu_percent": 52.88318833547952,
+      "rss_bytes": 21659648,
+      "hwm_sum_bytes": 22126592,
+      "pss_bytes": null
+    },
+    "backend": {
+      "cpu_percent": 72.86437519096862,
+      "rss_bytes": 28659712,
+      "hwm_sum_bytes": 28659712,
+      "pss_bytes": null
+    },
+    "client": {
+      "cpu_percent": 96.8140643447217,
+      "rss_bytes": 53153792,
+      "hwm_sum_bytes": 69681152,
+      "pss_bytes": null
+    }
+  },
+  "client_limit_warning": true,
+  "scenario": "nginx-https-proxy-warm-1"
+}

@@ -1,0 +1,121 @@
+{
+  "kind": "ws",
+  "connections_requested": 10,
+  "connections_established": 10,
+  "measurement_start_monotonic": 1063152.754252693,
+  "measurement_deadline_monotonic": 1063212.754252693,
+  "samples": 5940,
+  "message_rtt": {
+    "samples": 5940,
+    "p50_ms": 0.759,
+    "p95_ms": 1.099,
+    "p99_ms": 1.29
+  },
+  "first_event": {
+    "samples": 0,
+    "p50_ms": null,
+    "p95_ms": null,
+    "p99_ms": null
+  },
+  "event_interval": {
+    "samples": 0,
+    "p50_ms": null,
+    "p95_ms": null,
+    "p99_ms": null
+  },
+  "handshake": {
+    "samples": 10,
+    "p50_ms": 2.104,
+    "p95_ms": 2.266,
+    "p99_ms": 2.266
+  },
+  "close_handshake": {
+    "samples": 10,
+    "p50_ms": 0.678,
+    "p95_ms": 0.922,
+    "p99_ms": 0.922
+  },
+  "expected_closes": 10,
+  "unexpected_disconnects": 0,
+  "events_per_connection": {
+    "2067023": 594,
+    "2067017": 594,
+    "2067015": 594,
+    "2067022": 594,
+    "2067020": 594,
+    "2067014": 594,
+    "2067016": 594,
+    "2067018": 594,
+    "2067021": 594,
+    "2067019": 594
+  },
+  "progress_by_connection": {
+    "2067023": {
+      "last_progress_age_at_end": 0.03600717801600695,
+      "max_inactive_gap_seconds": 0.11357364500872791
+    },
+    "2067017": {
+      "last_progress_age_at_end": 0.03603186085820198,
+      "max_inactive_gap_seconds": 0.11383655504323542
+    },
+    "2067015": {
+      "last_progress_age_at_end": 0.03605757583864033,
+      "max_inactive_gap_seconds": 0.11379271582700312
+    },
+    "2067022": {
+      "last_progress_age_at_end": 0.03576838201843202,
+      "max_inactive_gap_seconds": 0.11402080301195383
+    },
+    "2067020": {
+      "last_progress_age_at_end": 0.03572739381343126,
+      "max_inactive_gap_seconds": 0.11380343302153051
+    },
+    "2067014": {
+      "last_progress_age_at_end": 0.03567011095583439,
+      "max_inactive_gap_seconds": 0.11383925098925829
+    },
+    "2067016": {
+      "last_progress_age_at_end": 0.0360884799156338,
+      "max_inactive_gap_seconds": 0.11370907793752849
+    },
+    "2067018": {
+      "last_progress_age_at_end": 0.03586767986416817,
+      "max_inactive_gap_seconds": 0.11388512677513063
+    },
+    "2067021": {
+      "last_progress_age_at_end": 0.035797355929389596,
+      "max_inactive_gap_seconds": 0.11381480097770691
+    },
+    "2067019": {
+      "last_progress_age_at_end": 0.036145490827038884,
+      "max_inactive_gap_seconds": 0.11366477888077497
+    }
+  },
+  "errors": {},
+  "valid": true,
+  "event_loop_lag_max_seconds": 0.0022232208866626024,
+  "percentile_method": "nearest rank; milliseconds",
+  "sample_limit": 2000000,
+  "scenario": "nginx-ws-10-2",
+  "resource_peaks": {
+    "server": {
+      "cpu_percent": 1.9962720499902455,
+      "rss_bytes": 20541440,
+      "hwm_sum_bytes": 22872064,
+      "pss_bytes": null
+    },
+    "backend": {
+      "cpu_percent": 1.9964416083479863,
+      "rss_bytes": 28659712,
+      "hwm_sum_bytes": 28659712,
+      "pss_bytes": null
+    },
+    "client": {
+      "cpu_percent": 2.994742654723421,
+      "rss_bytes": 48721920,
+      "hwm_sum_bytes": 69681152,
+      "pss_bytes": null
+    }
+  },
+  "client_limit_warning": false
+}

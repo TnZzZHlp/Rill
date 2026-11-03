@@ -108,3 +108,90 @@ fn cli_exit_codes_for_invalid_arguments_and_missing_instance() -> Result {
     }
     Ok(())
 }
+
+#[test]
+fn run_rejects_unsafe_control_socket_paths_without_removing_entries() -> Result {
+    use std::process::{Command, Stdio};
+    use std::thread;
+    use std::time::Instant;
+
+    for case in ["regular", "symlink", "socket", "parent"] {
+        let f = Fixture::new()?;
+        let root = f.dir.join("root");
+        fs::create_dir(&root)?;
+        let parent = f.dir.join("control");
+        fs::create_dir(&parent)?;
+        fs::set_permissions(
+            &parent,
+            fs::Permissions::from_mode(if case == "parent" { 0o755 } else { 0o700 }),
+        )?;
+        let socket = parent.join("sock");
+        let listener = match case {
+            "regular" => {
+                fs::write(&socket, b"preserve")?;
+                None
+            }
+            "symlink" => {
+                symlink("missing", &socket)?;
+                None
+            }
+            "socket" => Some(UnixListener::bind(&socket)?),
+            _ => None,
+        };
+        fs::write(
+            &f.entry,
+            format!(
+                "server {{ http \"{}\"; control-socket \"{}\"; }}\nsite \"example.test\" {{ root \"{}\"; }}\n",
+                f.address,
+                socket.display(),
+                root.display()
+            ),
+        )?;
+        let log = f.dir.join("output");
+        let output = fs::File::create(&log)?;
+        let mut child = Command::new(env!("CARGO_BIN_EXE_rill"))
+            .args(["run", "--config"])
+            .arg(&f.entry)
+            .stdout(Stdio::from(output.try_clone()?))
+            .stderr(Stdio::from(output))
+            .spawn()?;
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let status = loop {
+            if let Some(status) = child.try_wait()? {
+                break status;
+            }
+            if Instant::now() >= deadline {
+                child.kill()?;
+                child.wait()?;
+                return Err("run did not exit for unsafe socket".into());
+            }
+            thread::sleep(Duration::from_millis(10));
+        };
+        assert_eq!(status.code(), Some(1), "{case}");
+        let output = fs::read_to_string(&log)?.to_ascii_lowercase();
+        assert!(
+            output.contains("cannot bind private control socket"),
+            "{case}"
+        );
+        assert!(!output.contains("started"), "{case}");
+        match case {
+            "regular" => assert_eq!(fs::read(&socket)?, b"preserve"),
+            "symlink" => assert!(fs::symlink_metadata(&socket)?.file_type().is_symlink()),
+            "socket" => {
+                use std::os::unix::fs::FileTypeExt;
+                assert!(fs::symlink_metadata(&socket)?.file_type().is_socket());
+            }
+            _ => {
+                assert!(parent.is_dir());
+                assert_eq!(
+                    fs::symlink_metadata(&socket)
+                        .err()
+                        .map(|error| error.kind()),
+                    Some(std::io::ErrorKind::NotFound)
+                );
+            }
+        }
+        drop(listener);
+    }
+    Ok(())
+}

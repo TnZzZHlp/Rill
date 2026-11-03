@@ -1,0 +1,20 @@
+[
+  {
+    "name": "rill",
+    "forced_kill": false,
+    "remaining_live": false,
+    "returncode": 0
+  },
+  {
+    "name": "nginx",
+    "forced_kill": false,
+    "remaining_live": false,
+    "returncode": 0
+  },
+  {
+    "name": "backend",
+    "forced_kill": false,
+    "remaining_live": false,
+    "returncode": 0
+  }
+]

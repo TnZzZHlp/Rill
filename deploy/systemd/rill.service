@@ -1,0 +1,44 @@
+[Unit]
+Description=Rill web server
+After=network.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=rill
+Group=rill
+RuntimeDirectory=rill
+RuntimeDirectoryMode=0700
+UMask=0077
+ExecStartPre=/usr/local/bin/rill check --config /etc/rill/config.kdl
+ExecStart=/usr/local/bin/rill run --config /etc/rill/config.kdl
+ExecReload=/usr/local/bin/rill reload --socket /run/rill/control.sock --timeout 35s
+TimeoutStartSec=45s
+KillSignal=SIGTERM
+TimeoutStopSec=35s
+Restart=on-failure
+RestartSec=2s
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadOnlyPaths=/etc/rill /srv/rill
+ReadWritePaths=/run/rill
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectProc=invisible
+ProcSubset=pid
+ProtectControlGroups=true
+ProtectKernelTunables=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+MemoryMax=512M
+TasksMax=64
+LimitNOFILE=4096
+CPUQuota=200%
+
+[Install]
+WantedBy=multi-user.target

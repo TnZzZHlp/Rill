@@ -145,6 +145,41 @@ fn tls_reload_changes_new_handshakes_and_keepalive_routes_and_rolls_back_invalid
         assert_eq!(body, b"beta");
     }
 
+    a.save(&directory.0, "original", &[])?;
+    fs::copy(
+        directory.0.join("original.key"),
+        directory.0.join("default.key"),
+    )?;
+    let response = runtime.block_on(rill::control::client::reload(
+        &socket,
+        Duration::from_secs(10),
+    ))?;
+    assert_eq!(response.status, "error");
+    assert_eq!(response.code.as_deref(), Some("TLS_INVALID"));
+    assert_eq!(response.generation, None);
+    let mut mismatch = tls_connect(address, "app.test", &[&ca], true)?;
+    assert_eq!(
+        mismatch
+            .ssl()
+            .peer_certificate()
+            .ok_or("missing cert")?
+            .to_der()?,
+        b.cert.to_der()?
+    );
+    let (status, headers, body) = keepalive_request(&mut mismatch)?;
+    assert_eq!(status, 200);
+    assert!(
+        headers
+            .to_ascii_lowercase()
+            .contains("cache-control: max-age=20")
+    );
+    assert_eq!(body, b"beta");
+    drop(mismatch);
+    fs::copy(
+        directory.0.join("replacement.key"),
+        directory.0.join("default.key"),
+    )?;
+
     fs::write(directory.0.join("default.pem"), b"invalid certificate")?;
     let response = runtime.block_on(rill::control::client::reload(
         &socket,
@@ -287,6 +322,163 @@ async fn http2_existing_connection_uses_reloaded_routes_for_new_streams() -> Tes
 
     proxy.signal()?;
     drop(connector);
+    assert_eq!(proxy.finish()?.0, 0);
+    Ok(())
+}
+
+#[test]
+fn tls_websocket_survives_successful_and_failed_reload() -> TestResult {
+    use std::net::TcpListener;
+    use std::thread;
+
+    const MASKED: &[u8] = &[0x81, 0x82, 1, 2, 3, 4, b'h' ^ 1, b'i' ^ 2];
+    const CLOSE: &[u8] = &[0x88, 0x80, 1, 2, 3, 4];
+
+    let directory = Directory::new()?;
+    let control = directory.0.join("control");
+    fs::create_dir(&control)?;
+    fs::set_permissions(&control, fs::Permissions::from_mode(0o700))?;
+    let socket = control.join("rill.sock");
+    let site = directory.0.join("site.kdl");
+    let ca = Certificate::issue(&[], None, true, (-60, 3600))?;
+    let certificate = Certificate::issue(&["app.test"], Some(&ca), false, (-60, 3600))?;
+    let other = Certificate::issue(&["app.test"], Some(&ca), false, (-60, 3600))?;
+    certificate.save(&directory.0, "default", &[])?;
+    other.save(&directory.0, "other", &[])?;
+    let backend_a = TcpListener::bind("127.0.0.1:0")?;
+    let backend_b = TcpListener::bind("127.0.0.1:0")?;
+    let a = backend_a.local_addr()?;
+    let b = backend_b.local_addr()?;
+    let site_config =
+        |backend| format!("site \"app.test\" {{ tls \"default\"; proxy \"http://{backend}\"; }}\n");
+    fs::write(&site, site_config(a))?;
+    let address = vacant()?;
+    let config = format!(
+        "server {{ https \"{address}\"; control-socket \"{}\"; }}\n\
+         tls \"default\" {{ cert \"{}\"; key \"{}\"; }}\n\
+         import \"{}\"\n",
+        socket.display(),
+        directory.0.join("default.pem").display(),
+        directory.0.join("default.key").display(),
+        site.display()
+    );
+    let mut proxy = Proxy::start(address, &config)?;
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
+    let worker_a = thread::spawn(move || -> TestResult {
+        let mut stream = accept(&backend_a)?;
+        let request = head(&mut stream)?.to_ascii_lowercase();
+        assert!(request.contains("sec-websocket-key: dghlihnhbxbszsbub25jzq=="));
+        stream.write_all(b"HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=\r\n\r\n")?;
+        for _ in 0..3 {
+            let mut frame = [0; 8];
+            stream.read_exact(&mut frame)?;
+            assert_eq!(&frame[..], MASKED);
+            stream.write_all(b"\x81\x02hi")?;
+        }
+        let mut close = [0; 6];
+        stream.read_exact(&mut close)?;
+        assert_eq!(&close[..], CLOSE);
+        stream.write_all(b"\x88\x00")?;
+        Ok(())
+    });
+    let mut ws = tls_connect(address, "app.test", &[&ca], true)?;
+    assert_eq!(
+        ws.ssl()
+            .peer_certificate()
+            .ok_or("missing cert")?
+            .to_der()?,
+        certificate.cert.to_der()?
+    );
+    ws.write_all(b"GET / HTTP/1.1\r\nHost: app.test\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n\r\n")?;
+    let headers = head(&mut ws)?;
+    assert!(headers.starts_with("HTTP/1.1 101 "), "{headers}");
+    assert!(
+        headers
+            .to_ascii_lowercase()
+            .contains("sec-websocket-accept: s3pplmbitxaq9kygzzhzrbk+xoo=")
+    );
+    let exchange = |stream: &mut SslStream<TcpStream>| -> TestResult {
+        stream.write_all(MASKED)?;
+        let mut frame = [0; 4];
+        stream.read_exact(&mut frame)?;
+        assert_eq!(&frame, b"\x81\x02hi");
+        Ok(())
+    };
+    exchange(&mut ws)?;
+    fs::write(&site, site_config(b))?;
+    let response = runtime.block_on(rill::control::client::reload(
+        &socket,
+        Duration::from_secs(10),
+    ))?;
+    assert_eq!(response.status, "ok");
+    assert_eq!(response.generation, Some(2));
+    let worker_b = thread::spawn(move || -> TestResult {
+        for _ in 0..2 {
+            let mut stream = accept(&backend_b)?;
+            let request = head(&mut stream)?;
+            assert!(request.starts_with("GET / "), "{request}");
+            stream.write_all(
+                b"HTTP/1.1 200 OK\r\nContent-Length: 3\r\nConnection: close\r\n\r\nnew",
+            )?;
+        }
+        Ok(())
+    });
+    let mut new = tls_connect(address, "app.test", &[&ca], true)?;
+    assert_eq!(
+        new.ssl()
+            .peer_certificate()
+            .ok_or("missing cert")?
+            .to_der()?,
+        certificate.cert.to_der()?
+    );
+    let (status, _, body) = tls_request(&mut new, "app.test", "/")?;
+    assert_eq!(status, 200);
+    assert_eq!(body, b"new");
+    exchange(&mut ws)?;
+    fs::copy(
+        directory.0.join("default.key"),
+        directory.0.join("saved.key"),
+    )?;
+    fs::copy(
+        directory.0.join("other.key"),
+        directory.0.join("default.key"),
+    )?;
+    let response = runtime.block_on(rill::control::client::reload(
+        &socket,
+        Duration::from_secs(10),
+    ))?;
+    assert_eq!(response.status, "error");
+    assert_eq!(response.code.as_deref(), Some("TLS_INVALID"));
+    assert_eq!(response.generation, None);
+    exchange(&mut ws)?;
+    fs::copy(
+        directory.0.join("saved.key"),
+        directory.0.join("default.key"),
+    )?;
+    let mut after_failure = tls_connect(address, "app.test", &[&ca], true)?;
+    assert_eq!(
+        after_failure
+            .ssl()
+            .peer_certificate()
+            .ok_or("missing cert")?
+            .to_der()?,
+        certificate.cert.to_der()?
+    );
+    let (status, _, body) = tls_request(&mut after_failure, "app.test", "/")?;
+    assert_eq!(status, 200);
+    assert_eq!(body, b"new");
+    ws.write_all(CLOSE)?;
+    let mut close = [0; 2];
+    ws.read_exact(&mut close)?;
+    assert_eq!(&close, b"\x88\x00");
+    drop((ws, new, after_failure));
+    worker_a
+        .join()
+        .map_err(|_| "websocket backend panicked")??;
+    worker_b.join().map_err(|_| "http backend panicked")??;
+    proxy.signal()?;
     assert_eq!(proxy.finish()?.0, 0);
     Ok(())
 }

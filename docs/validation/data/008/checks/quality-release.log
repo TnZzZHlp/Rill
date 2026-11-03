@@ -1,0 +1,54 @@
+RED_EXIT=101
+assertion failed: accepted.nodelay()?
+
+running 18 tests
+..................
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 15 tests
+...............
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+
+running 7 tests
+...TLS library: OpenSSL 3.6.3 9 Jun 2026
+....
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.15s
+
+
+running 18 tests
+..................
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.82s
+
+
+running 19 tests
+...................
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.31s
+
+
+running 16 tests
+................
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 32.29s
+
+
+running 18 tests
+.....VmRSS/VmHWM KiB before=(18652, 18652) paused=(20104, 20104)
+.............
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.56s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+GREEN_QUALITY_PASSED
+rill 0.1.0
+RELEASE_BUILD_PASSED
+{"artifact": "rill-nodelay", "bytes": 18741536, "sha256": "c6be369b6d7b122924b5886421daf459491020eb8ff499e158f71d29b2484ac2"}
+{"artifact": "008-nodelay-regression-red.log", "bytes": 8406, "sha256": "6524734445a6e513dc8a2c90fd3fc95610188aaa1048df95beb8a3b847385e33"}

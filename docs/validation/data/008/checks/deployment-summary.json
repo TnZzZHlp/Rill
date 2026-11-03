@@ -1,0 +1,138 @@
+{
+  "binary_sha256": "c6be369b6d7b122924b5886421daf459491020eb8ff499e158f71d29b2484ac2",
+  "systemd": {
+    "records_path": "/var/tmp/rill-008.zWfZ2O/artifacts/008-systemd-results.json",
+    "records_sha256": "72f6f629a66a9ab61bd551678d7d4061fc88e49b31aa2c137e797d8d4292f8d1",
+    "validation": "passed",
+    "identity": {
+      "Uid": "65534\t65534\t65534\t65534",
+      "Gid": "65534\t65534\t65534\t65534",
+      "CapInh": "0000000000000000",
+      "CapPrm": "0000000000000000",
+      "CapEff": "0000000000000000",
+      "CapBnd": "0000000000000000",
+      "CapAmb": "0000000000000000",
+      "NoNewPrivs": "1",
+      "NSpid": "1502389\t1"
+    },
+    "drain": {
+      "drain_seconds": 15.992581536062062,
+      "download": {
+        "bytes": 16777216,
+        "sha256": "289184e1081dba91206603d04683de839d8cceeb3bef6a56badf3dc904bb4043"
+      },
+      "client_returncode": 0
+    },
+    "probes": [
+      {
+        "mode": "denied",
+        "uid": 1,
+        "filesystem_denied": true
+      },
+      {
+        "mode": "authorized",
+        "uid": 0,
+        "answer": {
+          "version": 1,
+          "id": "uid-probe",
+          "status": "ok",
+          "generation": 3
+        }
+      },
+      {
+        "mode": "unauthorized",
+        "uid": 1,
+        "answer": {
+          "version": 1,
+          "id": "invalid",
+          "status": "error",
+          "code": "UNAUTHORIZED"
+        }
+      },
+      {
+        "mode": "authorized",
+        "uid": 65534,
+        "answer": {
+          "version": 1,
+          "id": "uid-probe",
+          "status": "ok",
+          "generation": 4
+        }
+      }
+    ]
+  },
+  "podman": {
+    "records_path": "/var/tmp/rill-008.zWfZ2O/artifacts/008-podman-results.json",
+    "records_sha256": "06bbab109c0b5d7fbc4ebf303451372b7e40fe52c13d2e55b07abf61bcb1b7be",
+    "image": "31480fb4e829807300b287cee9625c01b2ea247c3aa8c53e4f0a7155afd87296",
+    "identity": {
+      "Uid": "10001\t10001\t10001\t10001",
+      "Gid": "10001\t10001\t10001\t10001",
+      "NSpid": "1504266\t1",
+      "CapInh": "0000000000000000",
+      "CapPrm": "0000000000000000",
+      "CapEff": "0000000000000000",
+      "CapBnd": "0000000000000000",
+      "CapAmb": "0000000000000000",
+      "NoNewPrivs": "1"
+    },
+    "drain": {
+      "drain_seconds": 16.044472843874246,
+      "download": {
+        "download": "complete",
+        "bytes": 16777216,
+        "sha256": "289184e1081dba91206603d04683de839d8cceeb3bef6a56badf3dc904bb4043",
+        "seconds": 16.000138595001772
+      }
+    },
+    "validation": {
+      "exit_code": 0,
+      "socket_removed": true,
+      "validation": "passed"
+    },
+    "https_probes": [
+      {
+        "mode": "static",
+        "status": 200,
+        "bytes": 10,
+        "sha256": "932fe3c7177fc670132ee259d322219b237752ef8e7be0475d133a977ca4f0d1",
+        "tls_verified": true
+      },
+      {
+        "mode": "proxy",
+        "status": 200,
+        "bytes": 19,
+        "sha256": "e7b778877dabed3f0dfe593455b724365d3b44c721043a8db0e2dbfdc6a539cd",
+        "tls_verified": true
+      },
+      {
+        "mode": "static",
+        "status": 200,
+        "bytes": 10,
+        "sha256": "932fe3c7177fc670132ee259d322219b237752ef8e7be0475d133a977ca4f0d1",
+        "tls_verified": true
+      },
+      {
+        "mode": "proxy",
+        "status": 200,
+        "bytes": 19,
+        "sha256": "e7b778877dabed3f0dfe593455b724365d3b44c721043a8db0e2dbfdc6a539cd",
+        "tls_verified": true
+      },
+      {
+        "mode": "static",
+        "status": 200,
+        "bytes": 10,
+        "sha256": "932fe3c7177fc670132ee259d322219b237752ef8e7be0475d133a977ca4f0d1",
+        "tls_verified": true
+      },
+      {
+        "mode": "static",
+        "status": 200,
+        "bytes": 10,
+        "sha256": "932fe3c7177fc670132ee259d322219b237752ef8e7be0475d133a977ca4f0d1",
+        "tls_verified": true
+      }
+    ]
+  }
+}

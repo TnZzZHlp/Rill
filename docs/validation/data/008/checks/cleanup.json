@@ -1,0 +1,20 @@
+{
+  "recorded_utc": "2026-11-03T11:58:30Z",
+  "temporary_services_removed": true,
+  "temporary_containers_removed": true,
+  "new_deployment_image_layers_removed": true,
+  "dedicated_runtime_mounts_removed": true,
+  "dummy_private_keys_removed": true,
+  "original_cached_images_preserved": true,
+  "retained": [
+    "artifacts/full",
+    "artifacts/full-nodelay",
+    "artifacts/rill",
+    "artifacts/rill-nodelay",
+    "source",
+    "nodelay-red",
+    "nodelay-green",
+    "raw-review"
+  ],
+  "note": "保留原始结果、二进制及只读执行快照/检查器作为交付证据；未删除原始数据。"
+}

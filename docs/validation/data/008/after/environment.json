@@ -1,0 +1,105 @@
+{
+  "status": "complete",
+  "missing": [],
+  "selected_groups": [
+    "http",
+    "streams",
+    "idle",
+    "reload"
+  ],
+  "python": "3.13.5 (main, Aug 10 2026, 12:06:59) [GCC 14.2.0]",
+  "platform": "Linux-7.2.11-x64v3-xanmod1-x86_64-with-glibc2.42",
+  "cpu_model": "model name\t: Genuine Intel(R) CPU 0000 @ 2.90GHz",
+  "cpu_affinity": {
+    "server": [
+      0,
+      1
+    ],
+    "client": [
+      2,
+      3
+    ],
+    "backend": [
+      4,
+      5
+    ]
+  },
+  "limits": {
+    "RLIMIT_NOFILE": [
+      4096,
+      4096
+    ],
+    "RLIMIT_NPROC": [
+      128,
+      128
+    ],
+    "RLIMIT_AS": [
+      2147483648,
+      2147483648
+    ]
+  },
+  "arguments": {
+    "rill": "/opt/rill/rill",
+    "nginx": "/reference/usr/sbin/nginx",
+    "nginx_loader": "/reference/lib/ld-musl-x86_64.so.1",
+    "workdir": "/scratch/work",
+    "output": "/scratch/results",
+    "cert": "/fixture/cert.pem",
+    "key": "/fixture/key.pem",
+    "ca": "/fixture/ca.pem",
+    "server_cpus": [
+      0,
+      1
+    ],
+    "client_cpus": [
+      2,
+      3
+    ],
+    "backend_cpus": [
+      4,
+      5
+    ],
+    "repeats": 3,
+    "http_seconds": 30,
+    "warmup_seconds": 2,
+    "concurrency": 8,
+    "stream_seconds": 60,
+    "idle_seconds": 60,
+    "stream_connections": [
+      10,
+      100
+    ],
+    "reload_seconds": 60,
+    "reload_interval": 10,
+    "reload_count": 5,
+    "only": [
+      "http",
+      "streams",
+      "idle",
+      "reload"
+    ]
+  },
+  "fixture_sha256": {
+    "small.bin": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+    "large.bin": "88d1c5370462c37ad9baed0c676beba4c80607d9d143a636d43c4866766636cb"
+  },
+  "rill_sha256": "c6be369b6d7b122924b5886421daf459491020eb8ff499e158f71d29b2484ac2",
+  "nginx_sha256": "bf30939947d1d9ac8dccb6477c336e612760d3ee3c43991085fd54b4c7d741d8",
+  "ca_sha256": "12ad477e7279d45d0c7c2e9f5f14bc622a38a890bb009eceef1abdacc10832a9",
+  "cert_sha256": "aef2aa54060ee8d1ba58fba2f23af92fab6e7fcbf68903cd297ce22a2dd290cd",
+  "tls": "CA and hostname verified; TLS >= 1.2; session cache and tickets disabled",
+  "nginx_sendfile": true,
+  "nginx_open_file_cache": false,
+  "config_sha256": {
+    "rill-active.kdl": "f8833b63d075ff609372fb40f4be7c488b40e23dd11641a7581f118b2e156a4d",
+    "rill-b.kdl": "6a90f3a85e0209cb58b82a05e0bb0c4ed937acf9e9206e6cbd42653bc1fa5862",
+    "rill-a.kdl": "f8833b63d075ff609372fb40f4be7c488b40e23dd11641a7581f118b2e156a4d",
+    "nginx-active.conf": "743f64d105dcec07b59a0d4196cbcc125a0eecc75bea1efec7055a15465a89a3",
+    "nginx-b.conf": "7cee33855e7cfb635a5c20fbc627921a13ef4f3100dc35e19ab52e6399be2394",
+    "nginx-a.conf": "743f64d105dcec07b59a0d4196cbcc125a0eecc75bea1efec7055a15465a89a3"
+  },
+  "clock": "monotonic",
+  "load": "closed-loop HTTP/1.1; not saturation capacity",
+  "rill_version": "rill 0.1.0",
+  "nginx_version": "nginx version: nginx/1.28.3"
+}

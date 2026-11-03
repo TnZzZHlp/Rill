@@ -1,0 +1,7 @@
+server {
+    http "0.0.0.0:8080"
+    control-socket "/run/rill/control.sock"
+}
+site "example.test" {
+    root "/srv/rill/www"
+}

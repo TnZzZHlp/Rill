@@ -8,6 +8,8 @@ use super::support::*;
 fn hosts_and_paths_are_deterministic_and_unknown_hosts_never_reach_a_backend() -> TestResult {
     let backend = TcpListener::bind("127.0.0.1:0")?;
     let upstream = backend.local_addr()?;
+    let wildcard_backend = TcpListener::bind("127.0.0.1:0")?;
+    let wildcard_upstream = wildcard_backend.local_addr()?;
     let address = vacant()?;
     let template = |reverse: bool| {
         let routes = if reverse {
@@ -23,7 +25,8 @@ fn hosts_and_paths_are_deterministic_and_unknown_hosts_never_reach_a_backend() -
         let exact = format!(
             "site \"api.example.test\" \"alias.example.test\" \"third.example.test\" {{\n{routes}\n}}"
         );
-        let wildcard = format!("site \"*.example.test\" {{ proxy \"http://{upstream}\"; }}");
+        let wildcard =
+            format!("site \"*.example.test\" {{ proxy \"http://{wildcard_upstream}\"; }}");
         format!(
             "server {{ http \"{address}\"; }}\n{}\n{}\n",
             if reverse { &exact } else { &wildcard },
@@ -31,7 +34,7 @@ fn hosts_and_paths_are_deterministic_and_unknown_hosts_never_reach_a_backend() -
         )
     };
     let worker = thread::spawn(move || -> TestResult {
-        for _ in 0..12 {
+        for _ in 0..14 {
             let mut stream = accept(&backend)?;
             let request = head(&mut stream)?;
             reply(
@@ -46,10 +49,21 @@ fn hosts_and_paths_are_deterministic_and_unknown_hosts_never_reach_a_backend() -
         }
         Ok(())
     });
+    let wildcard_worker = thread::spawn(move || -> TestResult {
+        for _ in 0..2 {
+            let mut stream = accept(&wildcard_backend)?;
+            let request = head(&mut stream)?;
+            let request = request.lines().next().ok_or("missing request line")?;
+            reply(&mut stream, format!("wildcard {request}").as_bytes(), true)?;
+        }
+        Ok(())
+    });
     for reverse in [false, true] {
         let mut proxy = Proxy::start(address, &template(reverse))?;
         for (host, path) in [
             ("API.EXAMPLE.TEST.", "/api/exact"),
+            ("alias.example.test", "/api/exact"),
+            ("third.example.test:8080", "/api/exact"),
             ("alias.example.test", "/api/private/a"),
             ("third.example.test:8080", "/api/a?original=yes"),
             ("wild.example.test", "/"),
@@ -58,7 +72,12 @@ fn hosts_and_paths_are_deterministic_and_unknown_hosts_never_reach_a_backend() -
         ] {
             let (status, _, body) = send(proxy.address, host, path)?;
             assert_eq!(status, 200);
-            assert_eq!(body, format!("GET {path} HTTP/1.1").as_bytes());
+            let expected = if host == "wild.example.test" {
+                format!("wildcard GET {path} HTTP/1.1")
+            } else {
+                format!("GET {path} HTTP/1.1")
+            };
+            assert_eq!(body, expected.as_bytes());
         }
         for host in [
             "example.test",
@@ -82,6 +101,9 @@ fn hosts_and_paths_are_deterministic_and_unknown_hosts_never_reach_a_backend() -
         assert_eq!(proxy.finish()?.0, 0);
     }
     worker.join().map_err(|_| "backend panicked")??;
+    wildcard_worker
+        .join()
+        .map_err(|_| "wildcard backend panicked")??;
     Ok(())
 }
 

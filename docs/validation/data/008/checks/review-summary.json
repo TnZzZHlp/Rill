@@ -1,0 +1,41 @@
+{
+  "source_review": {
+    "scope": "TCP_NODELAY 单行修复与真实 accepted socket 回归",
+    "blocking_findings": 0,
+    "report": "/root/.pi/agent/sessions/--root-github-Rill--/subagent-artifacts/856a5f61-2cdf-43fa-b099-94cb8ce015f6_worker_output.md"
+  },
+  "raw_review": {
+    "before": "/root/.pi/agent/sessions/--root-github-Rill--/subagent-artifacts/792622fd-a91a-4f18-9441-c684005db0b7_worker_output.md",
+    "after": "/root/.pi/agent/sessions/--root-github-Rill--/subagent-artifacts/7b8d2694-55b6-4aaa-acc4-6895690b6cae_worker_output.md",
+    "clarification": "/root/.pi/agent/sessions/--root-github-Rill--/subagent-artifacts/b40ab5bb-e4ab-4dbe-b510-29acee9fb144_worker_output.md",
+    "data_inconsistencies": 0,
+    "after_nginx_reload": {
+      "logical_samples": 3404346,
+      "physical_attempts": 3404466,
+      "idle_close_reconnects": 120,
+      "header_reset_retries": 14
+    },
+    "coverage": [
+      "manifest/type/nlink/size/SHA-256",
+      "actual binary SHA-256",
+      "all HTTP requests/quantiles/windows/reuse/retries",
+      "all streams/sequence/duration/quantiles/progress",
+      "all reload windows/calls",
+      "resource CSV peaks/process trees",
+      "process exits"
+    ]
+  },
+  "delivery_review": {
+    "report": "/root/.pi/agent/sessions/--root-github-Rill--/subagent-artifacts/da29ec16-6c4c-44a1-b4c6-8857e3053229_worker_output.md",
+    "finding": "Podman 文档将 memory+swap 合计限制误写成各 512 MiB",
+    "resolution": "已修正为内存 512 MiB、内存与 swap 合计 512 MiB",
+    "remaining_blockers": 0
+  },
+  "limits": [
+    "原始结果独立保留，不纳 Git",
+    "C8 闭环非容量上限",
+    "RSS 求和非独占内存，未测 PSS",
+    "生产 unit 使用隔离 fixture override 验证",
+    "rootless 未执行"
+  ]
+}

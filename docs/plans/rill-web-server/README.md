@@ -43,7 +43,9 @@ P0 包含原文全部必需服务、配置、安全、可观测性和交付要�
 
 006 已实现 HTTPS 上游、DNS 地址策略、WebSocket 和 SSE；隔离门禁 79 项通过，最终独立复审 No issues found、Merge verdict OK，详见 [006 验证记录](../../validation/006-proxy-streaming-safety.md)。独立提交为 2ba06369cfda291b53d968c1319fcbf507dcff7d。
 
-007 已实现原子 Reload 和本地管理，隔离门禁 106 项通过，最终新上下文独立复审 No issues found、Merge verdict OK；详见 [007 验证记录](../../validation/007-atomic-reload.md)。独立完成提交由父代理核对后执行。
+007 已实现原子 Reload 和本地管理，隔离门禁 106 项通过，最终新上下文独立复审 No issues found、Merge verdict OK；详见 [007 验证记录](../../validation/007-atomic-reload.md)。独立完成提交为 321aed0。
+
+008 已完成 P0 逐项补测、部署及基准交付；经用户确认修复 TCP_NODELAY，红色回归复现、绿色 111 项及 release 门禁通过。systemd/Podman 实测及修复前后各 108 轮标准基准通过独立复核，原始结果独立保留，明确 C8 闭环、客户端瓶颈和部署 override 边界；见 [008 验证记录](../../validation/008-p0-validation-deployment.md)。独立完成提交见 Git 历史；009 未开始。
 
 ## 目标与成功标准
 
@@ -63,10 +65,10 @@ P0 包含原文全部必需服务、配置、安全、可观测性和交付要�
   - 新快照单点发布，任何错误保留旧服务；新握手使用新证书、在途请求/长连接保持约定行为；CLI 返回实际结果，重启项变化明确失败。
   - 计划验证：007 的故障、并发与长连接场景，包含 T04–T08、T12、T17。
   - 验证证据：007 隔离门禁 106 项通过、最终独立复审 OK，见 docs/validation/007-atomic-reload.md。
-- [ ] **G05：P0 可部署且有真实验证证据**
+- [x] **G05：P0 可部署且有真实验证证据**
   - T01–T18、补充 P0 检查、Cargo 质量门禁、systemd/Podman 部署和基准全部完成。
   - 计划验证：008 的交付清单、完整验收报告和同环境对照结果。
-  - 验证证据：未执行。
+  - 验证证据：008 的 111 项门禁、release、systemd/Podman 及完整标准基准均通过；原始数据及发布交付分别独立复核，见 docs/validation/008-p0-validation-deployment.md。
 - [ ] **G06：P1 增强可配置且不破坏核心保证**
   - 009–011 交付所有增强；默认关闭的功能不暗中开启，缓存/导出/监听资源有界。
   - 计划验证：各阶段组合失败路径、权限边界、缓存一致性和开销检查。
@@ -78,7 +80,7 @@ P0 包含原文全部必需服务、配置、安全、可观测性和交付要�
 
 ## 架构与模块边界
 
-main、lib、cli 和 config 已由 002 建立，003 已提供 routing、HTTP proxy、初始 runtime 及结构化日志；tests 与 examples 包含必要验证及配置。004 已提供 TLS/证书模块，005 已提供静态文件；控制面已由 007 实现；完整观测、部署和压测仍待对应阶段。更新已有文件时保留无关用户修改。
+main、lib、cli 和 config 已由 002 建立，003 已提供 routing、HTTP proxy、初始 runtime 及结构化日志；tests 与 examples 包含必要验证及配置。004 已提供 TLS/证书模块，005 已提供静态文件；控制面已由 007 实现；部署和基准已由 008 提供，完整观测仍待 011。更新已有文件时保留无关用户修改。
 
 ```text
 src/
@@ -169,7 +171,7 @@ Q01–Q04 已解决：KDL v2、rill 命名、一级通配及完整路径 root �
 | 005 | [安全静态文件与 SPA](subplans/005-static-files.md) | 安全托管站点目录，提供完整 P0 文件响应语义。 | 003 | 已完成（2b9fe02） |
 | 006 | [完整代理、流式连接与安全边界](subplans/006-proxy-streaming-safety.md) | 补齐 HTTPS 上游、WebSocket、SSE 及完整代理安全和资源约束。 | 004 | 已完成（2ba0636） |
 | 007 | [原子 Reload 与本地管理](subplans/007-atomic-reload.md) | 通过受权限保护的本地控制面提供有实际结果反馈的事务性热更新。 | 004、005、006 | 已验收（独立完成提交见 Git 历史） |
-| 008 | [P0 验收、性能基线与部署](subplans/008-p0-validation-deployment.md) | 形成可部署的完整 P0 版本，补齐原文验收和交付证据。 | 007 | 未开始 |
+| 008 | [P0 验收、性能基线与部署](subplans/008-p0-validation-deployment.md) | 形成可部署的完整 P0 版本，补齐原文验收和交付证据。 | 007 | 已验收（独立完成提交见 Git 历史） |
 | 009 | [Snippet 与可选自动 Reload](subplans/009-config-reuse-watch.md) | 提供可复用路由片段和显式启用的文件变更重载。 | 008 | 未开始 |
 | 010 | [静态文件可选增强](subplans/010-static-enhancements.md) | 在不放宽目录约束的前提下提供预压缩、可控缓存、自定义错误页和可选目录浏览。 | 008 | 未开始 |
 | 011 | [日志、指标与可选链路追踪](subplans/011-observability.md) | 提供 Access Log、Prometheus 和可选 OpenTelemetry，保持热路径开销可控。 | 008 | 未开始 |
