@@ -1,0 +1,140 @@
+{
+  "kind": "ws",
+  "connections_requested": 10,
+  "connections_established": 10,
+  "measurement_start_monotonic": 1096033.225720231,
+  "measurement_deadline_monotonic": 1096093.225720231,
+  "samples": 5650,
+  "message_rtt": {
+    "samples": 5650,
+    "p50_ms": 0.772,
+    "p95_ms": 1.088,
+    "p99_ms": 1.353
+  },
+  "first_event": {
+    "samples": 0,
+    "p50_ms": null,
+    "p95_ms": null,
+    "p99_ms": null
+  },
+  "event_interval": {
+    "samples": 0,
+    "p50_ms": null,
+    "p95_ms": null,
+    "p99_ms": null
+  },
+  "handshake": {
+    "samples": 10,
+    "p50_ms": 2.644,
+    "p95_ms": 2.75,
+    "p99_ms": 2.75
+  },
+  "close_handshake": {
+    "samples": 10,
+    "p50_ms": 1.087,
+    "p95_ms": 1.336,
+    "p99_ms": 1.336
+  },
+  "expected_closes": 10,
+  "unexpected_disconnects": 0,
+  "events_per_connection": {
+    "1711198": 565,
+    "1711204": 565,
+    "1711199": 565,
+    "1711201": 565,
+    "1711197": 565,
+    "1711202": 565,
+    "1711203": 565,
+    "1711195": 565,
+    "1711200": 565,
+    "1711196": 565
+  },
+  "progress_by_connection": {
+    "1711198": {
+      "last_progress_age_at_end": 0.07078471803106368,
+      "max_inactive_gap_seconds": 0.1755366448778659
+    },
+    "1711204": {
+      "last_progress_age_at_end": 0.07057383190840483,
+      "max_inactive_gap_seconds": 0.1757616780232638
+    },
+    "1711199": {
+      "last_progress_age_at_end": 0.07086717593483627,
+      "max_inactive_gap_seconds": 0.17535928101278841
+    },
+    "1711201": {
+      "last_progress_age_at_end": 0.070607699919492,
+      "max_inactive_gap_seconds": 0.175698823062703
+    },
+    "1711197": {
+      "last_progress_age_at_end": 0.07081160903908312,
+      "max_inactive_gap_seconds": 0.17524775699712336
+    },
+    "1711202": {
+      "last_progress_age_at_end": 0.07064803200773895,
+      "max_inactive_gap_seconds": 0.1755042050499469
+    },
+    "1711203": {
+      "last_progress_age_at_end": 0.07070483290590346,
+      "max_inactive_gap_seconds": 0.17551360791549087
+    },
+    "1711195": {
+      "last_progress_age_at_end": 0.07109230291098356,
+      "max_inactive_gap_seconds": 0.1748867379501462
+    },
+    "1711200": {
+      "last_progress_age_at_end": 0.07091900194063783,
+      "max_inactive_gap_seconds": 0.1747666320297867
+    },
+    "1711196": {
+      "last_progress_age_at_end": 0.07113470998592675,
+      "max_inactive_gap_seconds": 0.1748102749697864
+    }
+  },
+  "errors": {},
+  "valid": true,
+  "event_loop_lag_max_seconds": 0.0753799679223448,
+  "percentile_method": "nearest rank; milliseconds",
+  "sample_limit": 2000000,
+  "scenario": "nginx-ws-10-1",
+  "resource_peaks": {
+    "server": {
+      "cpu_percent": 0.9434906379048438,
+      "rss_bytes": 21413888,
+      "hwm_sum_bytes": 22982656,
+      "pss_bytes": null,
+      "missing_root_samples": 0
+    },
+    "backend": {
+      "cpu_percent": 1.8869812758096876,
+      "rss_bytes": 25075712,
+      "hwm_sum_bytes": 27074560,
+      "pss_bytes": null,
+      "missing_root_samples": 0
+    },
+    "client": {
+      "cpu_percent": 10.369610728093555,
+      "rss_bytes": 61841408,
+      "hwm_sum_bytes": 93171712,
+      "pss_bytes": null,
+      "missing_root_samples": 0
+    },
+    "server_cgroup": {
+      "cpu_percent": 0.3773996001925988,
+      "memory_peak_bytes": 138412032,
+      "nr_throttled": 0,
+      "throttled_usec": 0
+    }
+  },
+  "server_missing_root_samples": 0,
+  "backend_peak": {
+    "cpu_percent": 1.8869812758096876,
+    "rss_bytes": 25075712,
+    "hwm_sum_bytes": 27074560,
+    "pss_bytes": null,
+    "missing_root_samples": 0
+  },
+  "client_limit_warning": false,
+  "resource_accounting": "process tree summed over the container init pid; cgroup v2 series in -cgroup.csv",
+  "resource_integrity": "ok"
+}

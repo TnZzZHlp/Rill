@@ -47,6 +47,7 @@ HTTPS 示例 `examples/deploy/https.kdl` 需要管理员自行提供证书及私
 - [systemd 部署](deploy/systemd/README.md)
 - [Podman 部署](deploy/podman/README.md)
 - [性能测试](scripts/bench/README.md)
+- [三目标 Podman 性能对比](docs/validation/bench-three-way.md)
 - [008 P0 验证记录](docs/validation/008-p0-validation-deployment.md)
 - [008 部署验证记录](docs/validation/008-deployment.md)
 

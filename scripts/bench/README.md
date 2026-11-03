@@ -1,6 +1,6 @@
 # 性能基线脚本
 
-执行结果和适用环境以验证记录为准；脚本状态不等于独立验收。`environment.json` 仅在全部所选目标和四组场景都成功、容器正常退出且无残留时标记 `complete`，只跑部分场景为 `partial`，执行失败为 `invalid`。
+执行结果和适用环境以 [三目标 Podman 性能对比](../../docs/validation/bench-three-way.md) 为准；脚本状态不等于独立验收。`environment.json` 仅在全部所选目标和四组场景都成功、容器正常退出且无残留时标记 `complete`，只跑部分场景为 `partial`，执行失败为 `invalid`。
 
 ## 文件职责
 
@@ -86,4 +86,4 @@ Reload 的 `calls` 记录发送时间、目标 `max-age`、返回码、生效观
 
 每次运行按 `--workdir` 目录名生成唯一容器名前缀，只清理本次实际创建的容器；网络在创建后立即进入清理责任域，任何阶段失败都会停止已创建容器并删除网络。残留复查区分"不存在"与 Podman 自身失败：无法确认残留时同样判失败。不运行全局 prune，不删除他人容器或网络。
 
-参数与历史口径说明仍以 [008 性能基线](../../docs/validation/008-performance-baseline.md)为准；该记录使用的是宿主进程与 nginx 1.28.3，不能与本文档所述容器化矩阵直接相减。
+参数与历史口径说明见 [008 性能基线](../../docs/validation/008-performance-baseline.md)；该记录使用的是宿主进程与 nginx 1.28.3，不能与本文档所述容器化矩阵直接相减。

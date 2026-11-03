@@ -1,0 +1,140 @@
+{
+  "kind": "ws",
+  "connections_requested": 10,
+  "connections_established": 10,
+  "measurement_start_monotonic": 1093761.431031723,
+  "measurement_deadline_monotonic": 1093821.431031723,
+  "samples": 5650,
+  "message_rtt": {
+    "samples": 5650,
+    "p50_ms": 0.87,
+    "p95_ms": 1.234,
+    "p99_ms": 1.468
+  },
+  "first_event": {
+    "samples": 0,
+    "p50_ms": null,
+    "p95_ms": null,
+    "p99_ms": null
+  },
+  "event_interval": {
+    "samples": 0,
+    "p50_ms": null,
+    "p95_ms": null,
+    "p99_ms": null
+  },
+  "handshake": {
+    "samples": 10,
+    "p50_ms": 3.652,
+    "p95_ms": 4.138,
+    "p99_ms": 4.138
+  },
+  "close_handshake": {
+    "samples": 10,
+    "p50_ms": 1.285,
+    "p95_ms": 1.411,
+    "p99_ms": 1.411
+  },
+  "expected_closes": 10,
+  "unexpected_disconnects": 0,
+  "events_per_connection": {
+    "853896": 565,
+    "853898": 565,
+    "853894": 565,
+    "853900": 565,
+    "853895": 565,
+    "853902": 565,
+    "853897": 565,
+    "853899": 565,
+    "853901": 565,
+    "853903": 565
+  },
+  "progress_by_connection": {
+    "853896": {
+      "last_progress_age_at_end": 0.08939354098401964,
+      "max_inactive_gap_seconds": 0.16755889495834708
+    },
+    "853898": {
+      "last_progress_age_at_end": 0.08963658311404288,
+      "max_inactive_gap_seconds": 0.1672618449665606
+    },
+    "853894": {
+      "last_progress_age_at_end": 0.08988608210347593,
+      "max_inactive_gap_seconds": 0.1667758848052472
+    },
+    "853900": {
+      "last_progress_age_at_end": 0.08957959013059735,
+      "max_inactive_gap_seconds": 0.16733661107718945
+    },
+    "853895": {
+      "last_progress_age_at_end": 0.08977923914790154,
+      "max_inactive_gap_seconds": 0.1670897719450295
+    },
+    "853902": {
+      "last_progress_age_at_end": 0.08932776306755841,
+      "max_inactive_gap_seconds": 0.16760200704447925
+    },
+    "853897": {
+      "last_progress_age_at_end": 0.08968007215298712,
+      "max_inactive_gap_seconds": 0.16688260599039495
+    },
+    "853899": {
+      "last_progress_age_at_end": 0.08948624809272587,
+      "max_inactive_gap_seconds": 0.16690252302214503
+    },
+    "853901": {
+      "last_progress_age_at_end": 0.08992529707029462,
+      "max_inactive_gap_seconds": 0.167062405962497
+    },
+    "853903": {
+      "last_progress_age_at_end": 0.08944522403180599,
+      "max_inactive_gap_seconds": 0.1672934009693563
+    }
+  },
+  "errors": {},
+  "valid": true,
+  "event_loop_lag_max_seconds": 0.06794172385707498,
+  "percentile_method": "nearest rank; milliseconds",
+  "sample_limit": 2000000,
+  "scenario": "rill-ws-10-1",
+  "resource_peaks": {
+    "server": {
+      "cpu_percent": 1.8859754803084303,
+      "rss_bytes": 22511616,
+      "hwm_sum_bytes": 23076864,
+      "pss_bytes": null,
+      "missing_root_samples": 0
+    },
+    "backend": {
+      "cpu_percent": 1.886199791126749,
+      "rss_bytes": 24977408,
+      "hwm_sum_bytes": 27074560,
+      "pss_bytes": null,
+      "missing_root_samples": 0
+    },
+    "client": {
+      "cpu_percent": 9.429877401542154,
+      "rss_bytes": 50274304,
+      "hwm_sum_bytes": 61587456,
+      "pss_bytes": null,
+      "missing_root_samples": 0
+    },
+    "server_cgroup": {
+      "cpu_percent": 0.9434529972963892,
+      "memory_peak_bytes": 129921024,
+      "nr_throttled": 0,
+      "throttled_usec": 0
+    }
+  },
+  "server_missing_root_samples": 0,
+  "backend_peak": {
+    "cpu_percent": 1.886199791126749,
+    "rss_bytes": 24977408,
+    "hwm_sum_bytes": 27074560,
+    "pss_bytes": null,
+    "missing_root_samples": 0
+  },
+  "client_limit_warning": false,
+  "resource_accounting": "process tree summed over the container init pid; cgroup v2 series in -cgroup.csv",
+  "resource_integrity": "ok"
+}

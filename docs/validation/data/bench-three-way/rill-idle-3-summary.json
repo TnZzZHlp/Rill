@@ -1,0 +1,49 @@
+{
+  "scenario": "rill-idle-3",
+  "valid": true,
+  "samples": 57,
+  "resource_peaks": {
+    "server": {
+      "cpu_percent": 1.8850627744926038,
+      "rss_bytes": 29474816,
+      "hwm_sum_bytes": 29560832,
+      "pss_bytes": null,
+      "missing_root_samples": 0
+    },
+    "backend": {
+      "cpu_percent": 0,
+      "rss_bytes": 25088000,
+      "hwm_sum_bytes": 27074560,
+      "pss_bytes": null,
+      "missing_root_samples": 0
+    },
+    "client": {
+      "cpu_percent": 7.497563139882065,
+      "rss_bytes": 50307072,
+      "hwm_sum_bytes": 61587456,
+      "pss_bytes": null,
+      "missing_root_samples": 0
+    },
+    "server_cgroup": {
+      "cpu_percent": 0.1120669819435853,
+      "memory_peak_bytes": 129921024,
+      "nr_throttled": 0,
+      "throttled_usec": 0
+    }
+  },
+  "server_max_threads": 4,
+  "server_max_fds": 15,
+  "latency": null,
+  "throughput": null,
+  "server_missing_root_samples": 0,
+  "backend_peak": {
+    "cpu_percent": 0,
+    "rss_bytes": 25088000,
+    "hwm_sum_bytes": 27074560,
+    "pss_bytes": null,
+    "missing_root_samples": 0
+  },
+  "client_limit_warning": false,
+  "resource_accounting": "process tree summed over the container init pid; cgroup v2 series in -cgroup.csv",
+  "resource_integrity": "ok"
+}

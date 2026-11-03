@@ -1,0 +1,73 @@
+{
+  "samples": 108489,
+  "issue_window_samples": 108489,
+  "successes": 108489,
+  "measurement_seconds": 10,
+  "completed_within_window": 108481,
+  "bytes_within_window": 111084544,
+  "completed_rps_nominal": 10848.1,
+  "completed_bytes_per_second_nominal": 11108454.4,
+  "cohort_rps_including_drain": 10847.705777206575,
+  "drain_seconds": 0.0011008989531546831,
+  "late_completions": 8,
+  "warmup_boundary_excluded_completions": 8,
+  "bytes": 111092736,
+  "error_rate": 0.0,
+  "p50_ms": 0.646,
+  "p95_ms": 0.854,
+  "p99_ms": 1.172,
+  "errors": {},
+  "measured_reused_requests": 108377,
+  "measured_reuse_ratio": 0.9989676372719815,
+  "connect_events": 112,
+  "reconnects": 112,
+  "idle_close_reconnects": 0,
+  "header_reset_retries": 0,
+  "physical_attempts": 108489,
+  "retry_policy": "GET only; at most one fresh connection retry after empty headers or header-phase reset on an existing warm connection; never retry body failures",
+  "event_loop_lag_max_seconds": 0.06250374391674995,
+  "valid": true,
+  "sample_limit": 2000000,
+  "percentile_method": "nearest rank on successful issue cohort",
+  "resource_peaks": {
+    "server": {
+      "cpu_percent": 47.849252788891654,
+      "rss_bytes": 21504000,
+      "hwm_sum_bytes": 22138880,
+      "pss_bytes": null,
+      "missing_root_samples": 0
+    },
+    "backend": {
+      "cpu_percent": 88.22585900627661,
+      "rss_bytes": 25088000,
+      "hwm_sum_bytes": 27119616,
+      "pss_bytes": null,
+      "missing_root_samples": 0
+    },
+    "client": {
+      "cpu_percent": 96.80860345385703,
+      "rss_bytes": 48164864,
+      "hwm_sum_bytes": 50741248,
+      "pss_bytes": null,
+      "missing_root_samples": 0
+    },
+    "server_cgroup": {
+      "cpu_percent": 47.61666789151192,
+      "memory_peak_bytes": 137801728,
+      "nr_throttled": 0,
+      "throttled_usec": 0
+    }
+  },
+  "server_missing_root_samples": 0,
+  "backend_peak": {
+    "cpu_percent": 88.22585900627661,
+    "rss_bytes": 25088000,
+    "hwm_sum_bytes": 27119616,
+    "pss_bytes": null,
+    "missing_root_samples": 0
+  },
+  "client_limit_warning": true,
+  "resource_accounting": "process tree summed over the container init pid; cgroup v2 series in -cgroup.csv",
+  "resource_integrity": "ok",
+  "scenario": "nginx-https-proxy-warm-3"
+}

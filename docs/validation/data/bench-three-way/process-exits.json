@@ -1,0 +1,41 @@
+{
+  "containers": [
+    {
+      "name": "bench-run-rill",
+      "id": "5d5eaa48be529ba9607ace6ef7718cc486c7412dd4b8e5c0ab5e0ab3ffd2b468",
+      "removed": true,
+      "stopped": true,
+      "stop_returncode": 0,
+      "exit_code": 0,
+      "forced": false
+    },
+    {
+      "name": "bench-run-nginx",
+      "id": "efcc0a4dcf8d10b8e6c18bac6d800620685eb94ed3c84f04b2d5db45dec815b1",
+      "removed": true,
+      "stopped": true,
+      "stop_returncode": 0,
+      "exit_code": 0,
+      "forced": false
+    },
+    {
+      "name": "bench-run-caddy",
+      "id": "4556c7693e59faaee13d56bb375d3c7f760ecc15ac79cb87cdaf2f3f716f5368",
+      "removed": true,
+      "stopped": true,
+      "stop_returncode": 0,
+      "exit_code": 0,
+      "forced": false
+    },
+    {
+      "name": "bench-run-backend",
+      "id": "3b24cc1f3a3cf310719a8a49877f8984e22a237fd0874a6902dec9615c02308b",
+      "removed": true,
+      "stopped": true,
+      "stop_returncode": 0,
+      "exit_code": 0,
+      "forced": false
+    }
+  ],
+  "residue": []
+}

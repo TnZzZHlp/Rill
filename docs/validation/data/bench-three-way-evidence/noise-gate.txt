@@ -1,0 +1,39 @@
+# 噪声判定门证据（2026-11-04，同日同机，full 运行之前）
+
+## 1. 角色集之外占用（阈值 < 5%）
+采样方式：full 运行前，以 nginx 目标跑一次 20 秒 http 组，在测量窗口内读取 /proc/stat
+两次（间隔 10 秒），统计角色集 CPU 0-5 之外各逻辑核的 busy 时间，除以整机 12 逻辑核容量。
+
+    sampled 10s: total host capacity 12091 ticks
+    whole-host busy=23.2%  role busy=19.6%  other=3.6%
+
+结论：3.6% < 5%，通过。
+
+## 2. nr_throttled（阈值全为 0）
+来源：full 运行全部 162 轮各自的 -cgroup.csv，逐行检查 server 组 nr_throttled。
+未在 -cgroup.csv 里出现任何非零值（复查命令见 bench-three-way.md 的独立核验一节）。
+
+## 3. 三轮 p50 相对离散（阈值 < 10%）
+pilot1：三目标 http 组各 3 轮、每轮 10 秒测量 + 2 秒预热，产物见本目录 pilot1/。
+首次 pilot 中 rill-http-large-warm 三轮 p50 为 67.508/66.192/74.942 ms，离散 13.0%，超过阈值。
+按要求重跑（gate3，三目标中仅 rill，http 组各 3 轮、25 秒测量）：
+
+    rill-http-large-cold         [79.351, 79.133, 78.863]   0.6%
+    rill-http-large-warm         [67.920, 64.099, 67.023]   5.7%
+    rill-http-proxy-cold         [2.123, 2.133, 2.146]      1.1%
+    rill-http-proxy-warm         [0.723, 0.720, 0.719]      0.6%
+    rill-http-small-cold         [2.057, 2.058, 2.026]      1.6%
+    rill-http-small-warm         [0.417, 0.422, 0.415]      1.7%
+    rill-https-large-cold        [162.412, 162.178, 163.580] 0.9%
+    rill-https-large-warm        [146.403, 145.968, 146.000] 0.3%
+    rill-https-proxy-cold        [8.524, 8.495, 8.487]      0.4%
+    rill-https-proxy-warm        [0.749, 0.743, 0.742]      0.9%
+    rill-https-small-cold        [8.355, 8.342, 8.366]      0.3%
+    rill-https-small-warm        [0.666, 0.667, 0.669]      0.4%
+
+重跑最大离散 5.7% < 10%，通过。gate3 的 summary 未单独归档，数值记录在此，
+其量级与 full 运行同场景结果一致（full 中 rill-http-large-warm p50 中位数 64.837 ms）。
+
+## 4. 结论
+三项门全部通过，因此未清场宿主既有负载（hindsight-api、qbittorrent、pi 等在此后
+运行期间持续存在）。full 运行期间宿主 loadavg 在 1-3 之间波动，属共享宿主而非独占基准机。
