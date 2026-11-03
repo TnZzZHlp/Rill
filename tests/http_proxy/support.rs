@@ -1,6 +1,7 @@
 use std::fs;
 use std::io::{self, Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
+use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -101,7 +102,20 @@ impl Proxy {
     ) -> TestResult<Self> {
         let directory = Directory::new()?;
         let file = directory.0.join("config.kdl");
-        fs::write(&file, configuration)?;
+        let contents = if configuration.contains("control-socket") {
+            configuration.to_owned()
+        } else {
+            let control = directory.0.join("control");
+            fs::create_dir(&control)?;
+            fs::set_permissions(&control, fs::Permissions::from_mode(0o700))?;
+            let socket = fs::canonicalize(&control)?.join("rill.sock");
+            configuration.replacen(
+                "server {",
+                &format!("server {{ control-socket {:?};", socket.to_string_lossy()),
+                1,
+            )
+        };
+        fs::write(&file, contents)?;
         let child = Command::new(env!("CARGO_BIN_EXE_rill"))
             .args(["run", "--config"])
             .arg(&file)

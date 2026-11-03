@@ -1,6 +1,6 @@
 # 配置与 CLI 契约
 
-本文以 001 确认的配置语义为基线。002 已实现配置管线与 Clap 驱动的 `rill check`；003 增加 HTTP 服务、路由与流式代理；004 增加 HTTPS、SNI、HTTP/2、证书准备和 HTTPS 重定向。005 增加安全静态文件；006 增加 HTTPS 上游和 WS/SSE；生产 Reload 仍由后续阶段实现。原始需求保留在 [writing-block.md](../writing-block.md)。
+本文以 001 确认的配置语义为基线。002 已实现配置管线与 Clap 驱动的 `rill check`；003 增加 HTTP 服务、路由与流式代理；004 增加 HTTPS、SNI、HTTP/2、证书准备和 HTTPS 重定向。005 增加安全静态文件；006 增加 HTTPS 上游和 WS/SSE；007 已实现原子 Reload 与本地管理。原始需求保留在 [writing-block.md](../writing-block.md)。
 
 当前可运行 `cargo run --locked -- check --config examples/config.kdl`，或使用 `examples/multi/config.kdl` 检查多文件示例。`cargo run --locked -- run --config examples/config.kdl` 启动 HTTP 服务，需自行提供配置的后端；多文件示例含 HTTPS 上游，run 需要可连接且证书受信的后端。成功表示配置、TLS 证书、静态 root 及字面量上游地址策略通过；check 不验证 DNS、连接或上游 TLS 信任，也不监听或写资源。证书读取或验证失败分别报告 `RESOURCE_IO`、`TLS_INVALID` 等定位错误，不能将阶段性检查视为完整资源验证。
 
@@ -15,7 +15,7 @@
 
 ## 2. CLI
 
-最终包名与可执行文件名为小写 `rill`，替代原文暂定的 `proxy-server`。CLI 使用 Clap 派生解析；003 已提供 run、check、帮助及版本，reload 尚未提供，调用 reload 返回参数错误退出码 2。以下 reload 用法为后续阶段契约。
+最终包名与可执行文件名为小写 `rill`，替代原文暂定的 `proxy-server`。CLI 使用 Clap 派生解析；run、check 和 reload 均已提供。
 
 ```text
 rill run --config /etc/rill/config.kdl
@@ -27,10 +27,10 @@ rill reload --socket /run/rill/control.sock --timeout 30s
 - `reload` 不接受新的配置路径，通知实例重新读取它启动时的入口配置。Socket 默认 `/run/rill/control.sock`；非默认实例使用显式 `--socket`。
 - `check` 完整准备候选配置但不绑定服务端口、不发送管理请求、不修改运行实例。
 - 成功退出码 0；配置或准备失败 1；命令参数错误 2；管理通信失败、超时或结果未知 3。服务端明确返回失败时退出码 1。
-- `reload` 等待真实结果，成功输出请求 ID 与配置代次；超时不承诺操作没有发生，不自动重试。`--timeout` 必须为有限正时长，默认 30 秒。
+- `reload` 等待真实结果，成功输出请求 ID 与配置代次；超时不承诺操作没有发生，不自动重试。`--timeout` 默认 30 秒，覆盖连接、发送和等待接收；仅接受正整数及 ms/s/m/h 单位，拒绝溢出。等待响应首字节不受帧 5 秒期限提前截断，首字节后帧读取限 5 秒。
 - 日志写标准错误，成功结果写标准输出，错误不得打印私钥、凭据或完整敏感配置。run 输出受 log-level 过滤的 JSON 行日志；check 保留配置位置诊断文本。
 - HTTPS 上游的身份来自配置 URL，转发 Host 仍保留客户端已验证 authority；采用系统 OpenSSL 信任路径及管理员指定的 SSL_CERT_FILE/SSL_CERT_DIR，不提供跳过验证。DNS 名校验链和主机名，IP 校验链并在发送请求前严格核对 iPAddress SAN，复用连接也必须核验。上游使用 HTTP/1，入站可使用 HTTP/1 或 HTTP/2。
-- run 在启动前解析并检查上游地址；请求触发 60 秒应用缓存刷新（并非 DNS TTL），失败不返回过期地址，失败退避 1 秒。全部候选检查、去重且不超过 64 个；任一禁止地址拒绝整次解析。单请求固定候选，最多尝试 8 个建立连接失败的地址，已建连或已发送请求后失败不重放。Reload 留给 007。
+- run 在启动前解析并检查上游地址；请求触发 60 秒应用缓存刷新（并非 DNS TTL），失败不返回过期地址，失败退避 1 秒。全部候选检查、去重且不超过 64 个；任一禁止地址拒绝整次解析。单请求固定候选，最多尝试 8 个建立连接失败的地址，已建连或已发送请求后失败不重放。Reload 重新准备上游。
 - HTTP/HTTPS 监听为 IPv4/IPv6 独立绑定，IPv6 设置 IPv6-only，可同端口双栈部署；任一监听绑定失败即启动失败，不继续提供部分站点。SIGTERM/SIGINT 都停止接受并等待最多 30 秒排空；正常退出 0，超期中止并退出 1。
 - HTTP/1.x 初始请求头总期限为 60 秒，复用连接下一请求的头部总期限使用上一请求路由的 idle-timeout；总期限不会随每次读取重新计时。已解析请求头最多 64 KiB；HTTP/1.x 框架解析本身仍有约 1 MiB 硬边界。全局最多 1024 个接受容量槽位，包含等待接受的保留槽位。
 - TLS 至少 1.2，握手期限 10 秒，ALPN 优先 h2，其次 http/1.1。协商 h2 后，客户端 24 字节前言另有 10 秒总期限，滴入不重置；读齐即解除，不限制合法长流。HTTP/2 使用 Pingora 默认 100 个并发流和 64 KiB 解码头部限制，连接无活跃流时 60 秒关闭。每流独立执行 request-timeout 总响应头预算；预算耗尽取消该流，不关闭兄弟流、不伪造已发送 504 的日志。HTTP/1.x 对应预算耗尽时尝试返回 504。
@@ -56,7 +56,7 @@ import "sites/*.kdl"
 - 全配置只能有一个 `server`。允许多个不重复的 HTTP/HTTPS 地址；地址必须包含合法 IP 和端口，IPv6 使用方括号。IPv4/IPv6 共端口须避免双栈重复绑定。
 - 至少有一个服务监听；HTTPS 站点必须有 TLS 引用，纯 HTTP 站点可以没有。启用 HTTPS 重定向时必须有 HTTPS 监听且重定向站点可完成 TLS。
 - `redirect-https` 默认关闭。自定义重定向端口使用 `redirect-port 8443`；只有一个不同的 HTTPS 监听端口时可自动推导，多端口歧义必须显式指定。443 不附加端口。只对匹配站点重定向，使用规范化站点 Host，不回显非法 Host。
-- `control-socket` 与监听地址属于启动配置；更改时 Reload 整体失败并提示重启。`log-level`、`redirect-https`、`redirect-port`、可信代理和上游允许集合随快照热更新；P0 server 除本文列举字段外全部拒绝。
+- `control-socket` 与 HTTP/HTTPS 监听地址集合属于启动配置；仅改变地址顺序允许，集合或 Socket 路径更改时 Reload 整体失败并提示重启。运行时线程和 TLS 基础协议设置固定于代码，没有可配置字段。`log-level`、`redirect-https`、`redirect-port`、可信代理和上游允许集合随快照热更新；P0 server 除本文列举字段外全部拒绝。
 - 相对 `import` 路径以声明它的文件目录解析。相对 `root`、`cert`、`key`、错误页路径也以其定义所在文件为基准；Profile/Snippet 展开不得改用引用者目录。文件来源使用解析后的实际文件路径确定基准；入口保留调用者提供的绝对路径，不固化符号链接目标，以便后续 Reload 能看到入口链接的更新。
 - glob 支持逐路径组件的 `*`、`?`、`[ab]`、`[a-z]`、`[!ab]`，不提供转义或递归目录语义；匹配路径按字节序排序。未匹配任何文件报错，避免拼写错误悄悄丢站。支持嵌套导入，基于实际文件身份检测循环，包括符号链接/硬链接别名；同一文件重复导入报错，不重复执行。
 - 配置只读取普通 UTF-8 文件。每文件最多 1 MiB，总计最多 8 MiB、512 文件；导入/Profile 嵌套最多 64 层，KDL 结构、块注释和连续 slashdash 注释嵌套最多 32 层，避免解析器栈溢出。加载中核对文件身份及修改元数据，变化时拒绝候选；不承诺替外部文件系统提供跨文件事务。

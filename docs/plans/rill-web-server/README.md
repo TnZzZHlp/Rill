@@ -6,10 +6,10 @@
 - 项目根目录：当前仓库 `/root/github/Rill`
 - 输出目录：`docs/plans/rill-web-server/`
 - 规划状态：已批准
-- 实施状态：001 已完成（ae4158b）；002 已完成（028fce3）；003 已完成（3ad652c）；004 已完成（397e972）；005 已完成（2b9fe02）；006 已验收（独立完成提交见 Git 历史）；007–012 未开始
+- 实施状态：001 已完成（ae4158b）；002 已完成（028fce3）；003 已完成（3ad652c）；004 已完成（397e972）；005 已完成（2b9fe02）；006 已完成（2ba0636）；007 已验收（独立完成提交见 Git 历史）；008–012 未开始
 - 批准依据：用户选择完整拆解 P0 与 P1、保留原始需求、采用独立总计划与子计划，并在十二阶段评审后回复“确认”。
 - 需求来源：[writing-block.md](../../../writing-block.md)
-- 规划时仅创建计划；用户已分别授权实施 001–006，要求完成后复审、测试，通过后各自独立提交；CLI 按用户要求使用 Clap，003 的 socket2 直接依赖已单独批准。
+- 规划时仅创建计划；用户已分别授权实施 001–007，要求完成后复审、测试，通过后各自独立提交；CLI 按用户要求使用 Clap，003 的 socket2 直接依赖已单独批准。
 
 ## 概述与范围
 
@@ -41,7 +41,9 @@ P0 包含原文全部必需服务、配置、安全、可观测性和交付要�
 
 005 已实现目录句柄约束的安全静态服务、GET/HEAD、Last-Modified 条件请求、单段 Range、受限 SPA 和有界流式文件响应；check/run 共用根资源准备。Sub Agent 分段实施及独立复审通过，最终离线隔离门禁与全量 69 项验证通过，详见 [005 验证记录](../../validation/005-static-files.md)。005 独立完成提交为 2b9fe02。
 
-006 已实现 HTTPS 上游、DNS 地址策略、WebSocket 和 SSE；隔离门禁 79 项通过，最终独立复审 No issues found、Merge verdict OK，详见 [006 验证记录](../../validation/006-proxy-streaming-safety.md)。独立提交由父代理核对后执行；Reload 仍待 007。
+006 已实现 HTTPS 上游、DNS 地址策略、WebSocket 和 SSE；隔离门禁 79 项通过，最终独立复审 No issues found、Merge verdict OK，详见 [006 验证记录](../../validation/006-proxy-streaming-safety.md)。独立提交为 2ba06369cfda291b53d968c1319fcbf507dcff7d。
+
+007 已实现原子 Reload 和本地管理，隔离门禁 106 项通过，最终新上下文独立复审 No issues found、Merge verdict OK；详见 [007 验证记录](../../validation/007-atomic-reload.md)。独立完成提交由父代理核对后执行。
 
 ## 目标与成功标准
 
@@ -57,10 +59,10 @@ P0 包含原文全部必需服务、配置、安全、可观测性和交付要�
   - GET/HEAD、MIME、条件请求、Range、缓存头、索引、受限 SPA 回退可用，编码与符号链接不能越出 root。
   - 计划验证：005 的响应与路径访问检查，包含 T09–T11、T16。
   - 验证证据：005 静态功能及安全检查通过，见 docs/validation/005-static-files.md；最终独立复审 OK。
-- [ ] **G04：Reload 具有完整事务性**
+- [x] **G04：Reload 具有完整事务性**
   - 新快照单点发布，任何错误保留旧服务；新握手使用新证书、在途请求/长连接保持约定行为；CLI 返回实际结果，重启项变化明确失败。
   - 计划验证：007 的故障、并发与长连接场景，包含 T04–T08、T12、T17。
-  - 验证证据：未执行。
+  - 验证证据：007 隔离门禁 106 项通过、最终独立复审 OK，见 docs/validation/007-atomic-reload.md。
 - [ ] **G05：P0 可部署且有真实验证证据**
   - T01–T18、补充 P0 检查、Cargo 质量门禁、systemd/Podman 部署和基准全部完成。
   - 计划验证：008 的交付清单、完整验收报告和同环境对照结果。
@@ -76,7 +78,7 @@ P0 包含原文全部必需服务、配置、安全、可观测性和交付要�
 
 ## 架构与模块边界
 
-main、lib、cli 和 config 已由 002 建立，003 已提供 routing、HTTP proxy、初始 runtime 及结构化日志；tests 与 examples 包含必要验证及配置。004 已提供 TLS/证书模块，005 已提供静态文件；控制面、完整观测、部署和压测仍待对应阶段。更新已有文件时保留无关用户修改。
+main、lib、cli 和 config 已由 002 建立，003 已提供 routing、HTTP proxy、初始 runtime 及结构化日志；tests 与 examples 包含必要验证及配置。004 已提供 TLS/证书模块，005 已提供静态文件；控制面已由 007 实现；完整观测、部署和压测仍待对应阶段。更新已有文件时保留无关用户修改。
 
 ```text
 src/
@@ -114,7 +116,7 @@ docs/
 
 ### 关键接口与数据流
 
-接口与代次契约已在 docs/architecture.md 固化；002–004 已实现共享构建管线及初始 HTTP/TLS 快照，005 已提供 root 准备，发布接口仍待后续阶段：
+接口与代次契约已在 docs/architecture.md 固化；002–004 已实现共享构建管线及初始 HTTP/TLS 快照，005 已提供 root 准备，007 已实现发布接口：
 
 1. `load(path) → LoadedConfig → parse → ParsedConfig`：导入、解析、保留来源文件和位置。
 2. `normalize → NormalizedConfig → validate → ValidatedConfig`：展开复用、消除简写、检查全局冲突。
@@ -165,8 +167,8 @@ Q01–Q04 已解决：KDL v2、rill 命名、一级通配及完整路径 root �
 | 003 | [HTTP 路由与基础代理](subplans/003-http-routing-proxy.md) | 提供可运行的多站点 HTTP 反向代理纵向切片。 | 002 | 已完成（3ad652c） |
 | 004 | [HTTPS 与 SNI 证书管理](subplans/004-https-certificates.md) | 提供真实证书校验、HTTPS 多站点及后续热更新可复用的 TLS 准备能力。 | 003 | 已完成（397e972） |
 | 005 | [安全静态文件与 SPA](subplans/005-static-files.md) | 安全托管站点目录，提供完整 P0 文件响应语义。 | 003 | 已完成（2b9fe02） |
-| 006 | [完整代理、流式连接与安全边界](subplans/006-proxy-streaming-safety.md) | 补齐 HTTPS 上游、WebSocket、SSE 及完整代理安全和资源约束。 | 004 | 已验收（独立完成提交见 Git 历史） |
-| 007 | [原子 Reload 与本地管理](subplans/007-atomic-reload.md) | 通过受权限保护的本地控制面提供有实际结果反馈的事务性热更新。 | 004、005、006 | 未开始 |
+| 006 | [完整代理、流式连接与安全边界](subplans/006-proxy-streaming-safety.md) | 补齐 HTTPS 上游、WebSocket、SSE 及完整代理安全和资源约束。 | 004 | 已完成（2ba0636） |
+| 007 | [原子 Reload 与本地管理](subplans/007-atomic-reload.md) | 通过受权限保护的本地控制面提供有实际结果反馈的事务性热更新。 | 004、005、006 | 已验收（独立完成提交见 Git 历史） |
 | 008 | [P0 验收、性能基线与部署](subplans/008-p0-validation-deployment.md) | 形成可部署的完整 P0 版本，补齐原文验收和交付证据。 | 007 | 未开始 |
 | 009 | [Snippet 与可选自动 Reload](subplans/009-config-reuse-watch.md) | 提供可复用路由片段和显式启用的文件变更重载。 | 008 | 未开始 |
 | 010 | [静态文件可选增强](subplans/010-static-enhancements.md) | 在不放宽目录约束的前提下提供预压缩、可控缓存、自定义错误页和可选目录浏览。 | 008 | 未开始 |
@@ -195,7 +197,7 @@ T01–T18 不是全部验收：还需核对 IPv4/IPv6、HTTP/2、上游 HTTPS �
 
 验证环境需 Rust Stable、Linux/Debian、OpenSSL、受控 HTTP/HTTPS 上游、临时测试目录/证书，以及 systemd/Podman 与对照服务器环境。任何新增工具或依赖需先批准。不要提交真实密钥，不为方便测试公开管理端口。
 
-原文支持的质量命令为 `cargo fmt`、`cargo clippy`；实施阶段执行 `cargo fmt --check`、`cargo check`、`cargo test`、`cargo build --release` 等必要门禁。001–006 均通过 fmt --check、check --locked、clippy --locked --all-targets -- -D warnings、test --locked；004–006 最终在只读、离线、隔离 loopback 环境额外使用 --offline 验证，分别共 48、69、79 项通过；详见各阶段验证记录；生产构建及性能检查仍留给对应阶段。集成和性能命令待实际脚本存在后记录，不虚构可运行命令。
+原文支持的质量命令为 `cargo fmt`、`cargo clippy`；实施阶段执行 `cargo fmt --check`、`cargo check`、`cargo test`、`cargo build --release` 等必要门禁。001–007 均通过 fmt --check、check --locked、clippy --locked --all-targets -- -D warnings、test --locked；004–006 最终在只读、离线、隔离 loopback 环境额外使用 --offline 验证，分别共 48、69、79 项通过；007 以 --include-ignored 实际运行隔离 DNS 超时回归，全量 106 项通过；详见各阶段验证记录；生产构建及性能检查仍留给对应阶段。集成和性能命令待实际脚本存在后记录，不虚构可运行命令。
 
 性能不预设 RPS；同一环境、相同负载与 Nginx/Caddy/Pingap 中至少一个对比。记录环境、版本、参数、原始数据、p50/p95/p99、吞吐、CPU/RSS、错误与断连，以及 Reload 时延峰值。环境不具备时保持阻塞，不能用说明文档代替通过证据。
 
@@ -219,9 +221,9 @@ T01–T18 不是全部验收：还需核对 IPv4/IPv6、HTTP/2、上游 HTTPS �
 3. 提交前同步本子计划与总计划进度。检查 Git 状态、工作区和暂存区，只暂存本阶段明确路径或已审阅代码块，不包含无关编辑、预先暂存内容或其他阶段未完成工作。无法安全分离时暂停询问。
 4. 每个子计划单独创建一次完成提交，成功后才能进入依赖它的阶段；不合并多个阶段，不逐任务提交。遵循仓库约定，否则使用 `feat(rill-web-server): complete subplan NNN - phase-name`，将 NNN 和 phase-name 替换为本阶段值。
 5. 验证提交成功并报告哈希；失败时说明阶段仍待提交。Git 不可用、非仓库、无身份、钩子失败或变更已提交时停止询问；不得自动初始化仓库、修改身份、绕过钩子、推送、改写历史或创建空提交。
-6. 规划阶段不执行实施检查或创建完成提交。001–003 已单独授权并实际验证，结果见各阶段验证记录；004 已完成，005 已完成并提交；006 已验收待独立提交；007–012 保持未实施。
+6. 规划阶段不执行实施检查或创建完成提交。001–003 已单独授权并实际验证，结果见各阶段验证记录；004 已完成，005 已完成并提交；006 已完成提交；007 已验收待独立提交；008–012 保持未实施。
 
 
 ## 交接
 
-001–005 已完成并提交，005 为 2b9fe02。006 实现和 79 项验证通过，最终独立复审 OK，独立提交由父代理核对后执行。007–012 未开始，不自动进入下一阶段。
+001–006 已完成并提交，005 为 2b9fe02，006 为 2ba0636。007 实现和 106 项验证通过，最终独立复审 OK，独立提交由父代理核对后执行。008–012 未开始，不自动进入下一阶段。

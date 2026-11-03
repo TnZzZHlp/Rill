@@ -10,7 +10,8 @@ use tokio::sync::watch;
 use tokio::time::{Instant, sleep_until, timeout};
 
 use super::handler::Handler;
-use crate::observability::logging::{Level, Logger};
+use crate::observability::logging::Level;
+use crate::runtime::state::RuntimeState;
 use crate::runtime::stream::SharedStream;
 
 #[derive(Clone, Copy, Debug)]
@@ -22,7 +23,7 @@ pub enum Phase {
 
 pub struct App {
     pub proxy: Arc<HttpProxy<Handler>>,
-    pub logger: Logger,
+    pub state: Arc<RuntimeState>,
 }
 
 #[async_trait]
@@ -67,14 +68,14 @@ impl HttpServerApp for App {
             }
         };
         let Some(shared) = shared else {
-            self.logger.event(
+            self.state.snapshot().logger.event(
                 Level::Warn,
                 "request_timeout",
                 &[("protocol", "h2"), ("action", "reset_stream")],
             );
             return None;
         };
-        self.logger.event(
+        self.state.snapshot().logger.event(
             Level::Warn,
             "request_timeout",
             &[("status", &timed_out.to_string())],

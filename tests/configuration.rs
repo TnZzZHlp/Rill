@@ -528,7 +528,7 @@ fn check_reports_syntax_locations_and_cli_argument_exit_codes() -> TestResult {
         vec!["check", "--config"],
         vec!["check", "--unknown"],
         vec!["run", "--unknown"],
-        vec!["reload"],
+        vec!["reload", "--unknown"],
     ] {
         let result = Command::new(env!("CARGO_BIN_EXE_rill"))
             .args(args)

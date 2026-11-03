@@ -48,6 +48,27 @@ impl Fixture {
     }
     pub fn start_config(&mut self, contents: &str, unprivileged: bool) -> TestResult {
         let config = self.dir.join("config.kdl");
+        let contents = if contents.contains("control-socket") {
+            contents.to_owned()
+        } else {
+            let control = self.dir.join("control");
+            fs::create_dir(&control)?;
+            fs::set_permissions(&control, fs::Permissions::from_mode(0o700))?;
+            if unprivileged && is_root()? {
+                fs::set_permissions(&self.dir, fs::Permissions::from_mode(0o755))?;
+                nix::unistd::chown(
+                    &control,
+                    Some(nix::unistd::Uid::from_raw(65534)),
+                    Some(nix::unistd::Gid::from_raw(0)),
+                )?;
+            }
+            let socket = fs::canonicalize(&control)?.join("rill.sock");
+            contents.replacen(
+                "server {",
+                &format!("server {{ control-socket {:?};", socket.to_string_lossy()),
+                1,
+            )
+        };
         fs::write(&config, contents)?;
         if unprivileged {
             fs::set_permissions(&config, fs::Permissions::from_mode(0o644))?;
@@ -189,14 +210,5 @@ pub fn header<'a>(head: &'a str, name: &str) -> Option<&'a str> {
 }
 
 pub fn is_root() -> TestResult<bool> {
-    let status = fs::read_to_string("/proc/self/status")?;
-    let uid = status
-        .lines()
-        .find_map(|line| line.strip_prefix("Uid:"))
-        .ok_or("missing Uid in /proc/self/status")?
-        .split_whitespace()
-        .next()
-        .ok_or("missing real uid")?
-        .parse::<u32>()?;
-    Ok(uid == 0)
+    Ok(nix::unistd::geteuid().is_root())
 }

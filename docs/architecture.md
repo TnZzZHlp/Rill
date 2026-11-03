@@ -1,10 +1,10 @@
 # Rill 架构与实施基线
 
-本文以 001 的模块与接口契约为基线，并记录 002–005 已交付边界。配置格式见 [configuration.md](configuration.md)，服务验证见 [003 验证记录](validation/003-http-routing-proxy.md) 、[004 验证记录](validation/004-https-certificates.md) 与 [005 验证记录](validation/005-static-files.md)。Reload 契约仍为后续要求。
+本文以 001 的模块与接口契约为基线，并记录 002–007 已交付边界。配置格式见 [configuration.md](configuration.md)，服务验证见 [003 验证记录](validation/003-http-routing-proxy.md) 、[004 验证记录](validation/004-https-certificates.md) 与 [005 验证记录](validation/005-static-files.md)。007 验证见 [验证记录](validation/007-atomic-reload.md)。
 
 ## 1. 目录与职责
 
-当前 main 仅委托 `cli::run`，CLI 使用 Clap 解析参数，check 调用统一配置构建入口。002 已提供 config 模块，003 已提供 routing、proxy、runtime 和结构化日志。001 的技术验证仍隔离在 tests/feasibility/；003 的真实服务验证在 tests/http_proxy/，004 的 TLS/HTTP2 验证在 tests/https/。004 已增加 tls 模块，005 已增加 static_files 模块，控制面和高级观测仍后续实现，不在 main 或 CLI 中堆业务逻辑。
+当前 main 仅委托 `cli::run`，CLI 使用 Clap 解析参数，check 调用统一配置构建入口。002 已提供 config 模块，003 已提供 routing、proxy、runtime 和结构化日志。001 的技术验证仍隔离在 tests/feasibility/；003 的真实服务验证在 tests/http_proxy/，004 的 TLS/HTTP2 验证在 tests/https/。004 已增加 tls 模块，005 已增加 static_files 模块，007 已增加控制面，高级观测仍后续实现，不在 main 或 CLI 中堆业务逻辑。
 
 | 拟议模块 | 负责 | 不负责 |
 | --- | --- | --- |
@@ -22,7 +22,7 @@
 
 ## 2. 配置构建契约
 
-002 在 src/config/ 实现下列加载至准备边界；003 已建立 HTTP RuntimeSnapshot，publish 留给 007。解析、导入、继承及验证不依赖 Pingora 类型：
+002 在 src/config/ 实现下列加载至准备边界；007 已交付 RuntimeSnapshot 发布。解析、导入、继承及验证不依赖 Pingora 类型：
 
 ```text
 load(entry) -> LoadedConfig
@@ -38,14 +38,14 @@ publish(prepared) -> Generation
 - `NormalizedConfig` 消除简写、应用继承，仍不包含 Pingora 对象。
 - `ValidatedConfig` 保证字段类型、域名与路径冲突、引用及安全策略一致；验证不是资源存在性的替代。
 - 完整服务的 `PreparedSnapshot` 必须持有路由、上游策略、root 句柄与已验证 TLS 材料，准备失败不产生发布副作用。005 以同形 PreparedRoute 区分 Proxy/Static，准备 root 和 PreparedTls。
-- `StartupSettings` 保存监听、控制 Socket、运行时线程和 TLS 基础协议设置。Reload 必须和启动值比较；任何需要重启的差异整体报错。
+- `StartupSettings` 保存监听、控制 Socket、运行时线程和 TLS 基础协议设置；后两者固定于代码，没有可配置字段。HTTP/HTTPS 地址按集合比较，顺序重排允许。Reload 必须和启动值比较；任何需要重启的差异整体报错。
 - 002 check 使用 build → load → parse → normalize → validate → ResourcePreparer，同一个入口供后续 run/reload 复用，不另写验证管线。check 不监听、不发请求、不发布。check 与 run 共用 root 和 TLS 准备；check 不检查 DNS、连接或上游 TLS 信任，不监听或写资源。证书资源检查与 run 共用 PreparedTls，不单独维护一套规则。
 - 新配置依赖的文件必须在本轮准备时读取并保持必要资源，不能发布后再懒加载证书或 root。
 - 文件读取过程中可能发生外部编辑；准备期检测所读取文件身份/元数据变化并拒绝不稳定候选。管理员需要跨文件内容事务时应先准备完整版本再触发 Reload，系统不承诺替外部文件系统提供事务。
 
 ## 3. 单根快照与原子发布
 
-005 的 RuntimeSnapshot 包含配置代次 1、标准化配置、Router、准备好的代理或静态路由、PreparedTls 和日志策略；RuntimeState 只有初始构建和 load_full 读取，没有发布接口。以下为后续完整服务必须持续遵守的快照内容：
+RuntimeSnapshot 包含标准化配置、Router、准备好的代理或静态路由、PreparedTls 和日志策略。以下为快照内容：
 
 - 单调递增的 `Generation`；溢出时失败而不是回绕。
 - 站点及 Host/路径路由表。
@@ -53,7 +53,7 @@ publish(prepared) -> Generation
 - 静态 root 句柄及静态响应策略。
 - 同代次的 SNI 证书集合、私钥及验证结果。
 
-`RuntimeState` 拥有唯一 `ArcSwap<RuntimeSnapshot>`。准备时不写活动状态，管理提交串行化：读取配置、准备全部资源、比较启动设置、赋代次、一次 store，随后返回成功。失败没有发布，因此所谓回滚是保留旧快照，而不是先局部更新再反向恢复。
+`RuntimeState` 拥有唯一 `ArcSwap<RuntimeSnapshot>`。准备时不写活动状态，管理提交串行化：读取配置、准备全部资源、比较启动设置、赋代次、一次 store，随后返回成功。关闭和提交共用短暂的 std Mutex gate，store 前检查关闭状态和 30 秒期限；blocking closure 只构建，不能访问 state 或 store。代次 checked_add 防溢出。启动快照使用后释放，不永久持有第一代；运行期 App 日志读取当前快照。失败没有发布，因此所谓回滚是保留旧快照，而不是先局部更新再反向恢复。
 
 只有管理提交路径可以串行化。HTTP 请求不持有全局管理互斥锁；通过 `load_full` 获取 Arc。路由、TLS、root 和上游不得各自维护独立活动指针。旧快照由持有者自然释放，不能在发布时关闭旧连接。
 
@@ -110,14 +110,15 @@ publish(prepared) -> Generation
 - Linux root 以 O_PATH 目录 FD 持有；准备时探测 openat2 BENEATH/NO_MAGICLINKS，核对 /proc/self PID、procfd 的 procfs 类型和自身 FD，能力不可用则 fail closed。允许约束解析的根内相对符号链接，拒绝绝对、越界和 magic link。
 - 客户路径先以 O_PATH 打开并检查普通文件或目录；普通文件经持存可信自身 procfd 的数字入口重开并比较 dev/ino/type，原 FD 保持存活，避免设备/FIFO 先读开和 FD 重用竞态。索引和 SPA 均从原 root FD 重开。路径严格解码一次，使用完整站点路径，不去路由前缀。
 - 信任本地文件系统、procfs 挂载/namespace 和进程 FD 表；不保证恶意挂载、FUSE 或 NFS 不阻塞，不替代 OS hardlink 和内容发布权限，也不声称消除所有文件系统竞态。
-- 全静态路由共享 128 个 Semaphore 许可，随 Opened 和 blocking 任务持有；max blocking 为 16，单块不超过 64 KiB，逐块背压且不超过声明长度。文件截断则中止流，不追加 HTTP 响应。最终头之前同步交接 Headers → Streaming 和 response_started，本地错误及重定向也如此；正常排空最多 30 秒，runtime.shutdown_background 避免未完成阻塞 IO 卡住运行时析构。
+- 全静态路由跨候选和配置代次共享进程级 128 个 Semaphore 许可，随 Opened 和 blocking 任务持有；max blocking 为 16，单块不超过 64 KiB，逐块背压且不超过声明长度。文件截断则中止流，不追加 HTTP 响应。最终头之前同步交接 Headers → Streaming 和 response_started，本地错误及重定向也如此；正常排空最多 30 秒，runtime.shutdown_background 避免未完成阻塞 IO 卡住运行时析构。
 - 缓存、预压缩和目录浏览属于后续阶段；无目录列表。具体响应语义见配置文档和 005 验证记录。
 
 ## 7. 本地控制协议
 
 - 使用 AF_UNIX 流 Socket，默认 `/run/rill/control.sock`；父目录 0700、Socket 0600，归服务 UID。拒绝不安全目录或链接，不误删其他实例 Socket。部署由 systemd RuntimeDirectory 或等效方式准备目录。
-- 接受后检查 SO_PEERCRED，默认仅服务 euid 和 root 可调用；Socket 文件权限不是对端身份检查的替代。初版不提供组级授权或公网管理端口。
-- 单行 UTF-8 JSON 帧，以换行结束，每帧最多 64 KiB；每连接一条请求一条结果，读写期限均为 5 秒。未知字段、重复 JSON 键、未知版本和超限报错并关闭，不无界读取。
+- 按目录 FD 使用 openat2 禁止 symlink/magic link；祖先须为 root 或服务 owner，若可写须 sticky。信任 proc 挂载、namespace、服务 UID 和 root 写入者；缺少安全内核或 proc 能力时 fail closed。私有目录使用短临时名和能力 FD 绑定，验证身份/权限后 renameat2 RENAME_NOREPLACE 到最终名；既存 Socket、文件及链接一律保留并失败，不自动清理。管理员确认无实例后手工处理遗留。正常 Drop 仅在 dev/ino/uid/type 匹配时 unlink；检查与 unlink 非原子，不保证抵御同 UID/root 恶意写入。绑定后首次 inode 检查失败可能保守留下临时项。
+- 接受后检查 SO_PEERCRED，默认仅服务 euid 和 root 可调用；Socket 文件权限不是对端身份检查的替代。初版不提供组级授权或公网管理端口；最多 32 个会话。
+- 单行 UTF-8 JSON 帧，以换行结束，每帧含换行最多 64 KiB；每连接一条请求一条结果，帧读取和写入各有 5 秒总期限。CLI 等待响应首字节由整体 timeout 约束，首字节后帧读取限 5 秒。未知字段、重复 JSON 键、未知版本和超限报错并关闭，不无界读取。
 
 ```json
 {"version":1,"id":"operator-001","operation":"reload"}
@@ -133,9 +134,9 @@ publish(prepared) -> Generation
 {"version":1,"id":"operator-001","status":"error","code":"CONFIG_TYPE","errors":[{"file":"sites/app.kdl","line":4,"column":5,"item":"spa","reason":"expected boolean"}]}
 ```
 
-- 成功必须在 store 完成后回复；错误为未提交、保留旧代次。结果长度限制 64 KiB，超出的诊断按条数截断并返回 truncated 标志，详细信息写脱敏服务日志。
+- 成功必须在 store 完成后回复；错误为未提交、保留旧代次。结果长度限制 64 KiB，超出的诊断按条数截断并返回 truncated 标志，日志只记录静态 code、id 和 generation，不记录原始帧。
 - 运行实例只读取自己的入口配置，不接收任意路径、PEM 或上游 URL 管理操作。
-- 一次仅执行一个准备/提交，最多再排队一个请求，其余返回 BUSY；watch 使用同一入口并合并事件。运行中的准备以 30 秒为默认期限，超时或关闭时不得晚到发布；设置取消令牌并在发布前检查。
+- 一次仅执行一个准备/提交，最多再排队一个请求，其余返回 BUSY；watch 使用同一入口并合并事件。运行中的准备以 30 秒为默认期限，超时或关闭时不得晚到发布；admission 为 2（执行 1、排队 1），execution 为 1；两个 OwnedPermit 由异步提交路径和真实 blocking closure 通过 Arc 共同持有，超时或取消不能提前释放真实任务额度。读完请求后准备期间 EOF 或多余字节取消管理 future；最终 gate 防止关闭或过期后发布。
 - CLI 等待超时或连接断开可能代表结果未知；不撤销已经完成的提交，不自动重发。服务端日志以 id 和 generation 提供追溯。
 
 ## 8. 错误分类
@@ -158,13 +159,13 @@ publish(prepared) -> Generation
 
 - 使用 Rust Stable，edition 2024；KDL 6.7.1 声明最低 Rust 1.95，工程声明相同下限。实际已验证工具链和完整锁定版本以验证记录为准，不声称在未运行的旧工具链通过。
 - 直接使用 Pingora 0.9.0 的 openssl/proxy 功能，关闭默认可选功能；不接入 BoringSSL、rustls、ACME、负载均衡或网络缓存。
-- `arc-swap` 1.9.3；Tokio 提供测试及运行时所需异步能力；async-trait 用于 Pingora 回调；直接 openssl 依赖用于安全 ex_data 类型和内存证书验证。002 按用户明确要求添加 Clap 派生 CLI，锁定版本 4.6.7，复用已有传递依赖，未增加其他依赖或测试工具。003 经用户访谈明确批准直接使用既有 socket2 0.6.5，并显式开启 Tokio 的 net/signal 功能；没有其他新增依赖或测试框架。005 经批准直接依赖 nix 0.31.3（fs）和 httpdate 1.0.3；Tokio fs 虽获批但实现未使用、未开启。Cargo.lock 仅 rill 依赖列表变化，无新包升级或测试框架。完整传递依赖固定在 Cargo.lock。
+- `arc-swap` 1.9.3；Tokio 提供测试及运行时所需异步能力；async-trait 用于 Pingora 回调；直接 openssl 依赖用于安全 ex_data 类型和内存证书验证。002 按用户明确要求添加 Clap 派生 CLI，锁定版本 4.6.7，复用已有传递依赖，未增加其他依赖或测试工具。003 经用户访谈明确批准直接使用既有 socket2 0.6.5，并显式开启 Tokio 的 net/signal 功能；没有其他新增依赖或测试框架。005 经批准直接依赖 nix 0.31.3（fs）和 httpdate 1.0.3；Tokio fs 虽获批但实现未使用、未开启。Cargo.lock 仅 rill 依赖列表变化，无新包升级或测试框架。007 经用户批准直接启用既有 serde 1.0.229 derive、serde_json 1.0.154（本地缓存新锁包 zmij 1.0.23）及 nix 0.31.3 user 功能，无其他依赖升级或新工具/测试框架。完整传递依赖固定在 Cargo.lock。
 - Debian 构建需要 Rust、C 工具链、make 和 Perl。Pingora 0.9.0 的 pingora-openssl 无条件启用 openssl 的 vendored 功能，因此本基线使用锁文件中的 openssl-src 构建 OpenSSL，而不是系统 openssl 命令对应的库。不要将两者版本混为一谈。未启用 OPENSSL_NO_VENDOR 覆盖；系统动态库方案须单独验证，008 部署说明必须以实际链接结果为准。001 不安装系统包、不引入测试框架或额外 dev-dependencies。
 - 001 必须通过 cargo fmt --check、cargo check --locked、cargo clippy --locked --all-targets -- -D warnings、cargo test --locked。测试不监听公网、不需要真实密钥或额外证书工具。
 - 003/004/005 验证真实监听、HTTP/2、优雅关闭；006 验证真实流式代理、WS/SSE；007 验证管理权限、真实 Reload 和并发原子性；008/012 补齐部署与性能门禁。不能用 001 的 TLS 字节流验证替代这些端到端验收。
 
 ## 10. 重要限制
 
-001 解除技术机制可行性阻塞，002 提供配置语义检查，003 提供 HTTP/1.x run 和基础代理，004 提供真实 HTTPS/SNI、HTTP/2、证书检查及安全重定向。005 已准备静态 root；006 支持 HTTPS 上游和 WS/SSE。check 仍不宣称 DNS、连通性或上游 TLS 信任已验证。尚无生产 Reload，也未执行独立安全审计或生产性能测试。合同如需改变通配层级、路径映射、Host/SNI 或快照代次边界，必须先更新计划并获得确认。
+001 解除技术机制可行性阻塞，002 提供配置语义检查，003 提供 HTTP/1.x run 和基础代理，004 提供真实 HTTPS/SNI、HTTP/2、证书检查及安全重定向。005 已准备静态 root；006 支持 HTTPS 上游和 WS/SSE。check 仍不宣称 DNS、连通性或上游 TLS 信任已验证。007 已实现 Reload；未执行独立全代码库安全审计或生产性能测试。合同如需改变通配层级、路径映射、Host/SNI 或快照代次边界，必须先更新计划并获得确认。
 
 006 的合法 101 是最终响应头，先检查请求头总期限再进入 Streaming；SSE 在普通最终头后逐段流式传输，不聚合且无响应总时长限制。read-timeout 为上游相邻读取期限，idle-timeout 用于下游读写和连接池；不承诺单向数据刷新共享双向 idle，也不承诺通用 TCP 半关闭。响应头后故障仅中止，不追加 HTTP；保留既有 30 秒排空。

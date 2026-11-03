@@ -3,6 +3,7 @@ mod transport;
 
 mod https {
     pub mod certificates;
+    pub mod reload;
     pub mod service;
     pub mod support;
     pub mod upstream;

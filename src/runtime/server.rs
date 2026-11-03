@@ -67,7 +67,7 @@ async fn endpoint_loop(
                         match timeout(Duration::from_secs(10), tls.accept(stream)).await {
                             Ok(Ok(stream)) => stream,
                             _ => {
-                                app.app.logger.event(Level::Warn, "tls_handshake_failed", &[]);
+                                app.app.state.snapshot().logger.event(Level::Warn, "tls_handshake_failed", &[]);
                                 return;
                             }
                         }
@@ -174,7 +174,32 @@ pub async fn serve(state: Arc<RuntimeState>) -> u8 {
         max_retries: 8,
         ..ServerConf::default()
     });
-    let mut proxy = HttpProxy::new(Handler { state }, configuration);
+    let control = match crate::control::socket::ControlSocket::bind(
+        &snapshot.configuration.server.control_socket,
+    ) {
+        Ok(socket) => socket,
+        Err(_) => {
+            let error = crate::config::ConfigError::new(
+                "RESOURCE_IO",
+                "control-socket",
+                "cannot bind private control socket; check directory ownership, mode and existing entries",
+                &snapshot.configuration.server.origin,
+            );
+            logger.event(
+                Level::Error,
+                "control_listen_failed",
+                &[("diagnostic", &error.to_string())],
+            );
+            return 1;
+        }
+    };
+    let coordinator = crate::runtime::reload::ReloadCoordinator::new(state.clone());
+    let mut proxy = HttpProxy::new(
+        Handler {
+            state: state.clone(),
+        },
+        configuration,
+    );
     let mut options = pingora::apps::HttpServerOptions::default();
     options.h2_idle_timeout = Some(Duration::from_secs(60));
     proxy.server_options = Some(options);
@@ -182,12 +207,18 @@ pub async fn serve(state: Arc<RuntimeState>) -> u8 {
     let app = Arc::new(Transport {
         app: Arc::new(App {
             proxy: Arc::new(proxy),
-            logger: logger.clone(),
+            state: state.clone(),
         }),
     });
     let capacity = Arc::new(Semaphore::new(1024));
     let (shutdown, receiver) = watch::channel(false);
     let mut workers = JoinSet::new();
+    workers.spawn(crate::control::server::serve(
+        control,
+        coordinator,
+        state.clone(),
+        receiver.clone(),
+    ));
     for (endpoint, secure) in listeners {
         workers.spawn(endpoint_loop(
             endpoint,
@@ -206,20 +237,25 @@ pub async fn serve(state: Arc<RuntimeState>) -> u8 {
                 .to_string(),
         )],
     );
+    drop(snapshot);
     let mut status = 0;
     tokio::select! {
         _ = terminate.recv() => {}
         _ = interrupt.recv() => {}
         result = workers.join_next() => {
             let _ = result;
-            logger.event(Level::Error, "listener_failed", &[]);
+            state.snapshot().logger.event(Level::Error, "listener_failed", &[]);
             status = 1;
         }
     }
-    logger.event(Level::Info, "shutdown_started", &[]);
+    state.close();
+    state
+        .snapshot()
+        .logger
+        .event(Level::Info, "shutdown_started", &[]);
     let _ = shutdown.send(true);
-    app.cleanup().await;
     let drained = timeout(Duration::from_secs(30), async {
+        app.cleanup().await;
         while let Some(result) = workers.join_next().await {
             if !matches!(result, Ok(Ok(()))) {
                 status = 1;
@@ -230,9 +266,15 @@ pub async fn serve(state: Arc<RuntimeState>) -> u8 {
     if drained.is_err() {
         workers.abort_all();
         while workers.join_next().await.is_some() {}
-        logger.event(Level::Warn, "shutdown_deadline", &[]);
+        state
+            .snapshot()
+            .logger
+            .event(Level::Warn, "shutdown_deadline", &[]);
         status = 1;
     }
-    logger.event(Level::Info, "stopped", &[("status", &status.to_string())]);
+    state
+        .snapshot()
+        .logger
+        .event(Level::Info, "stopped", &[("status", &status.to_string())]);
     status
 }

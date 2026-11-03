@@ -1,5 +1,5 @@
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use tokio::sync::Semaphore;
 
@@ -18,6 +18,8 @@ pub trait ResourcePreparer {
 
     fn prepare(&self, configuration: &ValidatedConfig) -> Result<Self::Resources>;
 }
+
+static STATIC_CAPACITY: OnceLock<Arc<Semaphore>> = OnceLock::new();
 
 pub struct ConfigurationOnly;
 
@@ -38,7 +40,9 @@ impl ResourcePreparer for ConfigurationOnly {
 
     fn prepare(&self, configuration: &ValidatedConfig) -> Result<Self::Resources> {
         let tls = crate::tls::cert::PreparedTls::prepare(configuration)?;
-        let capacity = Arc::new(Semaphore::new(128));
+        let capacity = STATIC_CAPACITY
+            .get_or_init(|| Arc::new(Semaphore::new(128)))
+            .clone();
         let routes = configuration
             .sites
             .iter()
@@ -68,4 +72,39 @@ pub fn build<P: ResourcePreparer>(
         configuration,
         resources,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::source::{Located, Origin};
+
+    #[tokio::test]
+    async fn prepared_generations_share_static_io_limit()
+    -> std::result::Result<(), Box<dyn std::error::Error>> {
+        let entry = Path::new("examples/config.kdl");
+        let mut configuration = validate(normalize(parse(load(entry)?)?)?)?;
+        configuration.sites[0].routes[0].action = Action::Static {
+            root: Located::new(std::env::temp_dir(), Origin::file(entry)),
+            spa: false,
+            cache_control: None,
+        };
+        let old = ConfigurationOnly.prepare(&configuration)?;
+        let CheckedRoute::Static(old) = &old.routes[0][0] else {
+            panic!("static route expected");
+        };
+        let permit = tokio::time::timeout(
+            std::time::Duration::from_secs(1),
+            old.capacity.clone().acquire_many_owned(128),
+        )
+        .await??;
+        let new = ConfigurationOnly.prepare(&configuration)?;
+        let CheckedRoute::Static(new) = &new.routes[0][0] else {
+            panic!("static route expected");
+        };
+        assert!(new.capacity.clone().try_acquire_owned().is_err());
+        drop(permit);
+        assert!(new.capacity.clone().try_acquire_owned().is_ok());
+        Ok(())
+    }
 }
