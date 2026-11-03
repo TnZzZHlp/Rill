@@ -74,7 +74,7 @@ python3 scripts/bench/bench.py --targets caddy --only reload --repeats 1 \
 
 ## 采样与口径
 
-`-resources.csv` 按宿主可见的容器主进程做进程树求和，覆盖 `server`、`backend` 与 `client`（宿主负载生成进程）三组，列为 `monotonic,group,cpu_percent,rss_bytes,hwm_bytes,threads,fds,processes`；容器运行时辅助进程不进入该树。`-cgroup.csv` 并列记录 cgroup v2 的 `cpu.stat usage_usec` 增量、`memory.current`、`memory.peak`、`nr_throttled`、`throttled_usec`、`pids.current`，两者口径独立，不互相替代。cgroup 路径解析失败或任一必需计数缺失、格式非数字时，该轮直接失败，不会以 0 冒充；`memory.peak` 在 6.x 内核上重复读取不重置，只有写入才会重置，因此同一个容器内多轮会保留同一峰值，跨轮比较须以新建容器为准。RSS 求和可能重复计入共享页；`memory.peak` 为 cgroup 计费峰值；不测 PSS。
+`-resources.csv` 按宿主可见的容器主进程做进程树求和，覆盖 `server`、`backend` 与 `client`（宿主负载生成进程）三组，列为 `monotonic,group,cpu_percent,rss_bytes,hwm_bytes,threads,fds,processes`；容器运行时辅助进程不进入该树。`-cgroup.csv` 并列记录 cgroup v2 的 `cpu.stat usage_usec` 增量、`memory.current`、`memory.peak`、`nr_throttled`、`throttled_usec`、`pids.current`，两者口径独立，不互相替代。cgroup 路径解析失败或任一必需计数缺失、格式非数字时，该轮直接失败，不会以 0 冒充。`memory.peak` 在容器生命周期内单调累积且不能通过写入重置（实测写入被忽略），因此它只是该容器历史峰值的上界，不是本轮峰值；本轮驻留峰值以每秒采样的 `memory_current` 最大值 `memory_current_max_bytes` 为准，`memory.peak_bytes` 仅作上界参考。RSS 求和可能重复计入共享页；cgroup 计费包含页缓存，与 RSS 不可互换；不测 PSS。
 
 HTTP 沿用 008 的最近秩分位数、issue cohort 与双速率口径：`completed_rps_nominal` 只计窗口内完成量，另报含排空的 cohort 速率。cold 指新建 TCP/TLS 连接，不清页缓存。逻辑请求错误率与物理 attempts、idle-close 重连、header-reset 重试分开统计。
 

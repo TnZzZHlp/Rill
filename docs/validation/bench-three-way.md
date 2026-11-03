@@ -53,24 +53,60 @@ Rill、Nginx、Caddy 三目标全量标准矩阵于本机完成：162 轮全部�
 | https / large / cold | 45.9 | 162.658/226.206/237.366 | 46.4 | 159.292/228.266/251.177 | 50.6 | 146.888/210.127/233.675 |
 | https / large / warm | 50.4 | 147.537/210.703/230.855 | 51.5 | 144.851/209.863/230.349 | 57.5 | 128.820/194.070/208.808 |
 
-### 服务 CPU（单逻辑核为 100%）
+### CPU（单逻辑核为 100%，cgroup 与进程树两种口径一致）
 
 | 场景 | Rill | Nginx | Caddy |
 | --- | ---: | ---: | ---: |
-| http / proxy / cold | 52% | 27% | 71% |
-| http / proxy / warm | 98% | 44% | 106% |
-| http / small / cold | 51% | 25% | 56% |
-| http / small / warm | 151% | 72% | 102% |
-| http / large / cold | 84% | 8% | 51% |
-| http / large / warm | 107% | 8% | 78% |
+| http / proxy / cold | 52% | 27% | 70% |
+| http / proxy / warm | 98% | 43% | 105% |
+| http / small / cold | 51% | 24% | 55% |
+| http / small / warm | 151% | 73% | 101% |
+| http / large / cold | 83% | 7% | 50% |
+| http / large / warm | 107% | 7% | 78% |
 | https / proxy / cold | 105% | 102% | 143% |
-| https / proxy / warm | 111% | 49% | 108% |
-| https / small / cold | 108% | 105% | 154% |
-| https / small / warm | 128% | 42% | 100% |
-| https / large / cold | 93% | 67% | 65% |
+| https / proxy / warm | 111% | 48% | 108% |
+| https / small / cold | 107% | 104% | 154% |
+| https / small / warm | 129% | 43% | 100% |
+| https / large / cold | 92% | 67% | 65% |
 | https / large / warm | 104% | 81% | 75% |
 
-### cgroup 内存峰值
+### 内存：进程树 RSS 峰值
+
+| 场景 | Rill | Nginx | Caddy |
+| --- | ---: | ---: | ---: |
+| http / proxy / cold | 18.0 MiB | 20.1 MiB | 61.9 MiB |
+| http / proxy / warm | 18.2 MiB | 20.1 MiB | 64.4 MiB |
+| http / small / cold | 18.4 MiB | 20.1 MiB | 63.0 MiB |
+| http / small / warm | 18.6 MiB | 20.1 MiB | 63.6 MiB |
+| http / large / cold | 20.5 MiB | 20.1 MiB | 62.3 MiB |
+| http / large / warm | 20.7 MiB | 20.1 MiB | 62.8 MiB |
+| https / proxy / cold | 20.7 MiB | 20.7 MiB | 63.5 MiB |
+| https / proxy / warm | 21.0 MiB | 20.7 MiB | 64.9 MiB |
+| https / small / cold | 20.8 MiB | 20.7 MiB | 63.6 MiB |
+| https / small / warm | 20.6 MiB | 20.5 MiB | 64.4 MiB |
+| https / large / cold | 21.0 MiB | 20.3 MiB | 63.1 MiB |
+| https / large / warm | 21.5 MiB | 20.4 MiB | 63.7 MiB |
+
+### 内存：cgroup 本轮驻留峰值（每秒 memory.current 的最大值）
+
+| 场景 | Rill | Nginx | Caddy |
+| --- | ---: | ---: | ---: |
+| http / proxy / cold | 8.0 MiB | 5.0 MiB | 17.6 MiB |
+| http / proxy / warm | 8.5 MiB | 5.2 MiB | 22.5 MiB |
+| http / small / cold | 9.0 MiB | 4.8 MiB | 19.8 MiB |
+| http / small / warm | 9.2 MiB | 4.7 MiB | 21.0 MiB |
+| http / large / cold | 115.0 MiB | 102.9 MiB | 104.5 MiB |
+| http / large / warm | 56.6 MiB | 117.3 MiB | 84.4 MiB |
+| https / proxy / cold | 27.1 MiB | 5.4 MiB | 21.2 MiB |
+| https / proxy / warm | 27.6 MiB | 5.7 MiB | 22.5 MiB |
+| https / small / cold | 27.3 MiB | 5.3 MiB | 21.1 MiB |
+| https / small / warm | 27.2 MiB | 5.1 MiB | 21.8 MiB |
+| https / large / cold | 67.8 MiB | 47.2 MiB | 62.7 MiB |
+| https / large / warm | 92.9 MiB | 43.7 MiB | 71.0 MiB |
+
+### 内存：cgroup 容器历史峰值上界（memory.peak，不可重置）
+
+同一容器连续跑完整个矩阵，该值只增不减，因此它反映"到此为止的最高水位"，不是本轮峰值。
 
 | 场景 | Rill | Nginx | Caddy |
 | --- | ---: | ---: | ---: |
@@ -87,6 +123,17 @@ Rill、Nginx、Caddy 三目标全量标准矩阵于本机完成：162 轮全部�
 | https / large / cold | 123.9 MiB | 132.0 MiB | 120.6 MiB |
 | https / large / warm | 123.9 MiB | 132.0 MiB | 120.6 MiB |
 
+### CPU 效率：每 1000 个成功请求消耗的服务 CPU 秒
+
+由 cgroup CPU 峰值与名义速率推算，仅用于同条件横向比较，不是实测能量。
+
+| 场景 | Rill | Nginx | Caddy |
+| --- | ---: | ---: | ---: |
+| http / proxy / warm | 0.0981 s | 0.0333 s | 0.1086 s |
+| http / small / warm | 0.0895 s | 0.0427 s | 0.0655 s |
+| https / proxy / warm | 0.1187 s | 0.0442 s | 0.1146 s |
+| https / small / warm | 0.1217 s | 0.0371 s | 0.0851 s |
+
 ### WebSocket 与 SSE
 
 | 场景 | Rill p50 / p99 | Nginx p50 / p99 | Caddy p50 / p99 |
@@ -98,11 +145,11 @@ Rill、Nginx、Caddy 三目标全量标准矩阵于本机完成：162 轮全部�
 
 ### 空闲资源（60 秒无请求）
 
-| 目标 | 线程 | fd | 进程树 RSS | cgroup 内存峰值 | CPU |
+| 目标 | 线程 | fd | 进程树 RSS | cgroup 本轮驻留峰值 | CPU |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| rill | 4 | 15 | 28.1 MiB | 123.9 MiB | 0.94% |
-| nginx | 3 | 29 | 20.2 MiB | 132.0 MiB | 0.00% |
-| caddy | 11 | 9 | 65.7 MiB | 120.6 MiB | 0.00% |
+| rill | 4 | 15 | 28.1 MiB | 33.7 MiB | 0.94% |
+| nginx | 3 | 29 | 20.2 MiB | 4.1 MiB | 0.00% |
+| caddy | 11 | 9 | 65.7 MiB | 23.7 MiB | 0.00% |
 
 ### Reload
 
@@ -128,7 +175,8 @@ Rill、Nginx、Caddy 三目标全量标准矩阵于本机完成：162 轮全部�
 - `http/proxy/cold` 与 `http/small/cold`：三方 RPS 在 3450–3618 之间，差异小于 5%。
 - `http/large/warm`：Caddy 122.7 RPS，Rill 113.9，Nginx 101.9；`https/large/warm` 同样是 Caddy 57.5 最高。大文件场景服务 CPU 在 8–107% 之间分布，并不普遍低于 1 KiB 场景（例如 `http/proxy/cold` 的 Rill 为 52%，而 `http/large/cold` 的 Rill 为 84%）。
 - HTTPS 场景按工作负载分别看：1 KiB 代理 cold 为 707–857 RPS，1 KiB 静态 cold 为 795–871 RPS，16 MiB cold 只有 45.9–50.6 RPS。不能把三者合并成一句"HTTPS cold 在 700–900 RPS"。
-- 空闲 cgroup 内存三者接近（Rill 123.9 MiB、Nginx 132.0 MiB、Caddy 120.6 MiB），进程树 RSS 差异更大（28.1 / 20.2 / 65.7 MiB）。两个口径不能互相替代：cgroup 计费包含页缓存，RSS 求和会重复计共享页。
+- CPU 与内存的同条件对比见上四张表与 CPU 效率表。CPU 上 Nginx 在 1 KiB 场景最低（每千请求 0.033–0.044 CPU 秒，Rill 0.090–0.122、Caddy 0.066–0.115），大文件场景三者 CPU 都低但 Nginx 尤其低（HTTP 7%）。内存上 RSS 与 cgroup 两种口径结论不同，必须分开读。
+- 空闲内存：cgroup 本轮驻留峰值 Rill 33.7 MiB、Nginx 4.1 MiB、Caddy 23.7 MiB，进程树 RSS 为 28.1 / 20.2 / 65.7 MiB。注意 Rill 的空闲 cgroup 值高于其负载场景（8–28 MiB），原因是空闲阶段紧接在探测与大文件请求之后，页缓存尚未回收；这说明 cgroup 口径含页缓存，不能等同于常驻堆占用。两个口径不能互相替代，RSS 求和还会重复计共享页。
 - WS 消息 RTT 三方 p50 在 0.777–1.521 ms，SSE 事件间隔三方 p50 约 1001.7–1001.9 ms。SSE 数值由后端事件产生节奏决定，不能读作代理转发开销。
 
 ## 客户端与宿主限制
@@ -141,6 +189,14 @@ Rill、Nginx、Caddy 三目标全量标准矩阵于本机完成：162 轮全部�
 - 仍需说明：宿主在运行期间存在 qbittorrent、pi、UploadRecord2TG 等常驻负载，loadavg 在 1–3 之间波动。这是共享宿主，不是独占基准机。
 - SMT 干扰：服务、客户端、后端各占两颗逻辑核（`0,1`、`2,3`、`4,5`），组内两颗属于不同物理核，但它们的兄弟核 `6–11` 未被本脚本隔离，宿主其他负载可能落在那里并与被测角色竞争同一条物理流水线。本记录未量化该影响，也未测 host 侧 DNAT/softirq 的总 CPU，只报告了容器内服务、客户端与后端三组。
 - 服务 CPU 只统计容器内被测服务，不含宿主机 DNAT/softirq 与负载生成器开销；客户端与后端 CPU 单列在 `-resources.csv` 的 `client`、`backend` 组。
+
+## 内存口径的一处修正
+
+`memory.peak` 是容器生命周期内的单调累计值，且不能通过写入重置（实测写入被内核忽略），因此同一个容器从第一轮跑到最后一轮时，它会一直保留历史最高水位。实测可见：Rill 在 `http/proxy/cold-1` 读到 6 MiB，经过 16 MiB 大文件场景后，其后所有轮次都读到 123.9 MiB；Nginx 在 `http/large/cold-2` 之后固定为 132.0 MiB。
+
+所以本轮驻留峰值必须用每秒采样的 `memory.current` 最大值，即上表"cgroup 本轮驻留峰值"。三张内存表并列给出，便于核对；`memory.peak` 只作为上界参考，不能用于比较单轮峰值，也不能读成"空闲占用"。
+
+脚本已相应修正：`metrics.py` 新增 `memory_current_max_bytes`，README 说明了该口径。
 
 ## Reload
 

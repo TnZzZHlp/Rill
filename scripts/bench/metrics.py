@@ -96,6 +96,9 @@ class Sampler:
             if required not in fields:
                 raise RuntimeError(f'cgroup metric {path.name}/cpu.stat missing {required}')
         values = {key: fields[key] for key in ('usage_usec', 'nr_throttled', 'throttled_usec')}
+        # memory.peak is monotonic for the container's lifetime and cannot be reset
+        # through the cgroup file, so it only bounds the peak; memory_current is
+        # sampled every second and gives the peak of this round.
         for name, key in (('memory.current', 'memory_current'), ('memory.peak', 'memory_peak'), ('pids.current', 'pids_current')):
             text = read(name).strip()
             if not text.isdigit():
@@ -143,9 +146,11 @@ class Sampler:
             self.cgroup_csv.writerow([now, name, cpu, values['memory_current'], values['memory_peak'],
                                       values['nr_throttled'], values['throttled_usec'], values['pids_current']])
             peak = self.peaks.setdefault(name + '_cgroup', {'cpu_percent': 0, 'memory_peak_bytes': 0,
+                                                            'memory_current_max_bytes': 0,
                                                             'nr_throttled': 0, 'throttled_usec': 0})
             peak['cpu_percent'] = max(peak['cpu_percent'], cpu)
             peak['memory_peak_bytes'] = max(peak['memory_peak_bytes'], values['memory_peak'])
+            peak['memory_current_max_bytes'] = max(peak['memory_current_max_bytes'], values['memory_current'])
             peak['nr_throttled'] = max(peak['nr_throttled'], values['nr_throttled'])
             peak['throttled_usec'] = max(peak['throttled_usec'], values['throttled_usec'])
         self.file.flush()
