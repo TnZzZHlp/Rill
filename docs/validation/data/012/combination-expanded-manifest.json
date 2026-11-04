@@ -1,0 +1,102 @@
+[
+  {
+    "path": "report.json",
+    "bytes": 39468,
+    "sha256": "30edcf69422d1cb76b0c9d7d6eb42bf76a223b9a766f571990da1f2fe632dbb8"
+  },
+  {
+    "path": "flow/backend.log",
+    "bytes": 100,
+    "sha256": "7bb3374aebd372527a3f93060da4fb75d43c9883c5202d0384caced00cfd72da"
+  },
+  {
+    "path": "flow/faultbackend.log",
+    "bytes": 100,
+    "sha256": "b22ce6005cfc17b6c27671fb88d0688436a8aa95af02be577e52e785aafc3307"
+  },
+  {
+    "path": "flow/faultbackend-restarted.log",
+    "bytes": 100,
+    "sha256": "b22ce6005cfc17b6c27671fb88d0688436a8aa95af02be577e52e785aafc3307"
+  },
+  {
+    "path": "flow/collector.log",
+    "bytes": 160789,
+    "sha256": "e50dc4a16bad8a71a74dfe874c3ce2c44c04dd832060ea299e0459f026d3f882"
+  },
+  {
+    "path": "flow/server.log",
+    "bytes": 47073,
+    "sha256": "b892ce9fffdbabb05c853433876cea4cc6830f50376cdc8e594004cb911ec666"
+  },
+  {
+    "path": "flow/check.log",
+    "bytes": 162,
+    "sha256": "c088cd4a37e67a430f8058ff6074d4e8c67cd7d18407fec5c27049fec3201a5c"
+  },
+  {
+    "path": "flow/invalid-reload.log",
+    "bytes": 235,
+    "sha256": "ddfc9fcc47a41ec0ba158bf04679e100b75e13ea96fff348a73dc06da4b6fdc4"
+  },
+  {
+    "path": "flow/expired-reload.log",
+    "bytes": 160,
+    "sha256": "455ccd28864805cd31f992d3cdd0c425e3c141ef1119468fd507a9dd239c75fe"
+  },
+  {
+    "path": "flow/valid-reload.log",
+    "bytes": 41,
+    "sha256": "911a3615980b45fa441592a1b38db3918a2c0e9e34e69e5cfa39a36a33c69279"
+  },
+  {
+    "path": "flow/concurrent-a.log",
+    "bytes": 41,
+    "sha256": "8b44dbd03e38241119ce26ae1e7f1004b5aae2e5d15415d21c422f5cc1ddfe53"
+  },
+  {
+    "path": "flow/concurrent-b.log",
+    "bytes": 41,
+    "sha256": "891776aff8d1a6e5179db9bb0c8c0e4e1d58abf0ae64660f3e49db26757329a3"
+  },
+  {
+    "path": "flow/config.kdl",
+    "bytes": 490,
+    "sha256": "06215f113a549285f6b8d782c799325b329ae8abff225305b7c8f2cfeba249ad"
+  },
+  {
+    "path": "flow/routes.kdl",
+    "bytes": 455,
+    "sha256": "f8aa4c2e417822ab673536250aa29dda800313214cca7af05f6ab8024faa671c"
+  },
+  {
+    "path": "flow/sites.kdl",
+    "bytes": 177,
+    "sha256": "36fccf4d3cfc03ee9349506a3f30875f0ec1ea3fc575bfe94f2ddea62780653c"
+  },
+  {
+    "path": "flow/collector.yaml",
+    "bytes": 356,
+    "sha256": "7a1061ef6da7b6708441ea51ec7c2f065ce65d5af606e89a44c25d09596e8023"
+  },
+  {
+    "path": "flow/root-a/small",
+    "bytes": 1024,
+    "sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987"
+  },
+  {
+    "path": "flow/root-a/small.gz",
+    "bytes": 29,
+    "sha256": "4794d8568e858f02bbf3b84f6afe13ebcc54ed3ece1530735151803ce7ea4d1a"
+  },
+  {
+    "path": "flow/root-a/small.br",
+    "bytes": 11,
+    "sha256": "7a05907c9e8559d4c96409a95fc91dfbdea53ac418b07d7416f8b427d35a1a2b"
+  },
+  {
+    "path": "flow/root-b/small",
+    "bytes": 1024,
+    "sha256": "0c66f2c45405de575189209a768399bcaf88ccc51002407e395c0136aad2844d"
+  }
+]

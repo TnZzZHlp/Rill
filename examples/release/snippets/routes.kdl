@@ -1,0 +1,11 @@
+snippet "web" {
+    route "/api/*" {
+        proxy "http://127.0.0.1:18081"
+    }
+    route "/*" {
+        root "../public"
+        spa #true
+        precompressed #true
+        browse #false
+    }
+}

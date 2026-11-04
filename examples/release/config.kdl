@@ -1,0 +1,17 @@
+server {
+    http "127.0.0.1:18080"
+    control-socket "/run/rill/control.sock"
+    watch #false
+    static-cache-bytes 8388608
+    upstream-allow "127.0.0.0/8"
+    observability {
+        access-log #true
+        metrics "127.0.0.1:19090"
+        tracing #false
+        trace-sample-per-mille 100
+        otlp-endpoint "http://127.0.0.1:4318/v1/traces"
+    }
+}
+
+import "snippets/routes.kdl"
+import "sites/web.kdl"

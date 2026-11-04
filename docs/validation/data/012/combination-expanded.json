@@ -1,0 +1,959 @@
+{
+  "covered": [
+    "single PID TLS streams, watch, proxy and Collector subset"
+  ],
+  "flow": {
+    "cleanup_failures": [],
+    "passed": true,
+    "pending": [],
+    "steps": {
+      "bad_syntax": {
+        "cli": {
+          "code": "CONFIG_SYNTAX",
+          "ended_monotonic": 1160646.723926348,
+          "exit": 1,
+          "generation": null,
+          "started_monotonic": 1160646.71811062
+        },
+        "settling_last": {
+          "generation": 2,
+          "route_series_point": 8,
+          "watch_event_count": 2,
+          "watch_event_digest": "d28b9a8cd81ebc6c445ab0c1645463bdefd7ec57cd42e23a8f41961ab3cab62f"
+        },
+        "settling_note": "500ms stable observation, not coordinator idle proof",
+        "watch_code": "CONFIG_SYNTAX"
+      },
+      "check": {
+        "exit": 0
+      },
+      "concurrent_reload": {
+        "busy_count": 0,
+        "calls": [
+          {
+            "code": null,
+            "ended_monotonic": 1160656.095748626,
+            "exit": 0,
+            "generation": 7,
+            "started_monotonic": 1160656.0880065
+          },
+          {
+            "code": null,
+            "ended_monotonic": 1160656.107982593,
+            "exit": 0,
+            "generation": 8,
+            "started_monotonic": 1160656.088455254
+          }
+        ],
+        "final_generation": 8,
+        "note": "concurrent launches; overlapping coordinator execution is not asserted",
+        "responses": [
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "path": "/small",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "c413dd662dfa021a9a6d3762095ee42295aa837fd0058b846483876f5bccb601",
+            "cache_control": "",
+            "path": "/proxy",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          }
+        ],
+        "settling_last": {
+          "generation": 6,
+          "route_series_point": 8,
+          "watch_event_count": 6,
+          "watch_event_digest": "638ee619ec54b12ab1d892b0c9eb61380a6eb3696c79275e235f35bb7a18ac16"
+        },
+        "settling_note": "500ms stable observation, not coordinator idle proof",
+        "success_generations": [
+          7,
+          8
+        ],
+        "traffic_count": 100
+      },
+      "drain": {
+        "bytes": 16777216,
+        "exit": 0,
+        "final_records": {
+          "access_count": 1,
+          "access_duration_ns": 2754190820,
+          "access_statuses": [
+            200
+          ],
+          "access_timestamp_ms": 1793795471533,
+          "body_bytes": 16777216,
+          "observation": "bounded server logs; same wall-clock order, not kernel continuous-state proof",
+          "outcome": "completed",
+          "shutdown_event_count": 1,
+          "shutdown_time_ms": 1793795468795,
+          "span_count": 1,
+          "span_duration_ns": 2754190820,
+          "span_id": "b83bcb1b93704541",
+          "span_statuses": [
+            200
+          ],
+          "trace_id": "c1d7ed91a5b69977b72ab7819e63d181"
+        },
+        "pid": 15,
+        "sha256": "289184e1081dba91206603d04683de839d8cceeb3bef6a56badf3dc904bb4043",
+        "signal_after_monotonic_ns": 1160658936203928,
+        "signal_after_wall_ms": 1793795468779,
+        "signal_before_monotonic_ns": 1160658936145445,
+        "signal_before_wall_ms": 1793795468779,
+        "signal_sent": true,
+        "socket_removed": true
+      },
+      "expired_certificate": {
+        "cli": {
+          "code": "TLS_INVALID",
+          "ended_monotonic": 1160648.037402328,
+          "exit": 1,
+          "generation": null,
+          "started_monotonic": 1160648.024476748
+        },
+        "settling_last": {
+          "generation": 3,
+          "route_series_point": 8,
+          "watch_event_count": 4,
+          "watch_event_digest": "c8e59ae106b750ab74c94a5d899a7022f8c8c7eeb03480655b923711f74f17e6"
+        },
+        "settling_note": "500ms stable observation, not coordinator idle proof",
+        "watch_code": "TLS_INVALID"
+      },
+      "fault_isolation": {
+        "backend_exit": 0,
+        "backend_stop_budget_seconds": 8,
+        "backend_stop_ended_monotonic": 1160654.413346681,
+        "backend_stop_started_monotonic": 1160649.393388146,
+        "final_records": {
+          "access_count": 3,
+          "access_statuses": [
+            200,
+            502,
+            200
+          ],
+          "span_count": 3,
+          "span_statuses": [
+            200,
+            502,
+            200
+          ]
+        },
+        "host": "example.test",
+        "path": "/proxy",
+        "restarted_backend_pid": 28,
+        "rill_pid": 15,
+        "statuses": [
+          200,
+          502,
+          200
+        ]
+      },
+      "initial": {
+        "br_note": "verified fixture bytes compared, not decoded here",
+        "cache_note": "enabled and repeatedly served, not cache-hit proof",
+        "generation": 1,
+        "pid": 15,
+        "process_sample": {
+          "fd": 24,
+          "threads": 8
+        },
+        "response": {
+          "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+          "cache_control": "public, max-age=11",
+          "status": 200,
+          "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+        }
+      },
+      "restore_b": {
+        "last": {
+          "generation": 3,
+          "response": {
+            "body_sha256": "0c66f2c45405de575189209a768399bcaf88ccc51002407e395c0136aad2844d",
+            "cache_control": "public, max-age=22",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          "route_series_point": 8
+        }
+      },
+      "restore_certificate": {
+        "last": {
+          "generation": 4,
+          "response": {
+            "body_sha256": "0c66f2c45405de575189209a768399bcaf88ccc51002407e395c0136aad2844d",
+            "cache_control": "public, max-age=22",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          "route_series_point": 8
+        }
+      },
+      "streams": {
+        "correlated": {
+          "sse": {
+            "access_duration_ns": 16052277563,
+            "generation": 1,
+            "hold_ns": 16051112442,
+            "outcome": "error",
+            "span_duration_ns": 16052277563,
+            "span_id": "d61764cd7dec2599",
+            "status": 200,
+            "trace_id": "58aeb2ab94632a0815abc60217335060"
+          },
+          "ws": {
+            "access_duration_ns": 16052013474,
+            "generation": 1,
+            "hold_ns": 16050164863,
+            "outcome": "completed",
+            "span_duration_ns": 16052013474,
+            "span_id": "a60e6dcf170039aa",
+            "status": 101,
+            "trace_id": "0dd020f2aaccd83b351b9f0a09bee315"
+          }
+        },
+        "correlation_observation": "after server and Collector shutdown; bounded logs only",
+        "final_process_sample": {
+          "fd": 26,
+          "threads": 8
+        },
+        "sampling_note": "point samples, not continuous bounds",
+        "sse_events": 16
+      },
+      "valid_cli": {
+        "result": {
+          "code": null,
+          "ended_monotonic": 1160648.957539771,
+          "exit": 0,
+          "generation": 5,
+          "started_monotonic": 1160648.950126555
+        },
+        "settling_last": {
+          "generation": 4,
+          "route_series_point": 8,
+          "watch_event_count": 5,
+          "watch_event_digest": "058ac941f7aee7422171091dbcd933bdadd877f48c1d939b237c5f3125116fc0"
+        },
+        "settling_note": "500ms stable observation, not coordinator idle proof"
+      },
+      "watch_a": {
+        "last": {
+          "generation": 6,
+          "response": {
+            "body_sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987",
+            "cache_control": "public, max-age=11",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          "route_series_point": 8
+        }
+      },
+      "watch_b": {
+        "last": {
+          "generation": 2,
+          "response": {
+            "body_sha256": "0c66f2c45405de575189209a768399bcaf88ccc51002407e395c0136aad2844d",
+            "cache_control": "public, max-age=22",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          "route_series_point": 8
+        }
+      }
+    }
+  },
+  "pending": [],
+  "scenario": "flow",
+  "status": "scope_completed"
+}

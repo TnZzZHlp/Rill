@@ -1,0 +1,116 @@
+{
+  "phase": "012",
+  "status": "final-delivery-accepted",
+  "reviews": [
+    {
+      "run": "99855898-3289-4eb1-8861-09e9bdf6bf7a",
+      "scope": "raw verifier static closure",
+      "result": "StaticMergeOK",
+      "dynamic": false
+    },
+    {
+      "run": "a8a30b04-1f27-447e-84c1-c2e9285f3112",
+      "scope": "expanded combination final attribute checks",
+      "result": "FlowExpandedMergeOK",
+      "dynamic": false
+    },
+    {
+      "run": "6f650922-0945-4082-90d2-d047855c09c1",
+      "scope": "fault backend stop-budget repair",
+      "result": "static closure; explicitly authorized single rerun",
+      "dynamic": false
+    },
+    {
+      "run": "e8a6fca5-97dd-426c-9999-1c0ec697c100",
+      "scope": "systemd managed process cleanup",
+      "result": "SystemdFinalStaticMergeOK",
+      "dynamic": false
+    },
+    {
+      "run": "8e33773d-2f4e-4c34-b98f-deef70ca0f9d",
+      "scope": "legal kernel pgrp zero parsing and owned-leader guards",
+      "result": "StaticMergeOK",
+      "dynamic": false
+    },
+    {
+      "run": "53c6350c-f9ba-41ed-9b9b-e56b3ee1c547",
+      "scope": "deployment client header-name normalization",
+      "result": "static closure",
+      "dynamic": false
+    },
+    {
+      "run": "1575cb11-56ea-4fe5-bd78-4263e245775e",
+      "scope": "Podman sampler, recoverable writes and final manifest",
+      "result": "PodmanStaticMergeOK",
+      "dynamic": false
+    },
+    {
+      "run": "58156704-7ca6-47fd-b35d-5bb8e99ae66a",
+      "scope": "Podman controlled CLI file-size and stdout read limits",
+      "result": "StaticMergeOK",
+      "dynamic": false
+    },
+    {
+      "run": "2a36820e-8342-433b-9ba1-7272746e58ca",
+      "scope": "T01 and AC01 evidence acceptance",
+      "result": "T01 Acceptance OK",
+      "dynamic": false
+    },
+    {
+      "run": "f7005816-1992-4b53-8dcc-65f16583205b",
+      "scope": "deployment documentation and release examples",
+      "result": "DocDeliveryStaticMergeOK subject to status-text correction",
+      "dynamic": false
+    },
+    {
+      "run": "4f01fb0f-c45f-4684-bb06-6905e81cd903",
+      "scope": "documentation status wording closure",
+      "result": "DocFindingClosed",
+      "dynamic": false
+    },
+    {
+      "run": "5f5e1492-a861-4ac2-81a4-e3db94ab791c",
+      "scope": "T02 and AC02 performance evidence acceptance",
+      "result": "T02 Acceptance OK",
+      "dynamic": false
+    },
+    {
+      "run": "633d7505-cb5e-42d3-9380-b307aeb64425",
+      "scope": "final independent delivery review",
+      "result": "FinalDeliveryMergeOK",
+      "dynamic": false
+    }
+  ],
+  "execution": [
+    {
+      "run": "ab439d84-cce7-4186-b481-cd0883b4833f",
+      "scope": "expanded combination",
+      "exit_code": 0
+    },
+    {
+      "run": "2e93c318-9912-4afc-8769-07699ad55786",
+      "scope": "systemd full",
+      "exit_code": 0
+    },
+    {
+      "run": "18dbb696-660e-4292-90ce-ea83673b4993",
+      "scope": "Podman full",
+      "exit_code": 0
+    },
+    {
+      "run": "3332f4d8-2c36-4c57-b61e-fe9b4e958017",
+      "scope": "162-round formal measurement",
+      "exit_code": 0
+    },
+    {
+      "run": "62192a57-1723-421d-9a78-6e59a92b1e51",
+      "scope": "independent formal raw verification",
+      "exit_code": 0
+    },
+    {
+      "run": "0250bfa0-b10c-491b-be7a-ec75b13e8191",
+      "scope": "final fmt, check, clippy and 176 tests",
+      "exit_code": 0
+    }
+  ]
+}

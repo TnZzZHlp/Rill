@@ -1,0 +1,247 @@
+{
+  "covered": [
+    "original and private-control release configuration check",
+    "single PID static, watch and rejected reload subset"
+  ],
+  "pending": [
+    "proxy",
+    "WS",
+    "SSE",
+    "Collector",
+    "concurrency",
+    "drain"
+  ],
+  "release_example_check": {
+    "original_exit": 0,
+    "passed": true,
+    "private_control_exit": 0
+  },
+  "scenario": "static",
+  "static": {
+    "cleanup_failures": [],
+    "passed": true,
+    "pending": [
+      "proxy",
+      "WS",
+      "SSE",
+      "Collector",
+      "concurrency",
+      "drain"
+    ],
+    "steps": {
+      "bad_syntax": {
+        "cli_exit": 1,
+        "code": "CONFIG_SYNTAX",
+        "generation": 2,
+        "response": {
+          "body_sha256": "0c66f2c45405de575189209a768399bcaf88ccc51002407e395c0136aad2844d",
+          "cache_control": "public, max-age=22",
+          "status": 200,
+          "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+        },
+        "route_series_point": 3,
+        "settling_last": {
+          "generation": 2,
+          "route_series_point": 3,
+          "watch_event_count": 2,
+          "watch_event_digest": "d28b9a8cd81ebc6c445ab0c1645463bdefd7ec57cd42e23a8f41961ab3cab62f"
+        },
+        "settling_note": "500ms stable metrics and watch events; not proof of coordinator idle",
+        "watch_code": "CONFIG_SYNTAX"
+      },
+      "cache_budget": {
+        "cli_exit": 1,
+        "code": "RESTART_REQUIRED",
+        "generation": 4,
+        "response": {
+          "body_sha256": "0c66f2c45405de575189209a768399bcaf88ccc51002407e395c0136aad2844d",
+          "cache_control": "public, max-age=22",
+          "status": 200,
+          "tls_sha256": "eed954f4535581995cc59240333aeaacdaf481aed0ba0071279bbcad91ae58c2"
+        },
+        "route_series_point": 3,
+        "settling_last": {
+          "generation": 4,
+          "route_series_point": 3,
+          "watch_event_count": 6,
+          "watch_event_digest": "6cf0dca51e2417ba7fb1bdb86127bd38d84ae679ba8a99a33c3bf0a075f446ae"
+        },
+        "settling_note": "500ms stable metrics and watch events; not proof of coordinator idle",
+        "watch_code": "RESTART_REQUIRED"
+      },
+      "cache_budget_restore": {
+        "last_observation": {
+          "generation": 5,
+          "response": {
+            "body_sha256": "0c66f2c45405de575189209a768399bcaf88ccc51002407e395c0136aad2844d",
+            "cache_control": "public, max-age=22",
+            "status": 200,
+            "tls_sha256": "eed954f4535581995cc59240333aeaacdaf481aed0ba0071279bbcad91ae58c2"
+          },
+          "route_series_point": 3
+        }
+      },
+      "certificate_b": {
+        "generation": 4,
+        "last_observation": {
+          "generation": 4,
+          "response": {
+            "body_sha256": "0c66f2c45405de575189209a768399bcaf88ccc51002407e395c0136aad2844d",
+            "cache_control": "public, max-age=22",
+            "status": 200,
+            "tls_sha256": "eed954f4535581995cc59240333aeaacdaf481aed0ba0071279bbcad91ae58c2"
+          },
+          "route_series_point": 3
+        },
+        "response": {
+          "body_sha256": "0c66f2c45405de575189209a768399bcaf88ccc51002407e395c0136aad2844d",
+          "cache_control": "public, max-age=22",
+          "status": 200,
+          "tls_sha256": "eed954f4535581995cc59240333aeaacdaf481aed0ba0071279bbcad91ae58c2"
+        }
+      },
+      "config_check": {
+        "exit": 0
+      },
+      "expired_certificate": {
+        "cli_exit": 1,
+        "code": "TLS_INVALID",
+        "generation": 3,
+        "response": {
+          "body_sha256": "0c66f2c45405de575189209a768399bcaf88ccc51002407e395c0136aad2844d",
+          "cache_control": "public, max-age=22",
+          "status": 200,
+          "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+        },
+        "route_series_point": 3,
+        "settling_last": {
+          "generation": 3,
+          "route_series_point": 3,
+          "watch_event_count": 4,
+          "watch_event_digest": "c8e59ae106b750ab74c94a5d899a7022f8c8c7eeb03480655b923711f74f17e6"
+        },
+        "settling_note": "500ms stable metrics and watch events; not proof of coordinator idle",
+        "watch_code": "TLS_INVALID"
+      },
+      "initial": {
+        "cache_bytes": 8388608,
+        "generation": 1,
+        "pid": 6,
+        "route_series": 3
+      },
+      "metrics_address": {
+        "cli_exit": 1,
+        "code": "RESTART_REQUIRED",
+        "generation": 5,
+        "response": {
+          "body_sha256": "0c66f2c45405de575189209a768399bcaf88ccc51002407e395c0136aad2844d",
+          "cache_control": "public, max-age=22",
+          "status": 200,
+          "tls_sha256": "eed954f4535581995cc59240333aeaacdaf481aed0ba0071279bbcad91ae58c2"
+        },
+        "route_series_point": 3,
+        "settling_last": {
+          "generation": 5,
+          "route_series_point": 3,
+          "watch_event_count": 8,
+          "watch_event_digest": "5a2d12d63cee6ded4655d0f1dac47ccc96c8217e2b3f4b4e6cd43d313763e2ea"
+        },
+        "settling_note": "500ms stable metrics and watch events; not proof of coordinator idle",
+        "watch_code": "RESTART_REQUIRED"
+      },
+      "metrics_address_restore": {
+        "last_observation": {
+          "generation": 6,
+          "response": {
+            "body_sha256": "0c66f2c45405de575189209a768399bcaf88ccc51002407e395c0136aad2844d",
+            "cache_control": "public, max-age=22",
+            "status": 200,
+            "tls_sha256": "eed954f4535581995cc59240333aeaacdaf481aed0ba0071279bbcad91ae58c2"
+          },
+          "route_series_point": 3
+        }
+      },
+      "replacement": {
+        "changed": {
+          "body_sha256": "3ca0903dc7f20cee7c4d65f83df4968296be28eaf7f339668b1add6d60416afd",
+          "cache_control": "public, max-age=11",
+          "status": 200,
+          "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+        },
+        "deleted_status": 404,
+        "restored": true
+      },
+      "representations": {
+        "br_note": "byte comparison to independently verified fixture; not decoded here",
+        "cache_note": "cache enabled and repeated responses served; not cache-hit proof",
+        "checks": {
+          "br": {
+            "bytes": 11,
+            "conditional": 304,
+            "etag": "W/\"br-46-21-b-6aeb1c55-5e233d6-6aeb1c55-5e233d6\"",
+            "head": 200
+          },
+          "gzip": {
+            "bytes": 29,
+            "conditional": 304,
+            "etag": "W/\"gzip-46-20-1d-6aeb1c55-5e1c499-6aeb1c55-5e1c499\"",
+            "head": 200
+          },
+          "identity": {
+            "bytes": 1024,
+            "conditional": 304,
+            "etag": "W/\"identity-46-1f-400-6aeb1c55-5e14992-6aeb1c55-5e14992\"",
+            "head": 200
+          }
+        },
+        "range": 206
+      },
+      "watch_restore_routes": {
+        "last_observation": {
+          "generation": 3,
+          "response": {
+            "body_sha256": "0c66f2c45405de575189209a768399bcaf88ccc51002407e395c0136aad2844d",
+            "cache_control": "public, max-age=22",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          "route_series_point": 3
+        }
+      },
+      "watch_root_b": {
+        "generation": 2,
+        "last_observation": {
+          "generation": 2,
+          "response": {
+            "body_sha256": "0c66f2c45405de575189209a768399bcaf88ccc51002407e395c0136aad2844d",
+            "cache_control": "public, max-age=22",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          "route_series_point": 3
+        },
+        "responses": [
+          {
+            "body_sha256": "0c66f2c45405de575189209a768399bcaf88ccc51002407e395c0136aad2844d",
+            "cache_control": "public, max-age=22",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "0c66f2c45405de575189209a768399bcaf88ccc51002407e395c0136aad2844d",
+            "cache_control": "public, max-age=22",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          },
+          {
+            "body_sha256": "0c66f2c45405de575189209a768399bcaf88ccc51002407e395c0136aad2844d",
+            "cache_control": "public, max-age=22",
+            "status": 200,
+            "tls_sha256": "0a173393bc413aa0be9843f81f5decc2c4b0a8c1b77deadb74d10325b09dceb7"
+          }
+        ]
+      }
+    }
+  },
+  "status": "scope_completed"
+}

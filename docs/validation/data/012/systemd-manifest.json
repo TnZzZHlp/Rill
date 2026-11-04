@@ -1,0 +1,283 @@
+{
+  "scenario": "full",
+  "passed": true,
+  "basic_passed": false,
+  "files": [
+    {
+      "name": "backend.log",
+      "bytes": 88,
+      "sha256": "24dc3c88bad6a6ebfef004dbca653cac2cc9f731f5460e9af19b55d54b0c05a7"
+    },
+    {
+      "name": "command-000.log",
+      "bytes": 10,
+      "sha256": "391bc413c3044926b4afa41806bf4a5c4fad68a3165b8563fe1bffec0792fc76"
+    },
+    {
+      "name": "command-001.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "command-002.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "command-003.log",
+      "bytes": 46,
+      "sha256": "9a0e73bc41bb331bb459d039ccca17f40f593be7bd6ae7bbfdf61d57b028f3b7"
+    },
+    {
+      "name": "command-006.log",
+      "bytes": 165,
+      "sha256": "d379a2e80d87d89f2b546bb9c9ccdc23ec9639ad8b3d6db4ed3f73453627dcfc"
+    },
+    {
+      "name": "command-007.log",
+      "bytes": 124,
+      "sha256": "a3ed9a1320f1efa36470ee29d566c1896540673cf68e7d1e18d49050311db0fc"
+    },
+    {
+      "name": "command-009.log",
+      "bytes": 127,
+      "sha256": "65636657a0c17f4f20e6be1027de3c39809eb4e5e940ccdc43913bf79de3ddf8"
+    },
+    {
+      "name": "command-012.log",
+      "bytes": 222,
+      "sha256": "fde65d83710e5165df507d1a33cef42b992fad18d0a8d4ffde72a68ae9e29bef"
+    },
+    {
+      "name": "command-013.log",
+      "bytes": 222,
+      "sha256": "fde65d83710e5165df507d1a33cef42b992fad18d0a8d4ffde72a68ae9e29bef"
+    },
+    {
+      "name": "command-014.log",
+      "bytes": 26,
+      "sha256": "3f7a5388a5d67c9b1e7b21ae1f5e7cb35d5e732b6b48f82cd465f2c451aad7c7"
+    },
+    {
+      "name": "command-015.log",
+      "bytes": 222,
+      "sha256": "fde65d83710e5165df507d1a33cef42b992fad18d0a8d4ffde72a68ae9e29bef"
+    },
+    {
+      "name": "command-016.log",
+      "bytes": 222,
+      "sha256": "311f6e320b803131c0b7032ca58e418f7ef50f1f82b01af541d9b7cb94a341ad"
+    },
+    {
+      "name": "command-017.log",
+      "bytes": 222,
+      "sha256": "311f6e320b803131c0b7032ca58e418f7ef50f1f82b01af541d9b7cb94a341ad"
+    },
+    {
+      "name": "command-019.log",
+      "bytes": 222,
+      "sha256": "311f6e320b803131c0b7032ca58e418f7ef50f1f82b01af541d9b7cb94a341ad"
+    },
+    {
+      "name": "command-020.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "command-021.log",
+      "bytes": 222,
+      "sha256": "574fdcad06302fc20986d460a15711ca003d686ccbcb747cf8b9ffb64cb2c51a"
+    },
+    {
+      "name": "command-022.log",
+      "bytes": 222,
+      "sha256": "574fdcad06302fc20986d460a15711ca003d686ccbcb747cf8b9ffb64cb2c51a"
+    },
+    {
+      "name": "command-024.log",
+      "bytes": 222,
+      "sha256": "574fdcad06302fc20986d460a15711ca003d686ccbcb747cf8b9ffb64cb2c51a"
+    },
+    {
+      "name": "command-025.log",
+      "bytes": 26,
+      "sha256": "7a28f70e24ffc8025b97ad87e8132540f3d7e93371748a168a68961cfed057a3"
+    },
+    {
+      "name": "command-026.log",
+      "bytes": 123,
+      "sha256": "f194861665f59fd641c8a9f9a1ed195b7eb68b675cf25e4d25589e2bc6e85d56"
+    },
+    {
+      "name": "command-027.log",
+      "bytes": 222,
+      "sha256": "574fdcad06302fc20986d460a15711ca003d686ccbcb747cf8b9ffb64cb2c51a"
+    },
+    {
+      "name": "command-028.log",
+      "bytes": 30,
+      "sha256": "c3822808e26e0f08668934251b0c7c0e898a485fd58340626c6d4297289113da"
+    },
+    {
+      "name": "command-029.log",
+      "bytes": 222,
+      "sha256": "574fdcad06302fc20986d460a15711ca003d686ccbcb747cf8b9ffb64cb2c51a"
+    },
+    {
+      "name": "command-030.log",
+      "bytes": 222,
+      "sha256": "aab5353600bf32b866d4dc6e3d5d942702efd1b5944786c239d9fcc626148029"
+    },
+    {
+      "name": "command-031.log",
+      "bytes": 222,
+      "sha256": "aab5353600bf32b866d4dc6e3d5d942702efd1b5944786c239d9fcc626148029"
+    },
+    {
+      "name": "command-033.log",
+      "bytes": 222,
+      "sha256": "aab5353600bf32b866d4dc6e3d5d942702efd1b5944786c239d9fcc626148029"
+    },
+    {
+      "name": "command-034.log",
+      "bytes": 29,
+      "sha256": "80b703344f5bcd0b158a716911af99dec5ff35ae414987685835691307dd447c"
+    },
+    {
+      "name": "command-035.log",
+      "bytes": 186,
+      "sha256": "b11356c035d81137c7def4610ab07ad1a94e92382f20df158d0b4e70e8da242e"
+    },
+    {
+      "name": "command-036.log",
+      "bytes": 222,
+      "sha256": "aab5353600bf32b866d4dc6e3d5d942702efd1b5944786c239d9fcc626148029"
+    },
+    {
+      "name": "command-037.log",
+      "bytes": 28,
+      "sha256": "7966bdcd33efd8bf6e9459c736fe600e05edcd071bc6a84c75367814a173fd4a"
+    },
+    {
+      "name": "command-038.log",
+      "bytes": 222,
+      "sha256": "aab5353600bf32b866d4dc6e3d5d942702efd1b5944786c239d9fcc626148029"
+    },
+    {
+      "name": "command-039.log",
+      "bytes": 222,
+      "sha256": "6683526665d961deafbf6d6d6710f11184058b480a2b9584997a070549b85663"
+    },
+    {
+      "name": "command-041.log",
+      "bytes": 222,
+      "sha256": "6683526665d961deafbf6d6d6710f11184058b480a2b9584997a070549b85663"
+    },
+    {
+      "name": "command-042.log",
+      "bytes": 29,
+      "sha256": "9f46751acb68fbd57546c9578e787f5798d990e5369d4fcdcd35277f0ba4e74d"
+    },
+    {
+      "name": "command-043.log",
+      "bytes": 118,
+      "sha256": "7dc251e64d449e1445b38088db529d6a1acf5ec841a54d553d7af39aa2012c08"
+    },
+    {
+      "name": "command-044.log",
+      "bytes": 222,
+      "sha256": "6683526665d961deafbf6d6d6710f11184058b480a2b9584997a070549b85663"
+    },
+    {
+      "name": "command-045.log",
+      "bytes": 30,
+      "sha256": "c3822808e26e0f08668934251b0c7c0e898a485fd58340626c6d4297289113da"
+    },
+    {
+      "name": "command-046.log",
+      "bytes": 222,
+      "sha256": "6683526665d961deafbf6d6d6710f11184058b480a2b9584997a070549b85663"
+    },
+    {
+      "name": "command-047.log",
+      "bytes": 222,
+      "sha256": "d1c1d92e007fca9f34b5379ac03e122451510025d93ca144ccf4144f53a3336a"
+    },
+    {
+      "name": "command-049.log",
+      "bytes": 40,
+      "sha256": "9a3961af3ae6383bd754db3bb2b88dab996be12397d0f6dc432dda1ae59a8def"
+    },
+    {
+      "name": "command-050.log",
+      "bytes": 222,
+      "sha256": "27cb64c92d027d7603dde7ab409d13bcf716b22458cc08a09ce83e9a2be5c9b6"
+    },
+    {
+      "name": "command-051.log",
+      "bytes": 222,
+      "sha256": "27cb64c92d027d7603dde7ab409d13bcf716b22458cc08a09ce83e9a2be5c9b6"
+    },
+    {
+      "name": "command-054.log",
+      "bytes": 71,
+      "sha256": "98e8b90364907de4e17e274fa1c0318bb7bd256e6737de6d41f2105b1307bec7"
+    },
+    {
+      "name": "command-057.log",
+      "bytes": 32,
+      "sha256": "5a54ac44bca68bb6a0ecea372903b9ccaf630d6e78b9a19b5b886409c1bafba5"
+    },
+    {
+      "name": "command-059.log",
+      "bytes": 222,
+      "sha256": "27cb64c92d027d7603dde7ab409d13bcf716b22458cc08a09ce83e9a2be5c9b6"
+    },
+    {
+      "name": "command-060.log",
+      "bytes": 222,
+      "sha256": "ccbbce43f34d82eb8982bcbe422440ed247a5dc112f443ec7d4a5150e7636cd6"
+    },
+    {
+      "name": "command-061.log",
+      "bytes": 222,
+      "sha256": "ccbbce43f34d82eb8982bcbe422440ed247a5dc112f443ec7d4a5150e7636cd6"
+    },
+    {
+      "name": "command-063.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "command-064.log",
+      "bytes": 53,
+      "sha256": "61460ef8400e5aafadff59d2cd67f4a91ecf4c2220f46347316d4d4c8e975b8f"
+    },
+    {
+      "name": "command-067.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "command-068.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "download.log",
+      "bytes": 122,
+      "sha256": "997ee1c5a2e72ed4816ef1b1b1feaeacfc0c0514c18754693ad6bc8c64f95ca3"
+    },
+    {
+      "name": "results.json",
+      "bytes": 61534,
+      "sha256": "c4826b05fb99d1189a111fad5207791e96671ef70bf15181dd374e192abc739e"
+    }
+  ],
+  "total_bytes": 68809,
+  "limits": {
+    "file_bytes": 33554432,
+    "total_bytes": 134217728
+  },
+  "secret_scan_note": "fixed private-key PEM markers only; not proof of absence of all secrets"
+}

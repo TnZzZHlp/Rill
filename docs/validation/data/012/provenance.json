@@ -1,0 +1,35 @@
+{
+  "targets": {
+    "rill-008": {
+      "binary_sha256": "6d0986de0444282f3fe900a4c756928e80e01102bd7c04361d581cfe90be6640",
+      "bytes": 18741536,
+      "source_commit": "2059f1566fc50f1c959ad93c309befea11025b60",
+      "source_snapshot": "source-008",
+      "source_manifest_sha256": "e6e22403d580d3d5246c2e96730789b9f864723bb364ec962c688f897b394230",
+      "cargo_lock_sha256": "0c2121122c30b4d565d2a75082591502413b631d9a95c0c9a7a9ddcfc303869c",
+      "version": "rill 0.1.0",
+      "build_scope": "Fresh offline build from the recorded read-only snapshot using Rust/Cargo 1.99.1. Package version alone is not source identity."
+    },
+    "rill-current": {
+      "binary_sha256": "a97017b8af2f6df74dffc70a908770f66fc7a99324d633e283a5447869a4d523",
+      "bytes": 21796728,
+      "source_commit": "a1bf0314682b9d7e1e6a7f89d0d57b2e2e72755a",
+      "source_snapshot": "source-baseline",
+      "source_manifest_sha256": "e369622f7b6e8684fb2802d6a65b8b3311d26455b0f7cad694e4d675c7698c3d",
+      "cargo_lock_sha256": "8e3b94586d66ead70f8fc82ee38d15b9ef9d0d2e08c0b6abb82e0f6ae48eecb6",
+      "version": "rill 0.1.0",
+      "build_scope": "Fresh offline build from the recorded read-only snapshot using Rust/Cargo 1.99.1. Package version alone is not source identity."
+    },
+    "nginx": {
+      "binary_sha256": "bf30939947d1d9ac8dccb6477c336e612760d3ee3c43991085fd54b4c7d741d8",
+      "bytes": 1285264,
+      "version": "nginx/1.28.3",
+      "reference_source": "008 cached nginx:1.28-alpine extracted rootfs, no download or pull in 012",
+      "image_id": "dc73b49f5124cf2ee538dfbdfbd121f0b4ccdcb20fea30f3a81bd477c02e2bb5",
+      "image_digest": "sha256:a8b39bd9cf0f83869a2162827a0caf6137ddf759d50a171451b335cecc87d236"
+    }
+  },
+  "fixture_manifest_sha256": "8e8ae9bcc53b99cc04d38883259442fb6ec0772bb97b6ddfbf21f37b21466ed4",
+  "retry_policy": "At most one retry for eligible idempotent GET on existing warm connection empty response headers or header-phase reset; record physical attempts and retries; no partial-header/body retry.",
+  "approval": "24261651-3c40-4a50-b131-e93f24d99299"
+}

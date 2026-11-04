@@ -1,0 +1,107 @@
+[
+  {
+    "path": "report.json",
+    "bytes": 8719,
+    "sha256": "36815209a8e84debfb5a1c9bcbedeec29ddf6c6cec96eaa14ebcf4c6ad4d9136"
+  },
+  {
+    "path": "original-check.log",
+    "bytes": 162,
+    "sha256": "8186d5c94c91bd89e632224a117185e1fcf655ca7c9186a3a9f72f15f1f0947f"
+  },
+  {
+    "path": "private-control-check.log",
+    "bytes": 162,
+    "sha256": "8186d5c94c91bd89e632224a117185e1fcf655ca7c9186a3a9f72f15f1f0947f"
+  },
+  {
+    "path": "static/server.log",
+    "bytes": 18090,
+    "sha256": "b5d2114642d47976abf1ed9b2abbb2e45bebb5198a9fce8240dcef1db20c8abe"
+  },
+  {
+    "path": "static/static-check.log",
+    "bytes": 162,
+    "sha256": "17128498a424c0c5ba6e3c12e52479853d9ff8d9ea931a5060f3a9b5dc36ebc4"
+  },
+  {
+    "path": "static/bad_syntax.log",
+    "bytes": 264,
+    "sha256": "f728a8298dff94dd6df5fa8061e324fd40d6f1797125b5603555118102af75d1"
+  },
+  {
+    "path": "static/expired_certificate.log",
+    "bytes": 170,
+    "sha256": "127055d32cf377fd0c534f676a857b62a913d123b0eb72a6f23a0aa9e0051482"
+  },
+  {
+    "path": "static/cache_budget.log",
+    "bytes": 155,
+    "sha256": "dd211a9397e50ba1a371f077936e311598ecb98f69fddfb75a5d607953810f8b"
+  },
+  {
+    "path": "static/metrics_address.log",
+    "bytes": 155,
+    "sha256": "dcabd63bfa395d631c1533edd1d97766558a40088e5edad322b3d57f14028dc6"
+  },
+  {
+    "path": "static/root-a/data.bin",
+    "bytes": 1024,
+    "sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987"
+  },
+  {
+    "path": "static/root-b/data.bin",
+    "bytes": 1024,
+    "sha256": "0c66f2c45405de575189209a768399bcaf88ccc51002407e395c0136aad2844d"
+  },
+  {
+    "path": "release/config.kdl",
+    "bytes": 436,
+    "sha256": "0808181654248ed5d291a26434dec23fc0cb5f3719157fe2420c3426a09318e6"
+  },
+  {
+    "path": "static/release/config.kdl",
+    "bytes": 372,
+    "sha256": "df769433294b9687eb8731f4f4d3e8d454687137b8bf0ec90844af3204939bca"
+  },
+  {
+    "path": "release/public/assets/app.js",
+    "bytes": 81,
+    "sha256": "2607ee16a0fc689ecfd388a0775a16a454996595327cfa25b4668ad3b703aa96"
+  },
+  {
+    "path": "static/release/public/assets/app.js",
+    "bytes": 81,
+    "sha256": "2607ee16a0fc689ecfd388a0775a16a454996595327cfa25b4668ad3b703aa96"
+  },
+  {
+    "path": "release/public/index.html",
+    "bytes": 206,
+    "sha256": "1859357ca341d5613ef9514966e2667cf7f3f8acd3c4d93e04c74d10bbea48e8"
+  },
+  {
+    "path": "static/release/public/index.html",
+    "bytes": 206,
+    "sha256": "1859357ca341d5613ef9514966e2667cf7f3f8acd3c4d93e04c74d10bbea48e8"
+  },
+  {
+    "path": "release/sites/web.kdl",
+    "bytes": 84,
+    "sha256": "862c2720e0f5583e7fba35caa358953283e90df5a4716e34f5114233b132870d"
+  },
+  {
+    "path": "static/release/sites/web.kdl",
+    "bytes": 88,
+    "sha256": "767aa4eb29550695fecb6c810e0b665275e31639d37ec9d2cdf558d8b70a21e6"
+  },
+  {
+    "path": "release/snippets/routes.kdl",
+    "bytes": 200,
+    "sha256": "b5c490a733071a3ed85737b7c088ab87c8f19944102ecb4a971190a835703251"
+  },
+  {
+    "path": "static/release/snippets/routes.kdl",
+    "bytes": 171,
+    "sha256": "e9134eb1d62b08367086636aa79d671de2cf651f5ff1aadd67ca6227424dc937"
+  }
+]

@@ -1,0 +1,6 @@
+role=systemd uid=65534
+configuration valid: 1 sites, 2 routes (scope: configuration, TLS certificates, static roots and literal upstream policy; DNS and connectivity are not validated)
+role=systemd check_exit=0
+role=podman uid=10001
+configuration valid: 1 sites, 2 routes (scope: configuration, TLS certificates, static roots and literal upstream policy; DNS and connectivity are not validated)
+role=podman check_exit=0
