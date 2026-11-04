@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -7,12 +8,17 @@ use tokio::sync::Semaphore;
 use crate::config::model::{Action, Route};
 use crate::config::{ConfigError, Result};
 
+use super::error_page::ErrorPage;
 use super::root::Root;
 
 #[derive(Debug)]
 pub struct PreparedStatic {
     pub(crate) root: Root,
+    pub(crate) cache: Option<super::cache::Binding>,
     pub(crate) spa: bool,
+    pub(crate) precompressed: bool,
+    pub(crate) browse: bool,
+    pub(crate) error_pages: BTreeMap<u16, ErrorPage>,
     pub(crate) cache_control: Option<String>,
     pub(crate) capacity: Arc<Semaphore>,
     pub request: Duration,
@@ -25,6 +31,9 @@ impl PreparedStatic {
             root,
             spa,
             cache_control,
+            precompressed,
+            browse,
+            error_pages,
         } = &route.action
         else {
             return Err(ConfigError::new(
@@ -50,7 +59,14 @@ impl PreparedStatic {
         }
         Ok(Self {
             root: Root::prepare(root)?,
+            cache: None,
             spa: *spa,
+            precompressed: *precompressed,
+            browse: *browse,
+            error_pages: error_pages
+                .iter()
+                .map(|(&status, path)| Ok((status, ErrorPage::prepare(path)?)))
+                .collect::<Result<_>>()?,
             cache_control: cache_control.clone(),
             capacity,
             request: route

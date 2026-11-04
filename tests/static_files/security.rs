@@ -182,3 +182,146 @@ fn directory_index_symlink_remains_confined_to_original_root() -> TestResult {
     assert_eq!(f.request("GET", "/page/", "")?.0, 403);
     Ok(())
 }
+
+#[test]
+fn precompressed_sidecars_remain_confined_and_require_original() -> TestResult {
+    let mut f = Fixture::new()?;
+    fs::write(f.root.join("asset"), b"original")?;
+    fs::write(f.dir.join("outside"), b"outside")?;
+    fs::write(f.root.join("missing.br"), b"sidecar only")?;
+    symlink("../outside", f.root.join("asset.br"))?;
+    f.start("precompressed #true;")?;
+    assert_eq!(
+        f.request("GET", "/asset", "Accept-Encoding: br\r\n")?.0,
+        403
+    );
+    assert_eq!(
+        f.request("GET", "/asset", "Accept-Encoding: identity\r\n")?
+            .2,
+        b"original"
+    );
+    assert_eq!(
+        f.request("GET", "/missing", "Accept-Encoding: br\r\n")?.0,
+        404
+    );
+    fs::remove_file(f.root.join("asset.br"))?;
+    fs::create_dir(f.root.join("asset.br"))?;
+    assert_eq!(
+        f.request("GET", "/asset", "Accept-Encoding: br\r\n")?.0,
+        403
+    );
+    Ok(())
+}
+
+#[test]
+fn directory_listing_escapes_and_confines_entries() -> TestResult {
+    use std::ffi::OsString;
+    use std::os::unix::ffi::OsStringExt;
+    let mut f = Fixture::new()?;
+    let dir = f.root.join("dir");
+    fs::create_dir(&dir)?;
+    fs::write(dir.join("a\"<>%#? &"), b"safe")?;
+    fs::write(dir.join(".secret"), b"secret")?;
+    fs::write(dir.join(OsString::from_vec(vec![b'x', 0xff])), b"secret")?;
+    fs::write(dir.join("bad\\name"), b"secret")?;
+    fs::write(f.dir.join("outside"), b"secret")?;
+    symlink("../../outside", dir.join("escape"))?;
+    f.start("browse #true;")?;
+    let (status, head, body) = f.request("GET", "/dir", "Range: bytes=0-1\r\n")?;
+    assert_eq!(status, 200);
+    assert_eq!(
+        super::support::header(&head, "cache-control"),
+        Some("no-store")
+    );
+    let html = String::from_utf8(body)?;
+    assert!(html.contains("a&quot;&lt;&gt;%#? &amp;"));
+    assert!(html.contains("href=\"/dir/a%22%3C%3E%25%23%3F%20%26\""));
+    for hidden in [".secret", "escape", "bad\\name"] {
+        assert!(!html.contains(hidden));
+    }
+    assert_eq!(
+        f.request("GET", "/dir/a%22%3C%3E%25%23%3F%20%26", "")?.2,
+        b"safe"
+    );
+    for method in ["GET", "HEAD"] {
+        let (status, head, body) = f.request(method, "/dir", "If-None-Match: *\r\n")?;
+        assert_eq!(status, 304);
+        assert_eq!(super::support::header(&head, "content-length"), None);
+        assert_eq!(super::support::header(&head, "etag"), None);
+        assert_eq!(
+            super::support::header(&head, "cache-control"),
+            Some("no-store")
+        );
+        assert!(body.is_empty());
+    }
+    for condition in [
+        "If-None-Match: \"other\"\r\n",
+        "If-None-Match: *\r\nIf-None-Match: *\r\n",
+        "If-None-Match: *, \"other\"\r\n",
+    ] {
+        assert_eq!(f.request("GET", "/dir", condition)?.0, 200);
+    }
+    let (_, head, body) = f.request("HEAD", "/dir", "")?;
+    assert_eq!(
+        super::support::header(&head, "content-length"),
+        Some(html.len().to_string().as_str())
+    );
+    assert!(body.is_empty());
+    fs::write(dir.join("index.html"), b"index")?;
+    assert_eq!(f.request("GET", "/dir", "")?.2, b"index");
+    Ok(())
+}
+
+#[test]
+fn directory_listing_rejects_visible_and_scanned_limits() -> TestResult {
+    let mut f = Fixture::new()?;
+    let visible = f.root.join("visible");
+    let hidden = f.root.join("hidden");
+    fs::create_dir(&visible)?;
+    fs::create_dir(&hidden)?;
+    for index in 0..513 {
+        fs::write(visible.join(format!("file{index}")), b"")?;
+    }
+    for index in 0..4097 {
+        fs::write(hidden.join(format!(".file{index}")), b"")?;
+    }
+    let component = "a".repeat(200);
+    let mut deep = f.root.clone();
+    let mut url = String::new();
+    for _ in 0..4 {
+        deep.push(&component);
+        fs::create_dir(&deep)?;
+        url.push('/');
+        url.push_str(&component);
+    }
+    for index in 0..400 {
+        fs::write(deep.join(format!("file{index}")), b"")?;
+    }
+    f.start("browse #true;")?;
+    assert_eq!(f.request("GET", "/visible", "")?.0, 503);
+    assert_eq!(f.request("GET", "/hidden", "")?.0, 503);
+    assert_eq!(f.request("GET", &url, "")?.0, 503);
+    Ok(())
+}
+
+#[test]
+fn cache_does_not_bypass_new_permission_denial() -> TestResult {
+    use std::os::unix::fs::PermissionsExt;
+    let mut f = Fixture::new()?;
+    fs::set_permissions(&f.dir, fs::Permissions::from_mode(0o755))?;
+    fs::set_permissions(&f.root, fs::Permissions::from_mode(0o755))?;
+    let path = f.root.join("file");
+    fs::write(&path, b"private")?;
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o644))?;
+    let config = f
+        .config("")
+        .replacen("server {", "server { static-cache-bytes 65536;", 1);
+    f.start_config(&config, true)?;
+    assert_eq!(f.request("GET", "/file", "")?.2, b"private");
+    assert_eq!(f.request("GET", "/file", "")?.2, b"private");
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o000))?;
+    let (status, _, body) = f.request("GET", "/file", "")?;
+    assert_eq!(status, 403);
+    assert!(body.is_empty());
+    Ok(())
+}

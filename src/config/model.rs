@@ -35,6 +35,9 @@ pub struct RawRoute {
     pub action: RawAction,
     pub spa: Option<Located<bool>>,
     pub cache_control: Option<Located<String>>,
+    pub precompressed: Option<Located<bool>>,
+    pub browse: Option<Located<bool>>,
+    pub error_pages: BTreeMap<u16, Located<PathBuf>>,
 }
 
 #[derive(Clone, Debug)]
@@ -73,6 +76,7 @@ pub struct Server {
     pub http: Vec<Located<SocketAddr>>,
     pub https: Vec<Located<SocketAddr>>,
     pub watch: bool,
+    pub static_cache_bytes: usize,
     pub redirect_https: bool,
     pub redirect_port: Option<u16>,
     pub control_socket: PathBuf,
@@ -141,6 +145,9 @@ pub enum Action {
         root: Located<PathBuf>,
         spa: bool,
         cache_control: Option<String>,
+        precompressed: bool,
+        browse: bool,
+        error_pages: BTreeMap<u16, Located<PathBuf>>,
     },
 }
 

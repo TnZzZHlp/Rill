@@ -56,7 +56,7 @@ import "sites/*.kdl"
 - 全配置只能有一个 `server`。允许多个不重复的 HTTP/HTTPS 地址；地址必须包含合法 IP 和端口，IPv6 使用方括号。IPv4/IPv6 共端口须避免双栈重复绑定。
 - 至少有一个服务监听；HTTPS 站点必须有 TLS 引用，纯 HTTP 站点可以没有。启用 HTTPS 重定向时必须有 HTTPS 监听且重定向站点可完成 TLS。
 - `redirect-https` 默认关闭。自定义重定向端口使用 `redirect-port 8443`；只有一个不同的 HTTPS 监听端口时可自动推导，多端口歧义必须显式指定。443 不附加端口。只对匹配站点重定向，使用规范化站点 Host，不回显非法 Host。
-- `watch`、`control-socket` 与 HTTP/HTTPS 监听地址集合属于启动配置；仅改变地址顺序允许，集合、Socket 路径或 watch 更改时 Reload 整体失败并提示重启。运行时线程和 TLS 基础协议设置固定于代码，没有可配置字段。`log-level`、`redirect-https`、`redirect-port`、可信代理和上游允许集合随快照热更新；P0 server 除本文列举字段外全部拒绝。
+- `watch`、`control-socket`、`static-cache-bytes` 与 HTTP/HTTPS 监听地址集合属于启动配置；仅改变地址顺序允许，集合、Socket 路径或 watch 更改时 Reload 整体失败并提示重启。运行时线程和 TLS 基础协议设置固定于代码，没有可配置字段。`log-level`、`redirect-https`、`redirect-port`、可信代理和上游允许集合随快照热更新；P0 server 除本文列举字段外全部拒绝。
 - 相对 `import` 路径以声明它的文件目录解析。相对 `root`、`cert`、`key`、错误页路径也以其定义所在文件为基准；Profile/Snippet 展开不得改用引用者目录。文件来源使用解析后的实际文件路径确定基准；入口保留调用者提供的绝对路径，不固化符号链接目标，以便后续 Reload 能看到入口链接的更新。
 - glob 支持逐路径组件的 `*`、`?`、`[ab]`、`[a-z]`、`[!ab]`，不提供转义或递归目录语义；匹配路径按字节序排序。未匹配任何文件报错，避免拼写错误悄悄丢站。支持嵌套导入，基于实际文件身份检测循环，包括符号链接/硬链接别名；同一文件重复导入报错，不重复执行。
 - 配置只读取普通 UTF-8 文件。每文件最多 1 MiB，总计最多 8 MiB、512 文件；导入/Profile 嵌套最多 64 层，KDL 结构、块注释和连续 slashdash 注释嵌套最多 32 层，避免解析器栈溢出。加载中核对文件身份及修改元数据，变化时拒绝候选；不承诺替外部文件系统提供跨文件事务。
@@ -117,9 +117,20 @@ site "app.example.com" {
 - 路由匹配以框架校验后的原始 URI 路径为基准，不包含查询串；不隐式解码 `%2F` 或消除点段改变代理路由。非法百分号编码、NUL 和反斜杠拒绝。代理转发保留原始路径、编码和查询串，不隐式去前缀。
 - 静态动作在匹配后单独对路径做一次严格百分号解码，拒绝编码的分隔符、NUL、反斜杠和解码后的 `.`/`..` 段，不进行二次解码；使用目录句柄约束的打开方式防止竞态与符号链接越界。
 - root 始终拼接完整站点路径，不剥离路由前缀：`/assets/a.css` 加 root `/srv/www` 指向 `/srv/www/assets/a.css`。原文 root `/srv/www/assets` 会指向 `/srv/www/assets/assets/a.css`，应按期望调整为 `/srv/www`；不隐式提供 alias 行为。
-- 目录默认查找 `index.html`，无索引返回 404，不列目录。GET/HEAD 之外静态动作返回 405；HEAD 无响应体，忽略 Range 并返回完整表示的 200 元数据。
-- P0 使用 Last-Modified 和 Date，If-Modified-Since 以秒为精度返回 304；存在 If-None-Match 时不以 IMS 优先。未来修改时间钳位到 Date，无法表示时省略 Last-Modified 并禁用日期判断；同秒更新可能无法区分。支持单个 closed/open/suffix 字节范围及 206/416，非法或多段范围忽略并返回 200；超大数字安全饱和并检查原始十进制逆序。If-Range 仅有效匹配的日期且修改时间距 Date 至少 60 秒时支持 206，近期、无效值或 ETag 返回完整 200。MIME 使用小型明确映射，未知类型为 application/octet-stream；Cache-Control 在准备期校验头值。P1 的各压缩表示需独立验证器。
+- 目录默认查找 `index.html`，无索引且未启用浏览返回 404。GET/HEAD 之外静态动作返回 405；HEAD 无响应体，忽略 Range 并返回完整表示的 200 元数据。
+- P0 使用 Last-Modified 和 Date，If-Modified-Since 以秒为精度返回 304；存在 If-None-Match 时不以 IMS 优先。未来修改时间钳位到 Date，无法表示时省略 Last-Modified 并禁用日期判断；同秒更新可能无法区分。支持单个 closed/open/suffix 字节范围及 206/416，非法或多段范围忽略并返回 200；超大数字安全饱和并检查原始十进制逆序。If-Range 仅有效匹配的日期且修改时间距 Date 至少 60 秒时支持 206，近期、无效值或 ETag 返回完整 200。MIME 使用小型明确映射，未知类型为 application/octet-stream；Cache-Control 在准备期校验头值。各压缩表示有独立验证器。
 - SPA 回退仅用于 GET/HEAD、Accept 包含 `text/html` 且 q > 0、最终路径段无点的页面导航。仅 Missing 回退；不存在的带扩展名资源、无索引目录、Range 请求、访问拒绝和非法路径不回退。
+
+### 静态增强
+
+完整示例见 [static-enhancements](../examples/static-enhancements/config.kdl)。可用 `rill check --config examples/static-enhancements/config.kdl` 检查；示例监听 `127.0.0.1:18080`，Host 为 `static.test`；`/` 优先返回 index，`/files/` 可浏览。示例在 site 级开启浏览，覆盖整个静态 root 中所有可访问且无索引的目录，会向访问者公开目录名与可见条目；仅在确认这些内容适合公开时启用。初始无 sidecar，回退 identity。运行时默认控制 Socket 需要按控制面规范准备私有目录，实际部署应配置安全路径。
+
+- `server` 的 `static-cache-bytes` 默认 0，范围 0–268435456 字节，是启动项，修改需重启。进程共享正文预算，包含加载中、缓存中及已淘汰但仍由响应持有的正文；仅不大于 64 KiB 的单个正文可缓存，ready 与 loading 合计最多 1024 项，采用有界 LRU。同键正在加载时其他请求直接流式读取。0 时不占缓存池；Reload 后旧正文仍共享固定预算直到释放。预算使用量不是 RSS。
+- `precompressed #true` 和 `browse #true` 可用于静态 site 简写或静态 route，均默认 `#false`，不可用于代理，也不是 Profile 字段。预压缩只使用已有 `.br`、`.gz`，源文件必须存在，sidecar 修改时间不早于源文件；不在线压缩。缺失 sidecar 回退可接受的其他表示。
+- Accept-Encoding 按质量降序，同质量优先 br、gzip、identity；缺失或空字段使用 identity。重复编码取最低 q，已识别但非法的项视为 q=0；空白只接受 HTTP SP 和 HTAB。identity 隐含 q=1，除非显式设置或 `*;q=0` 拒绝；全部拒绝返回 406。静态文件表示、目录列表及所支持的错误页状态响应以 `Vary: Accept-Encoding` 表示可接受性受其影响，包括 406 及未启用压缩的情况；这不包括路径解码等提前产生的所有 400 响应。MIME 按源路径，Range 按所选压缩表示的字节，HEAD 忽略 Range。
+- ETag 是包含表示编码的弱元数据验证器，不是强内容 hash。If-None-Match 使用弱比较或 `*`，优先于 If-Modified-Since；If-Range 不能强匹配弱 ETag，日期仍遵循 60 秒强日期规则。不承诺恶意原位写入时的内容快照。
+- `error-page STATUS "path"` 可在 site 或 route 配置，仅支持 403、404、405、406、416、500、503，同状态重复拒绝。相对路径以定义文件为基准，Snippet 保留定义来源。父目录 root 准备失败拒绝候选；叶文件消失、不可读、特殊或超过 1 MiB 时返回空体并保留原状态及 405 Allow、416 Content-Range。HEAD 无体；错误页不递归、不做 SPA、压缩、缓存或条件处理，406 且 identity 不可接受时为空体。仅处理静态响应头发送前的错误，不替代代理错误。
+- 显式浏览时索引优先；目录使用稳定 FD 扫描，最多 4096 个原始条目、展示 512 项、HTML 256 KiB，超限返回 503 而非截断。隐藏 dot、越界、magic、特殊及无法 URL 访问的名称；HTML 转义，href 按字节编码。根内安全符号链接遵循 root 契约，挂载子目录通过 mnt_id FD 身份检查。命名空间为可信边界，不承诺恶意挂载或文件系统的全事务。列表无 ETag、日期或 Range；GET/HEAD 的合法 If-None-Match `*` 可返回 304，不存在的错误页不能返回 304。
 
 ## 6. Profile 与继承
 
@@ -163,7 +174,7 @@ server {
 
 inotify 内核事件队列以 50 ms 间隔有界 drain、每次最多 32 批，不是文件轮询。事件去抖 250 ms，最长等待 2 秒；BUSY、资源变化和不可用恢复等按 1 秒退避。稳定的普通配置语法错误等待后续修复事件，不无条件重试。队列 overflow 或 watch 失效会记录日志并标记 dirty 重建。自动 Reload 与手动 Reload 共用完整验证、准备和单点提交；注册前后核对实际消费 FD 的指纹，不能将其理解为恶意文件系统上的跨文件事务保证。
 
-预压缩、静态缓存、错误页、目录浏览、Metrics 和 OpenTelemetry 的具体参数由对应后续阶段补充，不因本节而宣称已实现。
+Metrics 和 OpenTelemetry 的具体参数由对应后续阶段补充。
 
 ## 8. 原文示例逐项对照
 

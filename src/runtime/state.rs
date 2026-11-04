@@ -14,6 +14,7 @@ use crate::observability::logging::Logger;
 use crate::proxy::upstream::PreparedPeer;
 use crate::routing::Router;
 use crate::static_files::PreparedStatic;
+use crate::static_files::cache::{self, Binding, CachePool};
 use crate::tls::cert::PreparedTls;
 use arc_swap::ArcSwap;
 use tokio::sync::watch;
@@ -102,6 +103,36 @@ impl HttpPreparer {
     }
 }
 
+fn bind_static_routes(
+    resources: &mut HttpResources,
+    cache: &Option<Arc<CachePool>>,
+    namespace: u64,
+    generation: u64,
+    origin: &Origin,
+) -> Result<()> {
+    for (site, routes) in resources.routes.iter_mut().enumerate() {
+        for (route_index, route) in routes.iter_mut().enumerate() {
+            if let PreparedRoute::Static(route) = route {
+                let prepared = Arc::get_mut(route).ok_or_else(|| {
+                    ConfigError::new(
+                        "INTERNAL",
+                        "static-cache-bytes",
+                        "static route is shared before publication",
+                        origin,
+                    )
+                })?;
+                prepared.cache = cache.as_ref().map(|pool| Binding {
+                    pool: pool.clone(),
+                    namespace,
+                    generation,
+                    route: (site, route_index),
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
 #[derive(Debug)]
 pub struct RuntimeSnapshot {
     pub generation: u64,
@@ -118,6 +149,7 @@ pub struct StartupSettings {
     pub https: BTreeSet<SocketAddr>,
     pub control_socket: PathBuf,
     pub watch: bool,
+    pub static_cache_bytes: usize,
 }
 
 impl StartupSettings {
@@ -137,6 +169,7 @@ impl StartupSettings {
                 .collect(),
             control_socket: configuration.server.control_socket.clone(),
             watch: configuration.server.watch,
+            static_cache_bytes: configuration.server.static_cache_bytes,
         }
     }
 }
@@ -169,27 +202,48 @@ pub struct RuntimeState {
     active: ArcSwap<RuntimeSnapshot>,
     entry: PathBuf,
     startup: StartupSettings,
+    cache: Option<Arc<CachePool>>,
+    namespace: u64,
     closed: Mutex<Gate>,
     shutdown: watch::Sender<bool>,
 }
 
 impl RuntimeState {
-    pub fn new(prepared: PreparedSnapshot<HttpResources>) -> Arc<Self> {
+    pub fn new(mut prepared: PreparedSnapshot<HttpResources>) -> Result<Arc<Self>> {
         let entry = prepared.configuration.entry.clone();
         let startup = StartupSettings::from_configuration(&prepared.configuration);
+        let origin = Origin::file(&entry);
+        let namespace = cache::next_namespace().ok_or_else(|| {
+            ConfigError::new(
+                "CONFIG_LIMIT",
+                "static-cache-bytes",
+                "cache namespace exhausted",
+                &origin,
+            )
+        })?;
+        let cache = cache::register(startup.static_cache_bytes).map_err(|reason| {
+            ConfigError::new("RESOURCE_IO", "static-cache-bytes", reason, &origin)
+        })?;
+        bind_static_routes(&mut prepared.resources, &cache, namespace, 1, &origin)?;
         let snapshot = RuntimeSnapshot::from_prepared(prepared, 1);
         let (shutdown, _) = watch::channel(false);
-        Arc::new(Self {
+        Ok(Arc::new(Self {
             active: ArcSwap::from_pointee(snapshot),
             entry,
             startup,
+            cache,
+            namespace,
             closed: Mutex::new(Gate::default()),
             shutdown,
-        })
+        }))
     }
 
     pub fn snapshot(&self) -> Arc<RuntimeSnapshot> {
         self.active.load_full()
+    }
+
+    pub fn static_cache_stats(&self) -> Option<crate::static_files::StaticCacheStats> {
+        self.cache.as_ref().map(|pool| pool.stats())
     }
 
     pub fn close(&self) {
@@ -298,13 +352,12 @@ impl RuntimeState {
 
     pub(crate) fn publish_tracked(
         &self,
-        prepared: PreparedSnapshot<HttpResources>,
+        mut prepared: PreparedSnapshot<HttpResources>,
         plan: DependencyPlan,
         watch: WatchResources,
         deadline: Instant,
     ) -> Result<u64> {
         let startup = StartupSettings::from_configuration(&prepared.configuration);
-        let mut candidate = RuntimeSnapshot::from_prepared(prepared, 0);
         let mut gate = self
             .closed
             .lock()
@@ -324,7 +377,14 @@ impl RuntimeState {
             .generation
             .checked_add(1)
             .ok_or_else(|| self.error("CONFIG_LIMIT", "generation limit exceeded"))?;
-        candidate.generation = generation;
+        bind_static_routes(
+            &mut prepared.resources,
+            &self.cache,
+            self.namespace,
+            generation,
+            &Origin::file(&self.entry),
+        )?;
+        let candidate = RuntimeSnapshot::from_prepared(prepared, generation);
         self.active.store(Arc::new(candidate));
         gate.active_plan = Some(plan);
         gate.failed_plan = None;
@@ -343,11 +403,10 @@ impl RuntimeState {
 
     pub(crate) fn publish(
         &self,
-        prepared: PreparedSnapshot<HttpResources>,
+        mut prepared: PreparedSnapshot<HttpResources>,
         deadline: Instant,
     ) -> Result<u64> {
         let startup = StartupSettings::from_configuration(&prepared.configuration);
-        let mut candidate = RuntimeSnapshot::from_prepared(prepared, 0);
         let closed = self
             .closed
             .lock()
@@ -367,7 +426,14 @@ impl RuntimeState {
             .generation
             .checked_add(1)
             .ok_or_else(|| self.error("CONFIG_LIMIT", "generation limit exceeded"))?;
-        candidate.generation = generation;
+        bind_static_routes(
+            &mut prepared.resources,
+            &self.cache,
+            self.namespace,
+            generation,
+            &Origin::file(&self.entry),
+        )?;
+        let candidate = RuntimeSnapshot::from_prepared(prepared, generation);
         self.active.store(Arc::new(candidate));
         Ok(generation)
     }
@@ -383,7 +449,7 @@ mod tests {
     fn publish_replaces_snapshot_and_close_rejects_candidate()
     -> std::result::Result<(), Box<dyn std::error::Error>> {
         let path = Path::new("examples/config.kdl");
-        let state = RuntimeState::new(build(path, &HttpPreparer)?);
+        let state = RuntimeState::new(build(path, &HttpPreparer)?)?;
         let old = state.snapshot();
         let weak = Arc::downgrade(&old);
         let mut candidate = build(path, &HttpPreparer)?;
@@ -410,7 +476,7 @@ mod tests {
     #[test]
     fn expired_deadline_rejects_publish() -> std::result::Result<(), Box<dyn std::error::Error>> {
         let path = Path::new("examples/config.kdl");
-        let state = RuntimeState::new(build(path, &HttpPreparer)?);
+        let state = RuntimeState::new(build(path, &HttpPreparer)?)?;
         let old = state.snapshot();
         let error = state
             .publish(build(path, &HttpPreparer)?, Instant::now())
@@ -425,7 +491,7 @@ mod tests {
     fn changed_http_address_requires_restart() -> std::result::Result<(), Box<dyn std::error::Error>>
     {
         let path = Path::new("examples/config.kdl");
-        let state = RuntimeState::new(build(path, &HttpPreparer)?);
+        let state = RuntimeState::new(build(path, &HttpPreparer)?)?;
         let old = state.snapshot();
         let mut candidate = build(path, &HttpPreparer)?;
         candidate.configuration.server.http[0].value = "127.0.0.1:8081".parse()?;
@@ -442,7 +508,7 @@ mod tests {
     fn changed_control_socket_requires_restart()
     -> std::result::Result<(), Box<dyn std::error::Error>> {
         let path = Path::new("examples/config.kdl");
-        let state = RuntimeState::new(build(path, &HttpPreparer)?);
+        let state = RuntimeState::new(build(path, &HttpPreparer)?)?;
         let old = state.snapshot();
         let mut candidate = build(path, &HttpPreparer)?;
         candidate
@@ -463,7 +529,7 @@ mod tests {
     fn generation_overflow_rejects_publish() -> std::result::Result<(), Box<dyn std::error::Error>>
     {
         let path = Path::new("examples/config.kdl");
-        let state = RuntimeState::new(build(path, &HttpPreparer)?);
+        let state = RuntimeState::new(build(path, &HttpPreparer)?)?;
         state.active.store(Arc::new(RuntimeSnapshot::from_prepared(
             build(path, &HttpPreparer)?,
             u64::MAX,

@@ -99,7 +99,13 @@ pub fn run(path: &Path) -> u8 {
             return 1;
         }
     };
-    let state = RuntimeState::new(prepared);
+    let state = match RuntimeState::new(prepared) {
+        Ok(state) => state,
+        Err(_) => {
+            Logger::new("info").event(Level::Error, "runtime_failed", &[]);
+            return 1;
+        }
+    };
     if let Some(plan) = plan {
         state.set_initial_plan(plan);
     }

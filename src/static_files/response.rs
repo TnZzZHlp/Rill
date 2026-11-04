@@ -5,6 +5,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use pingora::http::{RequestHeader, ResponseHeader};
 
 use super::range::{self, RangeDecision};
+use super::representation::Encoding;
+use super::validator;
 
 const HTTP_DATE_LIMIT: u64 = 253_402_300_800;
 
@@ -37,7 +39,7 @@ fn parsed_date(value: &str) -> Option<u64> {
     date_seconds(httpdate::parse_http_date(value).ok()?)
 }
 
-fn mime_type(path: &Path) -> &'static str {
+pub(crate) fn mime_type(path: &Path) -> &'static str {
     let Some(extension) = path.extension().and_then(|value| value.to_str()) else {
         return "application/octet-stream";
     };
@@ -64,6 +66,8 @@ pub fn plan(
     metadata: &Metadata,
     served_path: &Path,
     cache_control: Option<&str>,
+    encoding: Encoding,
+    _precompressed: bool,
 ) -> pingora::Result<Plan> {
     let now = SystemTime::now();
     let date = match now.duration_since(UNIX_EPOCH) {
@@ -78,12 +82,21 @@ pub fn plan(
     let file_length = metadata.len();
     let is_head = request.method.as_str() == "HEAD";
 
-    let not_modified = !request.headers.contains_key("if-none-match")
-        && modified.is_some_and(|mtime| {
+    let etag = validator::weak_etag(metadata, encoding);
+    let not_modified = if request.headers.contains_key("if-none-match") {
+        let values = request.headers.get_all("if-none-match");
+        if values.iter().any(|value| value.to_str().is_err()) {
+            false
+        } else {
+            validator::if_none_match(values.iter().filter_map(|value| value.to_str().ok()), &etag)
+        }
+    } else {
+        modified.is_some_and(|mtime| {
             single_header(request, "if-modified-since")
                 .and_then(parsed_date)
                 .is_some_and(|condition| mtime <= condition)
-        });
+        })
+    };
 
     let range_allowed = if request.headers.contains_key("if-range") {
         modified.is_some_and(|mtime| {
@@ -127,6 +140,13 @@ pub fn plan(
     header.insert_header("Date", http_date(date))?;
     header.insert_header("Accept-Ranges", "bytes")?;
     header.insert_header("Content-Type", mime_type(served_path))?;
+    header.insert_header("ETag", etag)?;
+    header.insert_header("Vary", "Accept-Encoding")?;
+    match encoding {
+        Encoding::Brotli => header.insert_header("Content-Encoding", "br")?,
+        Encoding::Gzip => header.insert_header("Content-Encoding", "gzip")?,
+        Encoding::Identity => {}
+    }
     if let Some(mtime) = modified {
         header.insert_header("Last-Modified", http_date(mtime))?;
     }

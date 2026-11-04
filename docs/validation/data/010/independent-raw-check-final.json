@@ -1,0 +1,1167 @@
+{
+  "manifest": {
+    "full": {
+      "entries": 110,
+      "unique_paths": 110,
+      "total_bytes": 161841929,
+      "bad": [],
+      "unlisted": [],
+      "missing": []
+    },
+    "pilot": {
+      "entries": 40,
+      "unique_paths": 40,
+      "total_bytes": 19963107,
+      "bad": [],
+      "unlisted": [],
+      "missing": []
+    },
+    "full-window-boundary-before": {
+      "entries": 110,
+      "unique_paths": 110,
+      "total_bytes": 162639396,
+      "bad": [],
+      "unlisted": [],
+      "missing": []
+    }
+  },
+  "rounds": [
+    {
+      "prefix": "round-01-identity-off-small",
+      "repeat": 1,
+      "computed": {
+        "samples": 453525,
+        "issue_window_samples": 453525,
+        "successes": 453525,
+        "bytes": 464409600,
+        "completed_within_window": 453517,
+        "bytes_within_window": 464401408,
+        "late_completions": 8,
+        "completed_rps_nominal": 15117.233333333334,
+        "completed_bytes_per_second_nominal": 15480046.933333334,
+        "cohort_rps_including_drain": 15117.23153610349,
+        "drain_seconds": 0.0005327640101313591,
+        "measured_reused_requests": 453525,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "error_rate": 0,
+        "p50_ms": 0.5,
+        "p95_ms": 0.643,
+        "p99_ms": 0.816,
+        "physical_attempts": 453525,
+        "idle_close_reconnects": 0,
+        "header_reset_retries": 0
+      },
+      "size_per_response": 1024,
+      "server": {
+        "cpu_percent": 146.7953546436322,
+        "rss_bytes": 14348288,
+        "hwm_sum_bytes": 14348288,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client": {
+        "cpu_percent": 96.87038654863579,
+        "rss_bytes": 47247360,
+        "hwm_sum_bytes": 47247360,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client_warning": true,
+      "resource_samples": {
+        "server": 33,
+        "client": 33
+      },
+      "errors": {}
+    },
+    {
+      "prefix": "round-02-identity-off-large",
+      "repeat": 1,
+      "computed": {
+        "samples": 3500,
+        "issue_window_samples": 3500,
+        "successes": 3500,
+        "bytes": 58720256000,
+        "completed_within_window": 3492,
+        "bytes_within_window": 58586038272,
+        "late_completions": 8,
+        "completed_rps_nominal": 116.4,
+        "completed_bytes_per_second_nominal": 1952867942.4,
+        "cohort_rps_including_drain": 116.5605665917266,
+        "drain_seconds": 0.02730771084316075,
+        "measured_reused_requests": 3500,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "error_rate": 0,
+        "p50_ms": 68.044,
+        "p95_ms": 77.292,
+        "p99_ms": 83.983,
+        "physical_attempts": 3500,
+        "idle_close_reconnects": 0,
+        "header_reset_retries": 0
+      },
+      "size_per_response": 16777216,
+      "server": {
+        "cpu_percent": 116.80499558014145,
+        "rss_bytes": 17723392,
+        "hwm_sum_bytes": 17858560,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client": {
+        "cpu_percent": 99.82648351582849,
+        "rss_bytes": 38596608,
+        "hwm_sum_bytes": 53268480,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client_warning": true,
+      "resource_samples": {
+        "server": 32,
+        "client": 32
+      },
+      "errors": {}
+    },
+    {
+      "prefix": "round-03-identity-on-small",
+      "repeat": 1,
+      "computed": {
+        "samples": 561372,
+        "issue_window_samples": 561372,
+        "successes": 561372,
+        "bytes": 574844928,
+        "completed_within_window": 561364,
+        "bytes_within_window": 574836736,
+        "late_completions": 8,
+        "completed_rps_nominal": 18712.133333333335,
+        "completed_bytes_per_second_nominal": 19161224.533333335,
+        "cohort_rps_including_drain": 18712.149634469126,
+        "drain_seconds": 0.0004013951402157545,
+        "measured_reused_requests": 561372,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "error_rate": 0,
+        "p50_ms": 0.403,
+        "p95_ms": 0.55,
+        "p99_ms": 0.702,
+        "physical_attempts": 561372,
+        "idle_close_reconnects": 0,
+        "header_reset_retries": 0
+      },
+      "size_per_response": 1024,
+      "server": {
+        "cpu_percent": 174.7792415972558,
+        "rss_bytes": 14651392,
+        "hwm_sum_bytes": 14651392,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client": {
+        "cpu_percent": 96.88936679546937,
+        "rss_bytes": 56606720,
+        "hwm_sum_bytes": 56606720,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client_warning": true,
+      "resource_samples": {
+        "server": 32,
+        "client": 32
+      },
+      "errors": {}
+    },
+    {
+      "prefix": "round-04-identity-on-large",
+      "repeat": 1,
+      "computed": {
+        "samples": 3504,
+        "issue_window_samples": 3504,
+        "successes": 3504,
+        "bytes": 58787364864,
+        "completed_within_window": 3496,
+        "bytes_within_window": 58653147136,
+        "late_completions": 8,
+        "completed_rps_nominal": 116.53333333333333,
+        "completed_bytes_per_second_nominal": 1955104904.5333333,
+        "cohort_rps_including_drain": 116.70233812697087,
+        "drain_seconds": 0.02510537696070969,
+        "measured_reused_requests": 3504,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "error_rate": 0,
+        "p50_ms": 67.586,
+        "p95_ms": 76.732,
+        "p99_ms": 85.46,
+        "physical_attempts": 3504,
+        "idle_close_reconnects": 0,
+        "header_reset_retries": 0
+      },
+      "size_per_response": 16777216,
+      "server": {
+        "cpu_percent": 119.7857742709942,
+        "rss_bytes": 16961536,
+        "hwm_sum_bytes": 17289216,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client": {
+        "cpu_percent": 97.76489576065015,
+        "rss_bytes": 44748800,
+        "hwm_sum_bytes": 61403136,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client_warning": true,
+      "resource_samples": {
+        "server": 32,
+        "client": 32
+      },
+      "errors": {}
+    },
+    {
+      "prefix": "round-05-transfer-off-identity",
+      "repeat": 1,
+      "computed": {
+        "samples": 559791,
+        "issue_window_samples": 559791,
+        "successes": 559791,
+        "bytes": 573225984,
+        "completed_within_window": 559784,
+        "bytes_within_window": 573218816,
+        "late_completions": 7,
+        "completed_rps_nominal": 18659.466666666667,
+        "completed_bytes_per_second_nominal": 19107293.866666667,
+        "cohort_rps_including_drain": 18659.411496221073,
+        "drain_seconds": 0.0004638470709323883,
+        "measured_reused_requests": 559791,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "error_rate": 0,
+        "p50_ms": 0.403,
+        "p95_ms": 0.568,
+        "p99_ms": 0.716
+      },
+      "size_per_response": 1024,
+      "server": {
+        "cpu_percent": 176.81132778558379,
+        "rss_bytes": 14659584,
+        "hwm_sum_bytes": 14659584,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client": {
+        "cpu_percent": 96.87922513007081,
+        "rss_bytes": 54059008,
+        "hwm_sum_bytes": 61403136,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client_warning": true,
+      "resource_samples": {
+        "server": 32,
+        "client": 32
+      },
+      "errors": {}
+    },
+    {
+      "prefix": "round-06-transfer-off-gzip",
+      "repeat": 1,
+      "computed": {
+        "samples": 536571,
+        "issue_window_samples": 536571,
+        "successes": 536571,
+        "bytes": 15560559,
+        "completed_within_window": 536563,
+        "bytes_within_window": 15560327,
+        "late_completions": 8,
+        "completed_rps_nominal": 17885.433333333334,
+        "completed_bytes_per_second_nominal": 518677.56666666665,
+        "cohort_rps_including_drain": 17885.4074167982,
+        "drain_seconds": 0.0004907629918307066,
+        "measured_reused_requests": 536571,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "error_rate": 0,
+        "p50_ms": 0.422,
+        "p95_ms": 0.601,
+        "p99_ms": 0.745
+      },
+      "size_per_response": 29,
+      "server": {
+        "cpu_percent": 182.77006537908855,
+        "rss_bytes": 16580608,
+        "hwm_sum_bytes": 16580608,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client": {
+        "cpu_percent": 94.89092222004246,
+        "rss_bytes": 53559296,
+        "hwm_sum_bytes": 61403136,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client_warning": true,
+      "resource_samples": {
+        "server": 33,
+        "client": 33
+      },
+      "errors": {}
+    },
+    {
+      "prefix": "round-07-transfer-off-br",
+      "repeat": 1,
+      "computed": {
+        "samples": 514135,
+        "issue_window_samples": 514135,
+        "successes": 514135,
+        "bytes": 5655485,
+        "completed_within_window": 514127,
+        "bytes_within_window": 5655397,
+        "late_completions": 8,
+        "completed_rps_nominal": 17137.566666666666,
+        "completed_bytes_per_second_nominal": 188513.23333333334,
+        "cohort_rps_including_drain": 17137.501888330964,
+        "drain_seconds": 0.000580210005864501,
+        "measured_reused_requests": 514135,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "error_rate": 0,
+        "p50_ms": 0.435,
+        "p95_ms": 0.644,
+        "p99_ms": 0.773
+      },
+      "size_per_response": 11,
+      "server": {
+        "cpu_percent": 177.7661099203136,
+        "rss_bytes": 16474112,
+        "hwm_sum_bytes": 16474112,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client": {
+        "cpu_percent": 94.88263209601674,
+        "rss_bytes": 52658176,
+        "hwm_sum_bytes": 61403136,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client_warning": true,
+      "resource_samples": {
+        "server": 33,
+        "client": 33
+      },
+      "errors": {}
+    },
+    {
+      "prefix": "round-08-identity-on-small",
+      "repeat": 2,
+      "computed": {
+        "samples": 543673,
+        "issue_window_samples": 543673,
+        "successes": 543673,
+        "bytes": 556721152,
+        "completed_within_window": 543665,
+        "bytes_within_window": 556712960,
+        "late_completions": 8,
+        "completed_rps_nominal": 18122.166666666668,
+        "completed_bytes_per_second_nominal": 18557098.666666668,
+        "cohort_rps_including_drain": 18122.139406730854,
+        "drain_seconds": 0.00048657599836587906,
+        "measured_reused_requests": 543673,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "error_rate": 0,
+        "p50_ms": 0.416,
+        "p95_ms": 0.573,
+        "p99_ms": 0.705,
+        "physical_attempts": 543673,
+        "idle_close_reconnects": 0,
+        "header_reset_retries": 0
+      },
+      "size_per_response": 1024,
+      "server": {
+        "cpu_percent": 174.75426892926376,
+        "rss_bytes": 14585856,
+        "hwm_sum_bytes": 14585856,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client": {
+        "cpu_percent": 96.87830728802749,
+        "rss_bytes": 53129216,
+        "hwm_sum_bytes": 61403136,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client_warning": true,
+      "resource_samples": {
+        "server": 32,
+        "client": 32
+      },
+      "errors": {}
+    },
+    {
+      "prefix": "round-09-identity-on-large",
+      "repeat": 2,
+      "computed": {
+        "samples": 3390,
+        "issue_window_samples": 3390,
+        "successes": 3390,
+        "bytes": 56874762240,
+        "completed_within_window": 3382,
+        "bytes_within_window": 56740544512,
+        "late_completions": 8,
+        "completed_rps_nominal": 112.73333333333333,
+        "completed_bytes_per_second_nominal": 1891351483.7333333,
+        "cohort_rps_including_drain": 112.83486642093459,
+        "drain_seconds": 0.04390493407845497,
+        "measured_reused_requests": 3390,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "error_rate": 0,
+        "p50_ms": 70.007,
+        "p95_ms": 78.365,
+        "p99_ms": 87.491,
+        "physical_attempts": 3390,
+        "idle_close_reconnects": 0,
+        "header_reset_retries": 0
+      },
+      "size_per_response": 16777216,
+      "server": {
+        "cpu_percent": 116.7551883307475,
+        "rss_bytes": 16736256,
+        "hwm_sum_bytes": 17154048,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client": {
+        "cpu_percent": 97.77980221553793,
+        "rss_bytes": 50675712,
+        "hwm_sum_bytes": 61403136,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client_warning": true,
+      "resource_samples": {
+        "server": 32,
+        "client": 32
+      },
+      "errors": {}
+    },
+    {
+      "prefix": "round-10-identity-off-small",
+      "repeat": 2,
+      "computed": {
+        "samples": 562364,
+        "issue_window_samples": 562364,
+        "successes": 562364,
+        "bytes": 575860736,
+        "completed_within_window": 562356,
+        "bytes_within_window": 575852544,
+        "late_completions": 8,
+        "completed_rps_nominal": 18745.2,
+        "completed_bytes_per_second_nominal": 19195084.8,
+        "cohort_rps_including_drain": 18745.179982960555,
+        "drain_seconds": 0.0004588118754327297,
+        "measured_reused_requests": 562364,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "error_rate": 0,
+        "p50_ms": 0.404,
+        "p95_ms": 0.534,
+        "p99_ms": 0.689,
+        "physical_attempts": 562364,
+        "idle_close_reconnects": 0,
+        "header_reset_retries": 0
+      },
+      "size_per_response": 1024,
+      "server": {
+        "cpu_percent": 172.75665911026175,
+        "rss_bytes": 14561280,
+        "hwm_sum_bytes": 14561280,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client": {
+        "cpu_percent": 96.8819300965382,
+        "rss_bytes": 54013952,
+        "hwm_sum_bytes": 61403136,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client_warning": true,
+      "resource_samples": {
+        "server": 32,
+        "client": 32
+      },
+      "errors": {}
+    },
+    {
+      "prefix": "round-11-identity-off-large",
+      "repeat": 2,
+      "computed": {
+        "samples": 3511,
+        "issue_window_samples": 3511,
+        "successes": 3511,
+        "bytes": 58904805376,
+        "completed_within_window": 3503,
+        "bytes_within_window": 58770587648,
+        "late_completions": 8,
+        "completed_rps_nominal": 116.76666666666667,
+        "completed_bytes_per_second_nominal": 1959019588.2666667,
+        "cohort_rps_including_drain": 116.86688448143109,
+        "drain_seconds": 0.042727805906906724,
+        "measured_reused_requests": 3511,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "error_rate": 0,
+        "p50_ms": 67.632,
+        "p95_ms": 75.203,
+        "p99_ms": 84.037,
+        "physical_attempts": 3511,
+        "idle_close_reconnects": 0,
+        "header_reset_retries": 0
+      },
+      "size_per_response": 16777216,
+      "server": {
+        "cpu_percent": 116.75131606348008,
+        "rss_bytes": 17641472,
+        "hwm_sum_bytes": 17903616,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client": {
+        "cpu_percent": 96.82723504543337,
+        "rss_bytes": 52334592,
+        "hwm_sum_bytes": 61403136,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client_warning": true,
+      "resource_samples": {
+        "server": 32,
+        "client": 32
+      },
+      "errors": {}
+    },
+    {
+      "prefix": "round-12-transfer-off-identity",
+      "repeat": 2,
+      "computed": {
+        "samples": 545487,
+        "issue_window_samples": 545487,
+        "successes": 545487,
+        "bytes": 558578688,
+        "completed_within_window": 545479,
+        "bytes_within_window": 558570496,
+        "late_completions": 8,
+        "completed_rps_nominal": 18182.633333333335,
+        "completed_bytes_per_second_nominal": 18619016.533333335,
+        "cohort_rps_including_drain": 18182.65236619405,
+        "drain_seconds": 0.00040857703424990177,
+        "measured_reused_requests": 545487,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "error_rate": 0,
+        "p50_ms": 0.412,
+        "p95_ms": 0.583,
+        "p99_ms": 0.712
+      },
+      "size_per_response": 1024,
+      "server": {
+        "cpu_percent": 175.78336109446937,
+        "rss_bytes": 14548992,
+        "hwm_sum_bytes": 14548992,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client": {
+        "cpu_percent": 96.87944816142019,
+        "rss_bytes": 54808576,
+        "hwm_sum_bytes": 61403136,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client_warning": true,
+      "resource_samples": {
+        "server": 33,
+        "client": 33
+      },
+      "errors": {}
+    },
+    {
+      "prefix": "round-13-transfer-off-gzip",
+      "repeat": 2,
+      "computed": {
+        "samples": 535262,
+        "issue_window_samples": 535262,
+        "successes": 535262,
+        "bytes": 15522598,
+        "completed_within_window": 535254,
+        "bytes_within_window": 15522366,
+        "late_completions": 8,
+        "completed_rps_nominal": 17841.8,
+        "completed_bytes_per_second_nominal": 517412.2,
+        "cohort_rps_including_drain": 17841.79350873591,
+        "drain_seconds": 0.0004593001212924719,
+        "measured_reused_requests": 535262,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "error_rate": 0,
+        "p50_ms": 0.425,
+        "p95_ms": 0.563,
+        "p99_ms": 0.733
+      },
+      "size_per_response": 29,
+      "server": {
+        "cpu_percent": 182.77752371700637,
+        "rss_bytes": 16531456,
+        "hwm_sum_bytes": 16531456,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client": {
+        "cpu_percent": 94.91348919849284,
+        "rss_bytes": 54620160,
+        "hwm_sum_bytes": 61403136,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client_warning": true,
+      "resource_samples": {
+        "server": 33,
+        "client": 33
+      },
+      "errors": {}
+    },
+    {
+      "prefix": "round-14-transfer-off-br",
+      "repeat": 2,
+      "computed": {
+        "samples": 537940,
+        "issue_window_samples": 537940,
+        "successes": 537940,
+        "bytes": 5917340,
+        "completed_within_window": 537933,
+        "bytes_within_window": 5917263,
+        "late_completions": 7,
+        "completed_rps_nominal": 17931.1,
+        "completed_bytes_per_second_nominal": 197242.1,
+        "cohort_rps_including_drain": 17931.09818728216,
+        "drain_seconds": 0.0003934160340577364,
+        "measured_reused_requests": 537940,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "error_rate": 0,
+        "p50_ms": 0.422,
+        "p95_ms": 0.589,
+        "p99_ms": 0.765
+      },
+      "size_per_response": 11,
+      "server": {
+        "cpu_percent": 181.75777487997635,
+        "rss_bytes": 16437248,
+        "hwm_sum_bytes": 16437248,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client": {
+        "cpu_percent": 94.88557055487075,
+        "rss_bytes": 54640640,
+        "hwm_sum_bytes": 61403136,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client_warning": true,
+      "resource_samples": {
+        "server": 33,
+        "client": 33
+      },
+      "errors": {}
+    },
+    {
+      "prefix": "round-15-identity-off-small",
+      "repeat": 3,
+      "computed": {
+        "samples": 554518,
+        "issue_window_samples": 554518,
+        "successes": 554518,
+        "bytes": 567826432,
+        "completed_within_window": 554510,
+        "bytes_within_window": 567818240,
+        "late_completions": 8,
+        "completed_rps_nominal": 18483.666666666668,
+        "completed_bytes_per_second_nominal": 18927274.666666668,
+        "cohort_rps_including_drain": 18483.675321639603,
+        "drain_seconds": 0.0004187668673694134,
+        "measured_reused_requests": 554518,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "error_rate": 0,
+        "p50_ms": 0.408,
+        "p95_ms": 0.568,
+        "p99_ms": 0.717,
+        "physical_attempts": 554518,
+        "idle_close_reconnects": 0,
+        "header_reset_retries": 0
+      },
+      "size_per_response": 1024,
+      "server": {
+        "cpu_percent": 175.79064214706173,
+        "rss_bytes": 14471168,
+        "hwm_sum_bytes": 14471168,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client": {
+        "cpu_percent": 96.8761214963442,
+        "rss_bytes": 54632448,
+        "hwm_sum_bytes": 61403136,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client_warning": true,
+      "resource_samples": {
+        "server": 32,
+        "client": 32
+      },
+      "errors": {}
+    },
+    {
+      "prefix": "round-16-identity-off-large",
+      "repeat": 3,
+      "computed": {
+        "samples": 3274,
+        "issue_window_samples": 3274,
+        "successes": 3274,
+        "bytes": 54928605184,
+        "completed_within_window": 3266,
+        "bytes_within_window": 54794387456,
+        "late_completions": 8,
+        "completed_rps_nominal": 108.86666666666666,
+        "completed_bytes_per_second_nominal": 1826479581.8666666,
+        "cohort_rps_including_drain": 109.08215632660394,
+        "drain_seconds": 0.014074806123971939,
+        "measured_reused_requests": 3274,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "error_rate": 0,
+        "p50_ms": 72.007,
+        "p95_ms": 81.96,
+        "p99_ms": 90.228,
+        "physical_attempts": 3274,
+        "idle_close_reconnects": 0,
+        "header_reset_retries": 0
+      },
+      "size_per_response": 16777216,
+      "server": {
+        "cpu_percent": 110.77512980361053,
+        "rss_bytes": 17854464,
+        "hwm_sum_bytes": 18120704,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client": {
+        "cpu_percent": 94.80346020299008,
+        "rss_bytes": 52424704,
+        "hwm_sum_bytes": 61403136,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client_warning": true,
+      "resource_samples": {
+        "server": 33,
+        "client": 33
+      },
+      "errors": {}
+    },
+    {
+      "prefix": "round-17-identity-on-small",
+      "repeat": 3,
+      "computed": {
+        "samples": 558443,
+        "issue_window_samples": 558443,
+        "successes": 558443,
+        "bytes": 571845632,
+        "completed_within_window": 558435,
+        "bytes_within_window": 571837440,
+        "late_completions": 8,
+        "completed_rps_nominal": 18614.5,
+        "completed_bytes_per_second_nominal": 19061248.0,
+        "cohort_rps_including_drain": 18614.492483289516,
+        "drain_seconds": 0.00044188695028424263,
+        "measured_reused_requests": 558443,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "error_rate": 0,
+        "p50_ms": 0.405,
+        "p95_ms": 0.551,
+        "p99_ms": 0.732,
+        "physical_attempts": 558443,
+        "idle_close_reconnects": 0,
+        "header_reset_retries": 0
+      },
+      "size_per_response": 1024,
+      "server": {
+        "cpu_percent": 171.77330182852032,
+        "rss_bytes": 14585856,
+        "hwm_sum_bytes": 14585856,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client": {
+        "cpu_percent": 96.88784901322644,
+        "rss_bytes": 54665216,
+        "hwm_sum_bytes": 61403136,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client_warning": true,
+      "resource_samples": {
+        "server": 32,
+        "client": 32
+      },
+      "errors": {}
+    },
+    {
+      "prefix": "round-18-identity-on-large",
+      "repeat": 3,
+      "computed": {
+        "samples": 3420,
+        "issue_window_samples": 3420,
+        "successes": 3420,
+        "bytes": 57378078720,
+        "completed_within_window": 3412,
+        "bytes_within_window": 57243860992,
+        "late_completions": 8,
+        "completed_rps_nominal": 113.73333333333333,
+        "completed_bytes_per_second_nominal": 1908128699.7333333,
+        "cohort_rps_including_drain": 113.86728915164666,
+        "drain_seconds": 0.0349646108224988,
+        "measured_reused_requests": 3420,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "error_rate": 0,
+        "p50_ms": 69.08,
+        "p95_ms": 78.485,
+        "p99_ms": 84.488,
+        "physical_attempts": 3420,
+        "idle_close_reconnects": 0,
+        "header_reset_retries": 0
+      },
+      "size_per_response": 16777216,
+      "server": {
+        "cpu_percent": 117.72503058111614,
+        "rss_bytes": 17870848,
+        "hwm_sum_bytes": 18055168,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client": {
+        "cpu_percent": 97.79384245279796,
+        "rss_bytes": 52359168,
+        "hwm_sum_bytes": 61403136,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client_warning": true,
+      "resource_samples": {
+        "server": 32,
+        "client": 32
+      },
+      "errors": {}
+    },
+    {
+      "prefix": "round-19-transfer-off-identity",
+      "repeat": 3,
+      "computed": {
+        "samples": 542629,
+        "issue_window_samples": 542629,
+        "successes": 542629,
+        "bytes": 555652096,
+        "completed_within_window": 542621,
+        "bytes_within_window": 555643904,
+        "late_completions": 8,
+        "completed_rps_nominal": 18087.366666666665,
+        "completed_bytes_per_second_nominal": 18521463.466666665,
+        "cohort_rps_including_drain": 18087.27927491797,
+        "drain_seconds": 0.0005872498732060194,
+        "measured_reused_requests": 542629,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "error_rate": 0,
+        "p50_ms": 0.41,
+        "p95_ms": 0.605,
+        "p99_ms": 0.732
+      },
+      "size_per_response": 1024,
+      "server": {
+        "cpu_percent": 172.80257788826984,
+        "rss_bytes": 14442496,
+        "hwm_sum_bytes": 14442496,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client": {
+        "cpu_percent": 96.88146107706905,
+        "rss_bytes": 56627200,
+        "hwm_sum_bytes": 61403136,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client_warning": true,
+      "resource_samples": {
+        "server": 32,
+        "client": 32
+      },
+      "errors": {}
+    },
+    {
+      "prefix": "round-20-transfer-off-gzip",
+      "repeat": 3,
+      "computed": {
+        "samples": 542855,
+        "issue_window_samples": 542855,
+        "successes": 542855,
+        "bytes": 15742795,
+        "completed_within_window": 542847,
+        "bytes_within_window": 15742563,
+        "late_completions": 8,
+        "completed_rps_nominal": 18094.9,
+        "completed_bytes_per_second_nominal": 524752.1,
+        "cohort_rps_including_drain": 18094.584289476257,
+        "drain_seconds": 0.000965554965659976,
+        "measured_reused_requests": 542855,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "error_rate": 0,
+        "p50_ms": 0.42,
+        "p95_ms": 0.558,
+        "p99_ms": 0.738
+      },
+      "size_per_response": 29,
+      "server": {
+        "cpu_percent": 182.80601359172067,
+        "rss_bytes": 16465920,
+        "hwm_sum_bytes": 16465920,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client": {
+        "cpu_percent": 94.88559160551303,
+        "rss_bytes": 54681600,
+        "hwm_sum_bytes": 61403136,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client_warning": true,
+      "resource_samples": {
+        "server": 33,
+        "client": 33
+      },
+      "errors": {}
+    },
+    {
+      "prefix": "round-21-transfer-off-br",
+      "repeat": 3,
+      "computed": {
+        "samples": 536937,
+        "issue_window_samples": 536937,
+        "successes": 536937,
+        "bytes": 5906307,
+        "completed_within_window": 536929,
+        "bytes_within_window": 5906219,
+        "late_completions": 8,
+        "completed_rps_nominal": 17897.633333333335,
+        "completed_bytes_per_second_nominal": 196873.96666666667,
+        "cohort_rps_including_drain": 17897.596821152176,
+        "drain_seconds": 0.0005081892013549805,
+        "measured_reused_requests": 536937,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "error_rate": 0,
+        "p50_ms": 0.423,
+        "p95_ms": 0.581,
+        "p99_ms": 0.743
+      },
+      "size_per_response": 11,
+      "server": {
+        "cpu_percent": 182.77966426729301,
+        "rss_bytes": 16576512,
+        "hwm_sum_bytes": 16576512,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client": {
+        "cpu_percent": 94.88631547526309,
+        "rss_bytes": 54636544,
+        "hwm_sum_bytes": 61403136,
+        "pss_bytes": null,
+        "missing_root_samples": 0
+      },
+      "client_warning": true,
+      "resource_samples": {
+        "server": 33,
+        "client": 33
+      },
+      "errors": {}
+    }
+  ],
+  "anomalies": [],
+  "limitations": [
+    "online warmup boundary, reconnect and event-loop lag not wholly raw-reconstructible",
+    "RSS double counts shared pages and HWM is historical; sampling not continuous",
+    "client saturation warning means closed-loop throughput is not server capacity",
+    "body memory usage, cache hit and fallback not measured",
+    "body bytes are not TCP wire bytes",
+    "socket removal and exit are summary/config/log claims, not independent timing proof",
+    "different identity and transfer drivers have different validation costs",
+    "binary size and hash are release log claims, not directly hashed binary"
+  ],
+  "environment": {
+    "status": "complete",
+    "parameters": {
+      "rill": "/opt/rill/rill",
+      "workdir": "/scratch/work",
+      "output": "/scratch/output",
+      "seconds": 30.0,
+      "repeats": 3,
+      "warmup": 2.0,
+      "concurrency": 8,
+      "server_cpus": [
+        4,
+        5
+      ],
+      "client_cpus": [
+        6,
+        7
+      ],
+      "sidecars_json": "/fixture/valid-sidecars.json",
+      "only": "all"
+    },
+    "binary_sha256": "d829946dad524b9146060fcb2ef60b037c33a3e592402ea3b66590f1eefc01f5",
+    "fixture_sha256": "441381bf6e3fbe8e6258d365e18901c1298efde85cc3fc80e9ab0ddc9469c267",
+    "kernel": "7.2.11-x64v3-xanmod1",
+    "python": "3.13.5 (main, Aug 10 2026, 12:06:59) [GCC 14.2.0]",
+    "original_affinity": [
+      4,
+      5,
+      6,
+      7
+    ],
+    "limits": {
+      "RLIMIT_AS": [
+        2147483648,
+        2147483648
+      ],
+      "RLIMIT_CPU": [
+        900,
+        900
+      ],
+      "RLIMIT_NPROC": [
+        128,
+        128
+      ],
+      "RLIMIT_NOFILE": [
+        512,
+        512
+      ],
+      "RLIMIT_FSIZE": [
+        536870912,
+        536870912
+      ]
+    },
+    "clock": "time.monotonic",
+    "offered_load": "closed-loop",
+    "cache_note": "Configured budget only; no cache hit metrics. Separate functional tests establish cache behavior.",
+    "memory_note": "RSS sums may double-count shared pages; HWM is historical, not round peak; PSS and cgroup metrics unavailable.",
+    "fixture_note": "Driver verifies identity and gzip; brotli compared to externally verified fixture bytes, driver does not decode brotli."
+  },
+  "pilot": {
+    "status": "complete",
+    "parameters": {
+      "rill": "/opt/rill/rill",
+      "workdir": "/scratch/work",
+      "output": "/scratch/output",
+      "seconds": 2.0,
+      "repeats": 1,
+      "warmup": 2.0,
+      "concurrency": 8,
+      "server_cpus": [
+        4,
+        5
+      ],
+      "client_cpus": [
+        6,
+        7
+      ],
+      "sidecars_json": "/fixture/valid-sidecars.json",
+      "only": "all"
+    },
+    "rounds": 7,
+    "windows": [
+      [
+        "round-01-identity-off-small",
+        2.0,
+        2.0
+      ],
+      [
+        "round-02-identity-off-large",
+        2.0,
+        2.0
+      ],
+      [
+        "round-03-identity-on-small",
+        2.0,
+        2.0
+      ],
+      [
+        "round-04-identity-on-large",
+        2.0,
+        2.0
+      ],
+      [
+        "round-05-transfer-off-identity",
+        2.0,
+        2.0
+      ],
+      [
+        "round-06-transfer-off-gzip",
+        2.0,
+        2.0
+      ],
+      [
+        "round-07-transfer-off-br",
+        2.0,
+        2.0
+      ]
+    ]
+  },
+  "total_full_rows": 8106101,
+  "client_warnings": 21,
+  "old_boundary": {
+    "file": "artifacts/full-window-boundary-before/output/round-15-identity-off-small-requests.csv.gz",
+    "line": 571583,
+    "row": {
+      "start_monotonic": "1129492.933850693",
+      "end_monotonic": "1129492.934313176",
+      "latency_us": "462",
+      "bytes": "1024",
+      "status": "200",
+      "error": "",
+      "connection_id": "149",
+      "tls_version": "",
+      "cipher": "",
+      "session_reused": "",
+      "connection_request_index": "77154",
+      "was_reused": "True",
+      "attempts": "1",
+      "connect_events": "0",
+      "idle_close_reconnects": "0",
+      "header_reset_retries": "0"
+    },
+    "deadline": 1129492.933850589,
+    "violates": true
+  }
+}

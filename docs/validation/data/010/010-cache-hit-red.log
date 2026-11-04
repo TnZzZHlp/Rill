@@ -1,0 +1,26 @@
+
+running 1 test
+
+thread 'static_files::serve::tests::cache_hit_rechecks_opened_file_version' (13753) panicked at src/static_files/serve.rs:387:9:
+assertion `left == right` failed
+  left: None
+ right: Some(116)
+stack backtrace:
+   0: __rustc::rust_begin_unwind
+   1: core::panicking::panic_fmt
+   2: core::panicking::assert_failed_inner
+   3: core::panicking::assert_failed::<core::option::Option<i32>, core::option::Option<i32>>
+   4: rill::static_files::serve::tests::cache_hit_rechecks_opened_file_version
+   5: rill::static_files::serve::tests::cache_hit_rechecks_opened_file_version::{closure#0}
+   6: <rill::static_files::serve::tests::cache_hit_rechecks_opened_file_version::{closure#0} as core::ops::function::FnOnce<()>>::call_once
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+static_files::serve::tests::cache_hit_rechecks_opened_file_version --- FAILED
+
+failures:
+
+failures:
+    static_files::serve::tests::cache_hit_rechecks_opened_file_version
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 33 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--lib`

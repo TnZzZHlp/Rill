@@ -2,6 +2,7 @@ import asyncio
 import csv
 import gzip
 import itertools
+import json
 import math
 import ssl
 import time
@@ -91,7 +92,14 @@ def percentile(values, fraction):
     return sorted(values)[math.ceil(len(values) * fraction) - 1] / 1000
 
 
-async def round_http(path, tls, warm, ca, seconds, warmup, concurrency, raw_path):
+def record_window(path, start, measure, deadline):
+    with path.open('x') as out:
+        json.dump({'warmup_start_monotonic': start, 'measure_start_monotonic': measure,
+                   'deadline_monotonic': deadline, 'clock': 'time.monotonic'}, out)
+        out.write('\n')
+
+
+async def round_http(path, tls, warm, ca, seconds, warmup, concurrency, raw_path, window_path=None):
     errors = Counter()
     latencies = []
     successful_bytes = attempted = reused_count = connect_events = reconnects = idle_reconnects = 0
@@ -101,6 +109,8 @@ async def round_http(path, tls, warm, ca, seconds, warmup, concurrency, raw_path
     start = time.monotonic()
     measure = start + warmup
     deadline = measure + seconds
+    if window_path is not None:
+        record_window(window_path, start, measure, deadline)
     last_completion = deadline
     with gzip.open(raw_path, 'xt', newline='', compresslevel=1) as out:
         csvout = csv.writer(out)
@@ -116,8 +126,10 @@ async def round_http(path, tls, warm, ca, seconds, warmup, concurrency, raw_path
             connections = 0
             ctx = context(ca) if tls else None
             try:
-                while time.monotonic() < deadline:
+                while True:
                     begin = time.monotonic()
+                    if begin >= deadline:
+                        break
                     measured = begin >= measure
                     status, size, error = '', 0, ''
                     attempt_count = connects = idle_closes = reset_retries = 0

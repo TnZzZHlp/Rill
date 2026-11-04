@@ -128,6 +128,7 @@ mod tests {
             http: Vec::new(),
             https: Vec::new(),
             watch: false,
+            static_cache_bytes: 0,
             redirect_https: false,
             redirect_port: None,
             control_socket: Default::default(),

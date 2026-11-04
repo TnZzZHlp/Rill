@@ -15,6 +15,7 @@ pub fn parse(node: &KdlNode, origin: &Origin) -> Result<Server> {
         http: Vec::new(),
         https: Vec::new(),
         watch: false,
+        static_cache_bytes: 0,
         redirect_https: false,
         redirect_port: None,
         control_socket: "/run/rill/control.sock".into(),
@@ -119,6 +120,22 @@ pub fn parse(node: &KdlNode, origin: &Origin) -> Result<Server> {
             name => {
                 once(&mut seen, child, &origin, "server")?;
                 match name {
+                    "static-cache-bytes" => {
+                        shape(child, &origin, "static-cache-bytes", 1..=1, false)?;
+                        result.static_cache_bytes = child.entries()[0]
+                            .value()
+                            .as_integer()
+                            .and_then(|value| usize::try_from(value).ok())
+                            .filter(|value| *value <= 268_435_456)
+                            .ok_or_else(|| {
+                                ConfigError::new(
+                                    "CONFIG_TYPE",
+                                    "static-cache-bytes",
+                                    "expected integer bytes from 0 to 268435456",
+                                    &origin,
+                                )
+                            })?;
+                    }
                     "watch" => result.watch = boolean(child, &origin, "watch")?.value,
                     "redirect-https" => {
                         result.redirect_https = boolean(child, &origin, "redirect-https")?.value

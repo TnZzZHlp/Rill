@@ -162,7 +162,9 @@ fn located_cost<T>(value: &Located<T>, chain: &[Origin]) -> Option<usize> {
 }
 
 fn route_cost(route: &RawRoute, chain: &[Origin]) -> Option<usize> {
-    let mut cost = size_of::<RawRoute>();
+    let mut cost = size_of::<RawRoute>()
+        .checked_sub(size_of::<Option<Located<bool>>>() * 2)?
+        .checked_sub(size_of::<BTreeMap<u16, Located<std::path::PathBuf>>>())?;
     cost = cost
         .checked_add(located_cost(&route.pattern, chain)?)?
         .checked_add(route.pattern.value.len())?;
@@ -202,6 +204,15 @@ fn route_cost(route: &RawRoute, chain: &[Origin]) -> Option<usize> {
         cost = cost
             .checked_add(located_cost(v, chain)?)?
             .checked_add(v.value.len())?;
+    }
+    for value in [&route.precompressed, &route.browse].into_iter().flatten() {
+        cost = cost.checked_add(located_cost(value, chain)?)?;
+    }
+    for value in route.error_pages.values() {
+        cost = cost
+            .checked_add(size_of::<u16>())?
+            .checked_add(located_cost(value, chain)?)?
+            .checked_add(value.value.as_os_str().len())?;
     }
     Some(cost)
 }
@@ -259,6 +270,15 @@ fn attach(route: &mut RawRoute, chain: &[Origin]) {
     }
     if let Some(v) = &mut route.cache_control {
         add_chain(&mut v.origin, chain);
+    }
+    for value in [&mut route.precompressed, &mut route.browse]
+        .into_iter()
+        .flatten()
+    {
+        add_chain(&mut value.origin, chain);
+    }
+    for value in route.error_pages.values_mut() {
+        add_chain(&mut value.origin, chain);
     }
 }
 

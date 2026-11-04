@@ -138,7 +138,7 @@ mod tests {
     #[tokio::test]
     async fn queued_reload_is_bounded_and_close_cancels_waiter()
     -> std::result::Result<(), Box<dyn std::error::Error>> {
-        let state = RuntimeState::new(build(Path::new("examples/config.kdl"), &HttpPreparer)?);
+        let state = RuntimeState::new(build(Path::new("examples/config.kdl"), &HttpPreparer)?)?;
         let coordinator = ReloadCoordinator::new(state.clone());
         let admission = coordinator.admission.clone().acquire_owned().await?;
         let execution = coordinator.execution.clone().acquire_owned().await?;

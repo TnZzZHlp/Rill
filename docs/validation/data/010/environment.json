@@ -1,0 +1,26 @@
+{
+  "baseline": "8b3b628aae453643a13e95e96914552808630e84",
+  "cpu": {
+    "vendor_id": "GenuineIntel",
+    "cpu family": "6",
+    "model": "158",
+    "model name": "Genuine Intel(R) CPU 0000 @ 2.90GHz",
+    "stepping": "10",
+    "microcode": "0xfa"
+  },
+  "host_kernel": "7.2.11-x64v3-xanmod1",
+  "binary_bytes": 19232808,
+  "binary_sha256": "d829946dad524b9146060fcb2ef60b037c33a3e592402ea3b66590f1eefc01f5",
+  "quality_snapshot": "source-formatted",
+  "release_snapshot": "source-release",
+  "measurement_snapshot": "source-measurement-final",
+  "project_code_execution": "OS sandbox only; read-only source/toolchain/registry, offline, private PID/mount/network with loopback only, uid65534 cap0",
+  "actual_rust_toolchain": "1.99.1-x86_64-unknown-linux-gnu",
+  "source_tree_checks": "repository src/tests/examples byte-identical to release snapshot; final measurement Python byte-identical to measurement snapshot; source manifest hashes verified",
+  "user_files_unchanged": [
+    "writing-block.md",
+    "docs/validation/bench-three-way.md",
+    "docs/plans/rill-web-server/bench-podman-three-way.md"
+  ],
+  "lock_changes": "same package set/versions; only rill dependency list adds existing bytes"
+}

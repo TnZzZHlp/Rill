@@ -385,3 +385,80 @@ fn alternating_reloads_keep_concurrent_reader_snapshots_consistent() -> Result {
     result?;
     reader_result
 }
+
+#[test]
+fn cache_root_reload_isolates_generations_and_failed_candidate() -> Result {
+    let mut f = Fixture::new()?;
+    let old = f.dir.join("old-root");
+    let new = f.dir.join("new-root");
+    fs::create_dir(&old)?;
+    fs::create_dir(&new)?;
+    fs::write(old.join("file"), b"alpha")?;
+    fs::write(new.join("file"), b"bravo")?;
+    let config = |root: &std::path::Path| {
+        f.config(root, "max-age=10")
+            .replacen("server {", "server { static-cache-bytes 65536;", 1)
+    };
+    let initial = config(&old);
+    let next = config(&new);
+    let invalid = config(&f.dir.join("missing"));
+    fs::write(&f.entry, initial)?;
+    f.start()?;
+    let mut connection = f.connect()?;
+    assert_eq!(Fixture::request(&mut connection, "/file")?.2, b"alpha");
+    assert_eq!(Fixture::request(&mut connection, "/file")?.2, b"alpha");
+    fs::write(&f.entry, invalid)?;
+    assert_eq!(f.reload()?.code.as_deref(), Some("RESOURCE_IO"));
+    assert_eq!(Fixture::request(&mut connection, "/file")?.2, b"alpha");
+    fs::write(&f.entry, next)?;
+    assert_eq!(f.reload()?.generation, Some(2));
+    assert_eq!(Fixture::request(&mut connection, "/file")?.2, b"bravo");
+    assert_eq!(Fixture::request(&mut connection, "/file")?.2, b"bravo");
+    Ok(())
+}
+
+#[test]
+fn cache_budget_changes_require_restart() -> Result {
+    for (initial, changed) in [(0, 65536), (65536, 131072)] {
+        let mut f = Fixture::new()?;
+        let root = f.dir.join("root");
+        fs::create_dir(&root)?;
+        fs::write(root.join("file"), b"stable")?;
+        let config = f.config(&root, "max-age=10");
+        let with_budget = |budget| {
+            config.replacen(
+                "server {",
+                &format!("server {{ static-cache-bytes {budget};"),
+                1,
+            )
+        };
+        fs::write(&f.entry, with_budget(initial))?;
+        f.start()?;
+        let mut connection = f.connect()?;
+        assert_eq!(Fixture::request(&mut connection, "/file")?.2, b"stable");
+        fs::write(&f.entry, with_budget(changed))?;
+        assert_eq!(f.reload()?.code.as_deref(), Some("RESTART_REQUIRED"));
+        let mut cli = std::process::Command::new(env!("CARGO_BIN_EXE_rill"))
+            .arg("reload")
+            .arg("--socket")
+            .arg(&f.socket)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()?;
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            if let Some(status) = cli.try_wait()? {
+                assert_eq!(status.code(), Some(1));
+                break;
+            }
+            if Instant::now() >= deadline {
+                cli.kill()?;
+                cli.wait()?;
+                return Err("reload CLI timed out".into());
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(Fixture::request(&mut connection, "/file")?.2, b"stable");
+    }
+    Ok(())
+}

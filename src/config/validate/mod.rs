@@ -179,7 +179,12 @@ pub fn validate(normalized: NormalizedConfig) -> Result<ValidatedConfig> {
             };
             let action = match route.action {
                 RawAction::Proxy(proxy) => {
-                    if route.spa.is_some() || route.cache_control.is_some() {
+                    if route.spa.is_some()
+                        || route.cache_control.is_some()
+                        || route.precompressed.is_some()
+                        || route.browse.is_some()
+                        || !route.error_pages.is_empty()
+                    {
                         return Err(ConfigError::new(
                             "CONFIG_TYPE",
                             "proxy",
@@ -193,6 +198,9 @@ pub fn validate(normalized: NormalizedConfig) -> Result<ValidatedConfig> {
                     root,
                     spa: route.spa.is_some_and(|value| value.value),
                     cache_control: route.cache_control.map(|value| value.value),
+                    precompressed: route.precompressed.is_some_and(|value| value.value),
+                    browse: route.browse.is_some_and(|value| value.value),
+                    error_pages: route.error_pages,
                 },
             };
             routes.push(Route {

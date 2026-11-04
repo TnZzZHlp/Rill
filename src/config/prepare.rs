@@ -212,6 +212,9 @@ mod tests {
             root: Located::new(std::env::temp_dir(), Origin::file(entry)),
             spa: false,
             cache_control: None,
+            precompressed: false,
+            browse: false,
+            error_pages: Default::default(),
         };
         let old = ConfigurationOnly.prepare(&configuration)?;
         let CheckedRoute::Static(old) = &old.routes[0][0] else {

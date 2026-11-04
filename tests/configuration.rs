@@ -992,3 +992,152 @@ fn tracked_build_retains_glob_and_symlink_dependencies_on_failure() -> TestResul
     fs::remove_dir_all(directory)?;
     Ok(())
 }
+
+#[test]
+fn static_enhancement_fields_and_snippet_origins() -> TestResult {
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let dir = std::env::temp_dir().join(format!("rill-010-config-{}-{unique}", std::process::id()));
+    fs::create_dir_all(dir.join("defs"))?;
+    let entry = dir.join("config.kdl");
+    fs::write(
+        dir.join("defs/shared.kdl"),
+        "snippet \"outer\" { use-snippet \"inner\"; }\nsnippet \"inner\" { route \"/assets/*\" { root \"www\"; precompressed #true; browse #true; error-page 404 \"errors/404.html\"; error-page 503 \"errors/503.html\"; } }\n",
+    )?;
+    fs::write(
+        &entry,
+        "server { http \"127.0.0.1:8080\"; static-cache-bytes 16777216; }\nimport \"defs/shared.kdl\"\nsite \"a.test\" { root \"www\"; precompressed #true; error-page 403 \"forbidden.html\"; route \"/other\" { root \"other\"; }; use-snippet \"outer\"; }\nsite \"b.test\" { use-snippet \"outer\"; }\n",
+    )?;
+    let parsed = parse(load(&entry)?)?;
+    let normalized = normalize(parsed)?;
+    for site in &normalized.sites {
+        let route = site
+            .routes
+            .iter()
+            .find(|route| route.pattern.value == "/assets/*")
+            .ok_or("snippet route")?;
+        assert!(
+            route
+                .precompressed
+                .as_ref()
+                .ok_or("precompressed")?
+                .origin
+                .references
+                .len()
+                >= 2
+        );
+        assert!(
+            route
+                .browse
+                .as_ref()
+                .ok_or("browse")?
+                .origin
+                .references
+                .len()
+                >= 2
+        );
+        assert!(route.error_pages[&404].origin.references.len() >= 2);
+        assert_eq!(
+            route.error_pages[&404].value,
+            fs::canonicalize(dir.join("defs"))?.join("errors/404.html")
+        );
+    }
+    let config = validate(normalized)?;
+    assert_eq!(config.server.static_cache_bytes, 16_777_216);
+    let Action::Static {
+        precompressed,
+        browse,
+        error_pages,
+        ..
+    } = &config.sites[0]
+        .routes
+        .iter()
+        .find(|r| r.pattern.value == "/other")
+        .ok_or("route")?
+        .action
+    else {
+        return Err("static".into());
+    };
+    assert!(!precompressed && !browse && error_pages.is_empty());
+    let Action::Static {
+        precompressed,
+        error_pages,
+        ..
+    } = &config.sites[0]
+        .routes
+        .iter()
+        .find(|r| r.pattern.value == "/*")
+        .ok_or("shorthand")?
+        .action
+    else {
+        return Err("static".into());
+    };
+    assert!(*precompressed && error_pages.contains_key(&403));
+    fs::remove_dir_all(dir)?;
+    Ok(())
+}
+
+#[test]
+fn static_enhancement_strict_config_and_budget() -> TestResult {
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let entry = std::env::temp_dir().join(format!(
+        "rill-010-invalid-{}-{unique}.kdl",
+        std::process::id()
+    ));
+    for (server, route, expected) in [
+        ("static-cache-bytes -1;", "root \"www\";", "CONFIG_TYPE"),
+        (
+            "static-cache-bytes 268435457;",
+            "root \"www\";",
+            "CONFIG_TYPE",
+        ),
+        ("static-cache-bytes \"1\";", "root \"www\";", "CONFIG_TYPE"),
+        ("", "root \"www\"; precompressed 1;", "CONFIG_TYPE"),
+        ("", "root \"www\"; browse #true { };", "CONFIG_TYPE"),
+        ("", "root \"www\"; error-page 200 \"x\";", "CONFIG_TYPE"),
+        ("", "root \"www\"; error-page 404 1;", "CONFIG_TYPE"),
+        (
+            "",
+            "root \"www\"; error-page 404 \"x\" extra=1;",
+            "CONFIG_TYPE",
+        ),
+        (
+            "",
+            "root \"www\"; error-page 404 \"x\"; error-page 404 \"y\";",
+            "DUPLICATE",
+        ),
+        (
+            "",
+            "proxy \"http://127.0.0.1:3000\"; browse #true;",
+            "CONFIG_TYPE",
+        ),
+    ] {
+        fs::write(
+            &entry,
+            format!(
+                "server {{ http \"127.0.0.1:8080\"; {server} }}\nsite \"a.test\" {{ {route} }}\n"
+            ),
+        )?;
+        let result = load(&entry)
+            .and_then(parse)
+            .and_then(normalize)
+            .and_then(validate);
+        let error = result.expect_err("invalid config accepted");
+        assert_eq!(error.code, expected, "{error}");
+        if expected == "DUPLICATE" {
+            assert!(!error.related.is_empty());
+        }
+    }
+    let path = "a".repeat(16000);
+    fs::write(
+        &entry,
+        format!(
+            "snippet \"s\" {{ route \"/*\" {{ root \"www\"; precompressed #true; browse #true; error-page 404 \"{path}\"; }} }}\nserver {{ http \"127.0.0.1:8080\"; }}\nsite \"a.test\" {{ {} }}",
+            "use-snippet \"s\"; ".repeat(600)
+        ),
+    )?;
+    let error =
+        normalize(parse(load(&entry)?)?).expect_err("new fields bypass snippet payload budget");
+    assert_eq!(error.code, "CONFIG_LIMIT");
+    fs::remove_file(entry)?;
+    Ok(())
+}

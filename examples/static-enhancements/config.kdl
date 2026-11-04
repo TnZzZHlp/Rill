@@ -1,0 +1,10 @@
+server {
+    http "127.0.0.1:18080"
+    static-cache-bytes 16777216
+}
+site "static.test" {
+    root "public"
+    browse #true
+    precompressed #true
+    error-page 404 "public/errors/404.html"
+}

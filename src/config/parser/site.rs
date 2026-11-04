@@ -1,4 +1,5 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::PathBuf;
 
 use kdl::KdlNode;
 
@@ -15,6 +16,9 @@ struct Scope {
     action: Option<RawAction>,
     spa: Option<Located<bool>>,
     cache_control: Option<Located<String>>,
+    precompressed: Option<Located<bool>>,
+    browse: Option<Located<bool>>,
+    error_pages: BTreeMap<u16, Located<PathBuf>>,
     tls: Option<Located<String>>,
     items: Vec<RouteItem>,
 }
@@ -26,6 +30,9 @@ fn scope(node: &KdlNode, origin: &Origin, site: bool) -> Result<Scope> {
         action: None,
         spa: None,
         cache_control: None,
+        precompressed: None,
+        browse: None,
+        error_pages: BTreeMap::new(),
         tls: None,
         items: Vec::new(),
     };
@@ -37,6 +44,29 @@ fn scope(node: &KdlNode, origin: &Origin, site: bool) -> Result<Scope> {
     {
         let origin = at(child, origin);
         match child.name().value() {
+            "error-page" => {
+                shape(child, &origin, "error-page", 2..=2, false)?;
+                let status = child.entries()[0]
+                    .value()
+                    .as_integer()
+                    .and_then(|value| u16::try_from(value).ok())
+                    .filter(|value| matches!(value, 403 | 404 | 405 | 406 | 416 | 500 | 503))
+                    .ok_or_else(|| {
+                        ConfigError::new("CONFIG_TYPE", "error-page", "unsupported status", &origin)
+                    })?;
+                let path = argument(child, 1, &origin, "error-page")?;
+                let path = Located::new(origin.relative_path(&path.value), origin.clone());
+                if let Some(first) = result.error_pages.insert(status, path) {
+                    return Err(ConfigError::new(
+                        "DUPLICATE",
+                        "error-page",
+                        "status is repeated",
+                        &origin,
+                    )
+                    .related(&first.origin));
+                }
+                continue;
+            }
             "use" => {
                 result.uses.extend(references(child, &origin)?);
                 continue;
@@ -76,6 +106,10 @@ fn scope(node: &KdlNode, origin: &Origin, site: bool) -> Result<Scope> {
                     RawAction::Root(path(child, &origin, "root")?)
                 });
             }
+            "precompressed" => {
+                result.precompressed = Some(boolean(child, &origin, "precompressed")?)
+            }
+            "browse" => result.browse = Some(boolean(child, &origin, "browse")?),
             "spa" => result.spa = Some(boolean(child, &origin, "spa")?),
             "cache-control" => {
                 result.cache_control = Some(string(child, &origin, "cache-control")?)
@@ -105,6 +139,9 @@ pub fn route(node: &KdlNode, origin: &Origin) -> Result<RawRoute> {
         action,
         spa: scope.spa,
         cache_control: scope.cache_control,
+        precompressed: scope.precompressed,
+        browse: scope.browse,
+        error_pages: scope.error_pages,
     })
 }
 
@@ -128,8 +165,16 @@ pub fn parse(node: &KdlNode, origin: &Origin) -> Result<RawSite> {
             action,
             spa: scope.spa,
             cache_control: scope.cache_control,
+            precompressed: scope.precompressed,
+            browse: scope.browse,
+            error_pages: scope.error_pages,
         })));
-    } else if scope.spa.is_some() || scope.cache_control.is_some() {
+    } else if scope.spa.is_some()
+        || scope.cache_control.is_some()
+        || scope.precompressed.is_some()
+        || scope.browse.is_some()
+        || !scope.error_pages.is_empty()
+    {
         return Err(ConfigError::new(
             "CONFIG_TYPE",
             "site",

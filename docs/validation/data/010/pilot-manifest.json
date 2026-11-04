@@ -1,0 +1,202 @@
+[
+  {
+    "path": "work/round-01-identity-off-small.kdl",
+    "bytes": 208,
+    "sha256": "bcec65cac221c295c2022313084d36d5eed5c7b0f1d3f0244db9b25561c042bb"
+  },
+  {
+    "path": "work/round-01-identity-off-small.log",
+    "bytes": 292,
+    "sha256": "720755614cf0151480941612f07749b6b99688b92252c0ead0907dec32c7c68a"
+  },
+  {
+    "path": "work/round-02-identity-off-large.kdl",
+    "bytes": 208,
+    "sha256": "a105fc6274b1cb5b5e459023ed19ae39f91dcf3d8faff39c94187215d816e6df"
+  },
+  {
+    "path": "work/round-02-identity-off-large.log",
+    "bytes": 292,
+    "sha256": "faca35aefd0acbe7d0a78818d93dd899fe1a7231668fbb80566c6f313061a8bf"
+  },
+  {
+    "path": "work/round-03-identity-on-small.kdl",
+    "bytes": 214,
+    "sha256": "81d5d504689f48a244a20ab4423bfd254d9f952d2c9f12ec872ff25088e6d763"
+  },
+  {
+    "path": "work/round-03-identity-on-small.log",
+    "bytes": 292,
+    "sha256": "2b2930a31c7e48417c098b97102c85f86d04e145cebb468b41534065acb95c9c"
+  },
+  {
+    "path": "work/round-04-identity-on-large.kdl",
+    "bytes": 214,
+    "sha256": "9536094301b0f3d605f1e802f29429a90313be31b8739ba42e8677cbe3d55296"
+  },
+  {
+    "path": "work/round-04-identity-on-large.log",
+    "bytes": 292,
+    "sha256": "753c92fd499105c4cf336b97995165ff0f9d89b5492a077e86307565263e5255"
+  },
+  {
+    "path": "work/round-05-transfer-off-identity.kdl",
+    "bytes": 210,
+    "sha256": "5902979a4b0e652f0096283f49135998e875e98314f7f88e77fe8a53610abf4b"
+  },
+  {
+    "path": "work/round-05-transfer-off-identity.log",
+    "bytes": 292,
+    "sha256": "54674855243025a75e75690d987a69d087a33e6db2bc2fddac2533c98bffc6b7"
+  },
+  {
+    "path": "work/round-06-transfer-off-gzip.kdl",
+    "bytes": 206,
+    "sha256": "b2d1bc7cf5c4a572eba93863351b7911ad6635b11961f8419a466f0fdce2dd89"
+  },
+  {
+    "path": "work/round-06-transfer-off-gzip.log",
+    "bytes": 292,
+    "sha256": "298020fb343b4b0bf5e4e6a103ff15dd3f478d1c7966cb528b94fa51125a8525"
+  },
+  {
+    "path": "work/round-07-transfer-off-br.kdl",
+    "bytes": 204,
+    "sha256": "955e8252bcaa23a105b2b968b8eb4fc40d713bf4d29b7594e06d1130392358ac"
+  },
+  {
+    "path": "work/round-07-transfer-off-br.log",
+    "bytes": 292,
+    "sha256": "a5d0a6195e0847f73d4adb18d1f63ec910e1c6354342e969a40e61db6c98f5c1"
+  },
+  {
+    "path": "work/www/large.bin",
+    "bytes": 16777216,
+    "sha256": "88d1c5370462c37ad9baed0c676beba4c80607d9d143a636d43c4866766636cb"
+  },
+  {
+    "path": "work/www/small.bin",
+    "bytes": 1024,
+    "sha256": "004ff2ad28c856e1e1eccdb7a0222f100eb2c26b6301a9f5968cdda899307987"
+  },
+  {
+    "path": "work/www/small.bin.br",
+    "bytes": 11,
+    "sha256": "7a05907c9e8559d4c96409a95fc91dfbdea53ac418b07d7416f8b427d35a1a2b"
+  },
+  {
+    "path": "work/www/small.bin.gz",
+    "bytes": 29,
+    "sha256": "4794d8568e858f02bbf3b84f6afe13ebcc54ed3ece1530735151803ce7ea4d1a"
+  },
+  {
+    "path": "output/round-01-identity-off-small-requests.csv.gz",
+    "bytes": 499422,
+    "sha256": "cf46244152a95d8f7f8feb5ee6fb7357759ec19c4b0a93bf0e0211594a920b71"
+  },
+  {
+    "path": "output/round-01-identity-off-small-resources.csv",
+    "bytes": 734,
+    "sha256": "a3550ab695ed20ced2bc2db34e899901c6d8a4ab65f5c7e29a796cc777c6c401"
+  },
+  {
+    "path": "output/round-01-identity-off-small-window.json",
+    "bytes": 160,
+    "sha256": "372248097c42a5188b70cbff5013ae0ad06a54698bdce72d4d7abcacbd58455d"
+  },
+  {
+    "path": "output/round-02-identity-off-large-requests.csv.gz",
+    "bytes": 2410,
+    "sha256": "914996bc372a99f1300ecb9b04416c0d3948730b7cfcd2eed02eb222b0b28d35"
+  },
+  {
+    "path": "output/round-02-identity-off-large-resources.csv",
+    "bytes": 733,
+    "sha256": "f91da408a043a9f06053ad0b32094fe1568bfd9cccdb330f5c2e27850dea6ca0"
+  },
+  {
+    "path": "output/round-02-identity-off-large-window.json",
+    "bytes": 160,
+    "sha256": "62eed07d00507d248ac2656a28a7b92286b28d49f5e967131c1f9a62489156a7"
+  },
+  {
+    "path": "output/round-03-identity-on-small-requests.csv.gz",
+    "bytes": 659365,
+    "sha256": "e822f624ed5715ea5b51cd2f623f8a4da6deae84068bee700d5d89bdcb049b10"
+  },
+  {
+    "path": "output/round-03-identity-on-small-resources.csv",
+    "bytes": 734,
+    "sha256": "92b85c801752e6d1a0556aadf5a7b997d2e98b24696f7e8d5324e53d435944c6"
+  },
+  {
+    "path": "output/round-03-identity-on-small-window.json",
+    "bytes": 160,
+    "sha256": "9e603acaf974f1b5ecbbd0117aa1f9d4d4c69cc10437d9d2e4d3d9fc8254c9dd"
+  },
+  {
+    "path": "output/round-04-identity-on-large-requests.csv.gz",
+    "bytes": 2447,
+    "sha256": "3b5da2c29e8582411f90f09c36971878db097f32530c07501ccadc5807778c9f"
+  },
+  {
+    "path": "output/round-04-identity-on-large-resources.csv",
+    "bytes": 731,
+    "sha256": "3c6409f46811a4c8343ed4093bdd3033a320dd460d60be3389784c1cd64c6242"
+  },
+  {
+    "path": "output/round-04-identity-on-large-window.json",
+    "bytes": 160,
+    "sha256": "5aa4597393252e6bfa2c5e7fd4a1acf389713a4437a6351aeaef8447c74a8d66"
+  },
+  {
+    "path": "output/round-05-transfer-off-identity-requests.csv.gz",
+    "bytes": 679371,
+    "sha256": "d10cb299c16e76cc637295ddfb8a71384c6e913f87016c675c454f409be17893"
+  },
+  {
+    "path": "output/round-05-transfer-off-identity-resources.csv",
+    "bytes": 727,
+    "sha256": "ff264ffc0b4f4f4b01540854b87b113a2f84f5938fac9abb2960fb685c9f30b2"
+  },
+  {
+    "path": "output/round-05-transfer-off-identity-window.json",
+    "bytes": 157,
+    "sha256": "b7485a03f005ba832283f248c39e20368c1025675b3bcf2f127629f802b57fd6"
+  },
+  {
+    "path": "output/round-06-transfer-off-gzip-requests.csv.gz",
+    "bytes": 648936,
+    "sha256": "15abea4cd99b028886d0002a993cc3665d3a58c75c9eaa3f180c8afd0501b976"
+  },
+  {
+    "path": "output/round-06-transfer-off-gzip-resources.csv",
+    "bytes": 732,
+    "sha256": "0b6e051f0f74925d0a3b676bbf034e6c3f0b99a0693aae3cec0b072069a987d5"
+  },
+  {
+    "path": "output/round-06-transfer-off-gzip-window.json",
+    "bytes": 157,
+    "sha256": "0a4a67a05895b84e91c24254219c1071560c78a6036ed3662fe44fa59405f1f2"
+  },
+  {
+    "path": "output/round-07-transfer-off-br-requests.csv.gz",
+    "bytes": 667492,
+    "sha256": "036c7a0d19826175d80bd0e774d31a38de4f265e1193b450c8889defb43e310b"
+  },
+  {
+    "path": "output/round-07-transfer-off-br-resources.csv",
+    "bytes": 734,
+    "sha256": "7652d1e156a8184bd2c6f061fdfa05e44abb9781112f0b5a743b388ffca20635"
+  },
+  {
+    "path": "output/round-07-transfer-off-br-window.json",
+    "bytes": 157,
+    "sha256": "f2423b93394080a3d55d862b342314fae2e51e004ff9ab99fa7500d233d7d887"
+  },
+  {
+    "path": "output/summary.json",
+    "bytes": 15640,
+    "sha256": "bbcf039ee6d4a21b16bc983222d49aace678268eb8e73b9e8d215c3c1ccaff0b"
+  }
+]

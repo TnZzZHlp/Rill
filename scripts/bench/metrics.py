@@ -10,8 +10,8 @@ import container
 class Sampler:
     """Per-second resource sampling for containerised targets.
 
-    ``roots`` maps a group name to either ``('container', <name>)`` or
-    ``('pid', <pid>)``. Process trees are resolved through the host-visible
+    ``roots`` maps a group name to ``('container', <name>)``,
+    ``('pid', <pid>)``, or ``('pid-self', <pid>)`` without descendants. Process trees are resolved through the host-visible
     container PID, so container runtime helpers are never part of the tree.
     ``cgroups`` maps a group name to a cgroup v2 directory for an independent
     accounting series.
@@ -41,7 +41,7 @@ class Sampler:
         """Resolve the host PID for a group, re-resolving when a cached container
         PID disappears so a restarted container is not sampled as zero forever."""
         kind, value = self.roots[name]
-        if kind == 'pid':
+        if kind in ('pid', 'pid-self'):
             self.resolved[name] = value
             return value
         cached = self.resolved.get(name)
@@ -112,7 +112,7 @@ class Sampler:
         for name in self.roots:
             pid = self.root_pid(name, processes)
             members = {pid} if pid else set()
-            if members:
+            if members and self.roots[name][0] != 'pid-self':
                 while True:
                     more = {p for p, item in processes.items() if item[0] in members} - members
                     if not more:

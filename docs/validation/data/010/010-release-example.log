@@ -1,0 +1,13 @@
+rill 0.1.0
+{
+  "example_validation": "passed",
+  "results": [
+    "index",
+    "browse_and_existence_validator",
+    "custom_error_get_head",
+    "verified_gzip_brotli_identity_range_head_etag",
+    "cached_file_replacement_and_deletion",
+    "exit_zero_socket_removed"
+  ]
+}
+{"artifact": "rill", "bytes": 19232808, "sha256": "d829946dad524b9146060fcb2ef60b037c33a3e592402ea3b66590f1eefc01f5"}

@@ -115,7 +115,8 @@ watch 使用独立于快照的 inotify FD 生命周期，最多活动和候选�
 - 客户路径先以 O_PATH 打开并检查普通文件或目录；普通文件经持存可信自身 procfd 的数字入口重开并比较 dev/ino/type，原 FD 保持存活，避免设备/FIFO 先读开和 FD 重用竞态。索引和 SPA 均从原 root FD 重开。路径严格解码一次，使用完整站点路径，不去路由前缀。
 - 信任本地文件系统、procfs 挂载/namespace 和进程 FD 表；不保证恶意挂载、FUSE 或 NFS 不阻塞，不替代 OS hardlink 和内容发布权限，也不声称消除所有文件系统竞态。
 - 全静态路由跨候选和配置代次共享进程级 128 个 Semaphore 许可，随 Opened 和 blocking 任务持有；max blocking 为 16，单块不超过 64 KiB，逐块背压且不超过声明长度。文件截断则中止流，不追加 HTTP 响应。最终头之前同步交接 Headers → Streaming 和 response_started，本地错误及重定向也如此；正常排空最多 30 秒，runtime.shutdown_background 避免未完成阻塞 IO 卡住运行时析构。
-- 缓存、预压缩和目录浏览属于后续阶段；无目录列表。具体响应语义见配置文档和 005 验证记录。
+- 每次请求安全打开并核验 dev/ino、size、mtime/ctime 纳秒、mode、uid、gid；缓存命中也 fstat 比较版本，加载前后 fstat 变化返回 503。这不是恶意原位写入的事务快照。
+- 进程级正文缓存预算包括 loading、ready 和淘汰后仍被响应持有的正文，响应使用切片 owner 而非复制；Reload 共享该固定预算。`RuntimeState::static_cache_stats` 是只读库 API，不是 HTTP 或 CLI 端点，使用量不是 RSS。预压缩、错误页及有界目录浏览的配置和响应细节见配置文档。
 
 ## 7. 本地控制协议
 
@@ -163,7 +164,7 @@ watch 使用独立于快照的 inotify FD 生命周期，最多活动和候选�
 
 - 使用 Rust Stable，edition 2024；KDL 6.7.1 声明最低 Rust 1.95，工程声明相同下限。实际已验证工具链和完整锁定版本以验证记录为准，不声称在未运行的旧工具链通过。
 - 直接使用 Pingora 0.9.0 的 openssl/proxy 功能，关闭默认可选功能；不接入 BoringSSL、rustls、ACME、负载均衡或网络缓存。
-- `arc-swap` 1.9.3；Tokio 提供测试及运行时所需异步能力；async-trait 用于 Pingora 回调；直接 openssl 依赖用于安全 ex_data 类型和内存证书验证。002 按用户明确要求添加 Clap 派生 CLI，锁定版本 4.6.7，复用已有传递依赖，未增加其他依赖或测试工具。003 经用户访谈明确批准直接使用既有 socket2 0.6.5，并显式开启 Tokio 的 net/signal 功能；没有其他新增依赖或测试框架。005 经批准直接依赖 nix 0.31.3（fs）和 httpdate 1.0.3；Tokio fs 虽获批但实现未使用、未开启。Cargo.lock 仅 rill 依赖列表变化，无新包升级或测试框架。007 经用户批准直接启用既有 serde 1.0.229 derive、serde_json 1.0.154（本地缓存新锁包 zmij 1.0.23）及 nix 0.31.3 user 功能，无其他依赖升级或新工具/测试框架。009 经批准启用既有 nix 0.31.3 的 inotify feature，不新增 crate；完整传递依赖固定在 Cargo.lock。
+- `arc-swap` 1.9.3；Tokio 提供测试及运行时所需异步能力；async-trait 用于 Pingora 回调；直接 openssl 依赖用于安全 ex_data 类型和内存证书验证。002 按用户明确要求添加 Clap 派生 CLI，锁定版本 4.6.7，复用已有传递依赖，未增加其他依赖或测试工具。003 经用户访谈明确批准直接使用既有 socket2 0.6.5，并显式开启 Tokio 的 net/signal 功能；没有其他新增依赖或测试框架。005 经批准直接依赖 nix 0.31.3（fs）和 httpdate 1.0.3；Tokio fs 虽获批但实现未使用、未开启。Cargo.lock 仅 rill 依赖列表变化，无新包升级或测试框架。007 经用户批准直接启用既有 serde 1.0.229 derive、serde_json 1.0.154（本地缓存新锁包 zmij 1.0.23）及 nix 0.31.3 user 功能，无其他依赖升级或新工具/测试框架。010 经批准直接复用锁定的 bytes 1.12.1 及 nix 0.31.3 的 dir feature；009 经批准启用既有 nix 0.31.3 的 inotify feature，不新增 crate；完整传递依赖固定在 Cargo.lock。
 - Debian 构建需要 Rust、C 工具链、make 和 Perl。Pingora 0.9.0 的 pingora-openssl 无条件启用 openssl 的 vendored 功能，因此本基线使用锁文件中的 openssl-src 构建 OpenSSL，而不是系统 openssl 命令对应的库。不要将两者版本混为一谈。未启用 OPENSSL_NO_VENDOR 覆盖；系统动态库方案须单独验证，008 部署说明必须以实际链接结果为准。001 不安装系统包、不引入测试框架或额外 dev-dependencies。
 - 001 必须通过 cargo fmt --check、cargo check --locked、cargo clippy --locked --all-targets -- -D warnings、cargo test --locked。测试不监听公网、不需要真实密钥或额外证书工具。
 - 003/004/005 验证真实监听、HTTP/2、优雅关闭；006 验证真实流式代理、WS/SSE；007 验证管理权限、真实 Reload 和并发原子性；008/012 补齐部署与性能门禁。不能用 001 的 TLS 字节流验证替代这些端到端验收。

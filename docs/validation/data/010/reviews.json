@@ -1,0 +1,51 @@
+{
+  "scope": "010 静态增强；所有复审为只读静态检查，不替代父代理动态执行",
+  "raw_data_final": {
+    "run": "0d418ccd-9222-4603-b91c-9cfad918d8bb",
+    "result": "110 个文件哈希/字节一致，8,106,101 行全部满足严格起始窗口，关键统计和资源采样复算一致",
+    "report": "independent-raw-check-final.json",
+    "boundary": "在线诊断并非全部可由测量 CSV 重建；采样不证明全时序"
+  },
+  "delivery_final": {
+    "run": "2863ea3d-ce02-4bd5-a0d5-e03ff84f4940",
+    "result": "No issues found; Merge verdict OK for the final delivery",
+    "boundary": "只读文档与产物一致性复审，阅读独立核验报告，不冒充再次逐行计算原始数据；父代理负责提交及核对"
+  },
+  "implementation_final": {
+    "run": "c0cbbb1e-42ed-499c-bb5e-badb94f3b014",
+    "result": "No issues found; Merge verdict OK for the implementation",
+    "boundary": "最终原始核验与计划验收仍由父代理完成"
+  },
+  "closed_findings": [
+    {
+      "scope": "目录条目身份与挂载目录 d_ino 差异",
+      "closure_run": "8ec6b2ed-e54f-4e40-aab2-647d226fecec",
+      "dynamic_evidence": "010-final-mount-check.log：真实 bind/tmpfs，列表及文件内容通过"
+    },
+    {
+      "scope": "Accept-Encoding 非 ASCII 字节、Unicode OWS、listing 条件与 Vary",
+      "closure_run": "47ad720b-4967-44ad-832d-07d50ff212d1",
+      "dynamic_evidence": "typed HeaderValue 最小回归；最终 159 项门禁包含对应核心检查"
+    },
+    {
+      "scope": "缓存命中重新验证 opened FD 版本",
+      "closure_run": "ed996b87-712d-4738-b072-0e83ff12ff1f",
+      "dynamic_evidence": "010-cache-hit-red.log 修前失败；最终 159 项通过，hits == 1 的确定性 chmod 回归"
+    },
+    {
+      "scope": "client 采样误含 server 子树、复用连接 ID、缺少精确窗口",
+      "closure_run": "06348061-2102-4335-b7fc-7775d839baf5",
+      "dynamic_evidence": "独立 pilot 和最终正式原始数据，资源与窗口均保留"
+    },
+    {
+      "scope": "两次时钟读取导致 begin 超过 deadline",
+      "closure_run": "b4c0056a-ce06-419f-8d1a-dba25b332939",
+      "dynamic_evidence": "首批整批原始数据保留；修复后完整重跑最终 21 轮"
+    },
+    {
+      "scope": "示例浏览公开范围与 Vary 描述过宽",
+      "closure_run": "9aa984b7-6e8c-45d2-be89-626433822e8e",
+      "result": "两项文档 Medium 均关闭"
+    }
+  ]
+}

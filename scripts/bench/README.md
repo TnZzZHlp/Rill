@@ -87,3 +87,34 @@ Reload 的 `calls` 记录发送时间、目标 `max-age`、返回码、生效观
 每次运行按 `--workdir` 目录名生成唯一容器名前缀，只清理本次实际创建的容器；网络在创建后立即进入清理责任域，任何阶段失败都会停止已创建容器并删除网络。残留复查区分"不存在"与 Podman 自身失败：无法确认残留时同样判失败。不运行全局 prune，不删除他人容器或网络。
 
 参数与历史口径说明见 [008 性能基线](../../docs/validation/008-performance-baseline.md)；该记录使用的是宿主进程与 nginx 1.28.3，不能与本文档所述容器化矩阵直接相减。
+
+## 静态增强 A/B 驱动
+
+`static_ab.py` 是入口，`static_ab_runner.py` 负责编排，`static_ab_transfer.py` 验证并测量表示传输；复用 `traffic.py` 和 `metrics.py`。后者新增 `pid-self` 采样口径以兼容既有进程树口径：客户端只统计驱动自身，不把服务子进程计入客户端。
+
+必须由外部 OS 沙箱提供只读根、仅 loopback 网络、零 capability、UID 65534 和资源限制；驱动不自动隔离，也不拉取容器。预先提供可执行的同一 010 二进制、独立可写私有目录及已验证 sidecar fixture。选择当前允许 affinity 中互不重叠的两颗服务 CPU 和两颗客户端 CPU，端口 127.0.0.1:18080 须空闲：
+
+```sh
+python3 scripts/bench/static_ab.py --rill /input/rill \
+  --workdir /scratch/static-work --output /scratch/static-output \
+  --sidecars-json /input/sidecars.json \
+  --server-cpus 0,1 --client-cpus 2,3
+```
+
+两个目录均必须不存在、互不嵌套；默认 3 次重复、每轮 30 秒、预热 2 秒、并发 8。identity 的 small（1 KiB）和 large（16 MiB）分别比较缓存关闭及 16 MiB 预算开启，共 12 轮；transfer 在缓存关闭下分别测 identity、gzip、br，共 9 轮，总计 21 轮。`--only identity` 或 `--only transfer` 只产生 partial 结果；`--seconds`、`--warmup`、`--repeats`、`--concurrency` 可调整，调整后不可冒充默认矩阵。
+
+`--sidecars-json` 必填，UTF-8 JSON 包含 `identity_base64`、`gzip_base64`、`br_base64` 三个标准 base64 字符串。identity 必须恰为 1024 个 ASCII `s`；gzip 可用 Python 标准库生成，br 由发布流程提供，并在运行前用独立 Brotli 解码器验证解码结果与 identity 逐字节一致。例如在已有经过独立解码验证的 `/input/small.br` 后生成 JSON：
+
+```sh
+python3 - <<'PY'
+import base64, gzip, json
+from pathlib import Path
+raw = b's' * 1024
+values = {'identity': raw, 'gzip': gzip.compress(raw), 'br': Path('/input/small.br').read_bytes()}
+Path('/input/sidecars.json').write_text(json.dumps({k + '_base64': base64.b64encode(v).decode() for k, v in values.items()}))
+PY
+```
+
+驱动验证 identity 和 gzip 解码，br 仅与外部已验证 fixture 字节比较，不自行解码；传入参数不构成验证证明。每轮独立服务进程组，仅清理自己启动的 PGID，正常退出码必须为 0、不得强杀且控制 Socket 不残留，否则该轮无效。输出 `summary.json`、逐请求 `*-requests.csv.gz`、`*-resources.csv` 和记录精确 monotonic measure_start、deadline 的 `*-window.json`；失败为 invalid。资源数据的 RSS 可能重复计算共享页，HWM 为历史峰值，非该轮峰值；无 PSS 和 cgroup 数据。
+
+延迟使用最近秩，区分窗口完成的 nominal 速率与含排空的 issue cohort 速率；预热边界、重连和事件循环 lag 是在线诊断，不能仅由逐请求 CSV 重建。压缩统计是编码后的 payload 字节，不是 TCP/HTTP 总线字节。客户端 CPU 达单核 90% 或事件循环 lag 达 100 ms 警告；闭环 RPS 不是容量。配置预算不等于实际使用量或命中率，不从 HTTP metrics 推断命中，缓存行为另由核心功能测试验证。
