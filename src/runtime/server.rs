@@ -198,18 +198,6 @@ pub async fn serve(state: Arc<RuntimeState>) -> u8 {
             }
         }
     }
-    let metrics_listener =
-        if let Some(address) = snapshot.configuration.server.observability.startup.metrics {
-            match tokio::net::TcpListener::bind(address).await {
-                Ok(listener) => Some(listener),
-                Err(_) => {
-                    logger.event(Level::Error, "metrics_listen_failed", &[]);
-                    return 1;
-                }
-            }
-        } else {
-            None
-        };
     let resolver = match crate::tls::resolver::Resolver::new(state.clone()) {
         Ok(resolver) => resolver,
         Err(_) => {
@@ -261,15 +249,6 @@ pub async fn serve(state: Arc<RuntimeState>) -> u8 {
     let capacity = Arc::new(Semaphore::new(1024));
     let (shutdown, receiver) = watch::channel(false);
     let mut workers = JoinSet::new();
-    if let Some(listener) = metrics_listener {
-        let metrics = state.observability.metrics.clone();
-        let shutdown = receiver.clone();
-        workers.spawn(async move {
-            crate::observability::metrics_server::serve(listener, metrics, shutdown)
-                .await
-                .map_err(|_| "metrics listener failed")
-        });
-    }
     workers.spawn(crate::control::server::serve(
         control,
         coordinator.clone(),

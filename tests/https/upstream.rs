@@ -2,7 +2,6 @@ use std::fs;
 use std::io::{self, Read, Write};
 use std::net::{IpAddr, Ipv4Addr, TcpListener};
 use std::thread;
-use std::time::{Duration, Instant};
 
 use openssl::ssl::{HandshakeError, NameType, SslAcceptor, SslMethod};
 
@@ -160,9 +159,8 @@ fn invalid_upstream_certificates_never_receive_http() -> TestResult {
         } else {
             "127.0.0.1"
         };
-        let metrics = vacant()?;
         let configuration = format!(
-            "server {{ http \"{address}\"; upstream-allow \"127.0.0.0/8\"; upstream-allow \"::1/128\"; observability {{ metrics \"{metrics}\"; }}; }}\nsite \"app.test\" {{ proxy \"https://{host}:{port}\"; }}\n"
+            "server {{ http \"{address}\"; upstream-allow \"127.0.0.0/8\"; upstream-allow \"::1/128\"; }}\nsite \"app.test\" {{ proxy \"https://{host}:{port}\"; }}\n"
         );
         let ca_path = directory.0.join("ca.pem");
         let empty = directory.0.join("empty");
@@ -177,24 +175,6 @@ fn invalid_upstream_certificates_never_receive_http() -> TestResult {
         )?;
         assert_eq!(send(address, "app.test", "/")?.0, 502, "{case}");
         worker.join().map_err(|_| "backend panicked")??;
-        let deadline = Instant::now() + Duration::from_secs(2);
-        loop {
-            let mut scrape = connect(metrics)?;
-            scrape.write_all(b"GET /metrics HTTP/1.1\r\nHost: localhost\r\n\r\n")?;
-            let (status, _, body) = response(&mut scrape)?;
-            assert_eq!(status, 200);
-            let body = String::from_utf8(body)?;
-            if body.contains("rill_upstream_attempts_total{result=\"tls_fail\"} 1") {
-                if case == "unknown_ca" {
-                    assert!(body.contains("rill_upstream_attempts_total{result=\"fail\"} 0"));
-                }
-                break;
-            }
-            if Instant::now() >= deadline {
-                return Err(format!("TLS failure metric missing: {case}").into());
-            }
-            thread::sleep(Duration::from_millis(10));
-        }
         proxy.signal()?;
         let (status, logs) = proxy.finish()?;
         assert_eq!(status, 0);
@@ -204,24 +184,4 @@ fn invalid_upstream_certificates_never_receive_http() -> TestResult {
         );
     }
     Ok(())
-}
-
-#[test]
-fn metrics_bind_failure_emits_startup_error() -> TestResult {
-    let occupied = TcpListener::bind("127.0.0.1:0")?;
-    let metrics = occupied.local_addr()?;
-    let address = vacant()?;
-    let configuration = format!(
-        "server {{ http \"{address}\"; observability {{ metrics \"{metrics}\"; }}; }}\nsite \"app.test\" {{ proxy \"http://127.0.0.1:3000\"; }}\n"
-    );
-    match Proxy::start(address, &configuration) {
-        Ok(_) => Err("metrics bind conflict accepted".into()),
-        Err(error) => {
-            assert!(
-                error.to_string().contains("metrics_listen_failed"),
-                "{error}"
-            );
-            Ok(())
-        }
-    }
 }

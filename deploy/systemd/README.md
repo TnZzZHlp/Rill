@@ -36,15 +36,8 @@ AmbientCapabilities=CAP_NET_BIND_SERVICE
 
 缓存默认 0；示例的 8 MiB 是正文在 owner 生命周期内共享的预算，包括仍被响应持有的正文，不是 RSS、在途请求或元数据总预算。预压缩和目录浏览默认关闭，错误页默认 none；预压缩需要管理员提供不早于原文件的真实 sidecar，缺失可回退 identity。启用目录浏览会公开相应可访问条目，默认不建议随意开启。
 
-监听地址、控制 Socket、watch、缓存预算、metrics 地址和 OTLP 地址为启动项，修改返回 `RESTART_REQUIRED`，即使 tracing 关闭也一样；应重启而不是发送 SIGHUP。观测开关和采样可热更新；snippet、root、TLS 和策略随候选配置同一事务验证发布。旧 P0 配置不写新增块保留默认语义；KDL 2 布尔值为 `#true`/`#false`，未知字段严格报错并带来源。
+监听地址、控制 Socket、watch 和缓存预算为启动项，修改返回 `RESTART_REQUIRED`；应重启而不是发送 SIGHUP。访问日志开关和采样可热更新；snippet、root、TLS 和策略随候选配置同一事务验证发布。KDL 2 布尔值为 `#true`/`#false`，未知字段严格报错并带来源。
 
-metrics 仅接受非零端口字面量 IPv4/IPv6 loopback，且无认证，须用 OS 隔离；不可用 `0.0.0.0`。OTLP 仅同网络命名空间 loopback HTTP 的精确 `/v1/traces`，Collector 由管理员另行提供，不支持远端认证或 HTTPS。访问日志默认不含 URL、headers 或客户端 IP，但管理员运行时诊断可能包含路径和地址；opaque hash 不保证匿名化。日志和访问日志共用 4096 × 4 KiB 的 best-effort 队列，追踪队列 2048、批次 128，关闭等待分别为 1 秒和 3 秒，不能保证全部 flush；监控丢弃与失败批次，失败批次不是丢失 span 数。详见[配置](../../docs/configuration.md)和[架构](../../docs/architecture.md)。
+访问日志不含 URL、headers 或客户端 IP，但管理员运行时诊断可能包含路径和地址；opaque hash 不保证匿名化。运行日志与访问日志共用 4096 × 4 KiB 的 best-effort 队列，关闭最多等待 1 秒，不能保证全部 flush；默认关闭访问日志仍有后台日志线程。详见[配置](../../docs/configuration.md)和[架构](../../docs/architecture.md)。
 
-即使 tracing 关闭，以下任一环境变量存在也会令 run 以脱敏 `CONFIG_ENV` 拒绝启动，check 只检查配置而不执行此检查：`OTEL_EXPORTER_OTLP_HEADERS`、`OTEL_EXPORTER_OTLP_TRACES_HEADERS`、`OTEL_EXPORTER_OTLP_COMPRESSION`、`OTEL_EXPORTER_OTLP_TRACES_COMPRESSION`。值不会输出。支持 `UnsetEnvironment` 的 systemd 可在管理员审查的 override 中清除：
-
-```ini
-[Service]
-UnsetEnvironment=OTEL_EXPORTER_OTLP_HEADERS OTEL_EXPORTER_OTLP_TRACES_HEADERS OTEL_EXPORTER_OTLP_COMPRESSION OTEL_EXPORTER_OTLP_TRACES_COMPRESSION
-```
-
-迁移时检查实际 unit 和继承环境；此 override 未在此声称已执行。SDK 可能读取其他环境变量，但有效 endpoint、超时、协议、采样、resource 和 span 限制由 Rill 覆盖，export 不使用代理；`SSL_CERT_FILE`/`SSL_CERT_DIR` 仍影响上游 TLS。默认关闭观测仍会启动 owner 线程。012 新范围须另行验证，不能把既有 008 预检视为所有发行版或正式账户的生产验收。正式安装和持久账户由管理员操作，不停止共享生产服务、不修改宿主 sysctl。
+指标和 OTLP 追踪已移除，部署旧配置时删除 `metrics`、`tracing`、`trace-sample-per-mille`、`otlp-endpoint`；不再需要 Collector 或 OpenTelemetry 环境变量 override。`SSL_CERT_FILE`/`SSL_CERT_DIR` 仍影响上游 TLS。历史隔离预检不代表当前所有发行版或正式账户的生产验收。正式安装和持久账户由管理员操作，不停止共享生产服务、不修改宿主 sysctl。

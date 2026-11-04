@@ -16,7 +16,7 @@
 | src/proxy/ | Pingora 适配、上游策略、头部和流式处理 | 自行实现 HTTP/TLS 栈 |
 | src/static_files/ | 根目录约束打开、表示选择、条件/范围响应与可选缓存 | 重新解析配置 |
 | src/control/ | Unix Socket、对端授权、帧限制、请求结果 | 绕过 runtime 验证 |
-| src/observability/ | 结构化事件、指标与可选追踪 | 改变代理业务结果 |
+| src/observability/ | 结构化运行事件与访问日志 | 改变代理业务结果 |
 
 001 验证目录：`tests/feasibility.rs` 为测试入口，`tests/feasibility/configuration.rs` 验证 KDL 契约，`snapshot.rs` 只准备内存快照与临时证书，`tls.rs` 使用 Pingora 的真实异步握手流程。没有模拟 TLS，也不写入私钥文件。
 
@@ -175,20 +175,16 @@ watch 使用独立于快照的 inotify FD 生命周期，最多活动和候选�
 
 006 的合法 101 是最终响应头，先检查请求头总期限再进入 Streaming；SSE 在普通最终头后逐段流式传输，不聚合且无响应总时长限制。read-timeout 为上游相邻读取期限，idle-timeout 用于下游读写和连接池；不承诺单向数据刷新共享双向 idle，也不承诺通用 TCP 半关闭。响应头后故障仅中止，不追加 HTTP；保留既有 30 秒排空。
 
-## 11. 可观测性运行边界
+## 11. 访问日志运行边界
 
-配置与操作见 [可观测性配置与运维](configuration.md#可观测性配置与运维)。生产状态拥有一个 provider、日志线程和追踪 worker；候选准备和 check 不产生监听或 exporter 副作用。请求持有原快照策略，Reload 不改变进行中的请求。
+配置与操作见[可观测性配置与运维](configuration.md#可观测性配置与运维)。运行状态拥有一个共享日志线程；check 和候选准备不启动日志线程。请求持有开始时的快照策略，Reload 不改变进行中的请求。
 
-访问事件 `event=access` 使用 `timestamp_ms`、可为 null 的 32 位十六进制 `request_id`、32 位 `trace_id` 和 16 位 `span_id`、`generation`、不透明 `site`/`route`、`method`、`status`、`body_bytes`、`duration_ns`、`outcome`。方法固定 GET、HEAD、POST、PUT、DELETE、OPTIONS、PATCH、CONNECT、OTHER；outcome 为 completed、error、cancelled、timeout。status 和正文计数未知时为 null 而非 0；App 预算取消时上下文未记录已发响应，不能把随后尝试的 504 当作已写入。普通、静态、代理和 WS/SSE 在请求或会话结束时记录，而非响应头时。升级流的字节只能解释为已知框架正文计数，不是 WS 应用 payload 或 TCP 线缆字节。
+访问事件 `event=access` 使用 `timestamp_ms`、可为 null 的 32 位十六进制 `request_id`、`generation`、不透明 `site`/`route`、`method`、`status`、`body_bytes`、`duration_ns`、`outcome`。方法固定 GET、HEAD、POST、PUT、DELETE、OPTIONS、PATCH、CONNECT、OTHER；outcome 为 completed、error、cancelled、timeout。status 和正文计数未知时为 null 而非 0。普通、静态、代理和 WS/SSE 在请求或会话结束时记录，而非响应头时；升级流正文计数不是 WS 应用 payload 或 TCP 线缆字节。
 
-访问事件和 span 不包含原 URL、查询、Host、客户 IP、头、cookie、密钥或原始错误。site/route 标识不是加密匿名化：知道配置的人可计算并关联。P0 运行事件保留原有 `time_ms` schema 和管理员配置诊断字段，可能包含文件名或监听地址，不能声称所有日志都不含地址。
+事件不包含原 URL、查询、Host、客户 IP、头、cookie、密钥或原始错误。site/route 身份是最小规范化站点域名和路由模式的长度前缀 SHA-256 前 16 字节，不按路由序号；知道配置的人可计算并关联，不是加密匿名化。未匹配的身份为 unknown；不再保留指标路由槽或 overflow 标签。P0 运行事件保留 `time_ms` schema 和管理员诊断字段，可能包含文件名或监听地址。
 
-运行事件与访问事件共享最多 4096 条、每条序列化不超过 4 KiB 的队列和唯一 stderr writer。生产者在级别或访问采样后有界复制并尝试非阻塞锁和发送，满、关闭或锁竞争丢弃并计入 `rill_log_queue_drop_total`；写出失败计入 `rill_log_export_failure_total`。访问开关独立于运行日志级别，log-level off 不关闭访问日志。尚未绑定 owner 的 check 和早期启动错误仍走原同步路径，且此时尚未接受业务请求。关闭先停止准入并最多等待 1 秒正常 flush；超时后 worker 停止新写并清理队列，但已阻塞的 stderr 写无法取消，余下丢弃计数可能在 shutdown 返回后才发生，不保证送达。
+运行事件与访问事件共享最多 4096 条、每条序列化不超过 4 KiB 的队列和唯一 stderr writer。生产者在级别或访问采样后有界复制并尝试非阻塞锁和发送，满、关闭或锁竞争时丢弃；写出失败不改变业务结果。没有指标端点或导出诊断计数。访问开关独立于运行日志级别，log-level off 不关闭访问日志。尚未绑定 owner 的 check 和早期启动错误走同步路径，此时尚未接受业务请求。
 
-指标使用 128 个进程永久路由身份槽及 unknown、overflow，共 130 个；失败候选不占槽，超出后归 overflow 并继续服务。身份为最小规范化站点域名和路由模式的长度前缀 SHA-256 前 16 字节，不按路由序号；Reload 改变域名集合可能改变身份。未匹配 Host 归 unknown，未知方法归 OTHER。标签不含代次、原 Host、URI 或地址。全局请求计数为 9 种方法乘 7 种状态分类；每路由有完成计数和 12 个有限边界加 +Inf、sum、count 的耗时直方图。另有正文、活跃量、上游、Reload、代次和四项诊断，最坏 2162 条序列，最大 u64 数字下输出不超过 1 MiB。独占桶采样后前缀累加，保证 +Inf 与 count 一致；抓取不是全事务，sum 和其他计数可因并发近似。
+关闭先停止准入并最多等待 1 秒正常 flush；超时后 worker 停止新写并清理队列，但已经阻塞的 stderr 写无法取消，不保证完整送达。采样是每千分比周期计数，不是独立随机概率。
 
-`rill_body_bytes_total` 累计已知正文；`rill_inflight_requests`、`rill_active_transports`、`rill_active_h2_streams` 分别表示请求、HTTP 接管的底层传输和 H2 流。传输在共享底层流最后释放时递减，TLS 握手前不计 HTTP 活跃连接。框架建立上下文前的异常头不计已解析请求。`rill_upstream_attempts_total` 的 started/new/reused/fail/tls_fail 是事件而非当前连接数：连接尝试开始计 started，连接后校验通过按新建或复用计 new/reused；连接失败中的 TLS 握手、超时或证书错误及连接后校验失败计 tls_fail，其他连接失败计 fail。`rill_reload_total` 的 success/fail/busy/timeout/shutdown 是各出口事件计数。请求耗时覆盖完整根请求会话，WS/SSE 可以很长，取消时可能只有部分计数。
-
-追踪使用官方 SDK 根 span 和官方 OTLP exporter，由自定义 SDK SpanProcessor 的独立线程有界批处理，不是 SDK 内置 BSP。队列及在途合计最多 2048，单批最多 128；存活请求 span 不在此预算内，不能视作 RSS 上限。头采样是每千分比周期计数而非随机独立概率：0 不创建 span、1000 全采；日志采样独立，trace ID 使用 OS 随机数。不信任外来 traceparent、tracestate、baggage；向上游无条件移除这些头，仅本地有效且选中的 span 插入 flags 为 01 的新 traceparent，不传播 baggage。provider 不设置为全局 provider，resource 仅有 service.name/version，属性数限制 16，events/links 为 0，值是受控短字段。
-
-导出只向配置端点 POST，不重定向、不代理、不重试，HTTP 总时间及连接超时均为 2 秒，请求体最多 1 MiB、响应体最多 64 KiB，超长响应立即失败。发送额外复制最多 1 MiB，响应缓冲和分配器开销也不属于 span 队列预算。客户端构造及析构在 OS 线程进行。关闭最多等待 3 秒以尝试尾批，其余丢弃计数；无法强制取消失控外部库或恶意本地文件系统的阻塞，不保证全部 flush。Collector 故障不在请求热路径等待，可观察对应诊断计数。
+Prometheus 指标、指标监听、OpenTelemetry SDK/OTLP 导出和 span worker 已移除；没有相关环境变量检查或 trace/span ID。代理继续剥离外来 traceparent、tracestate 和 baggage，不再生成或注入追踪上下文。历史 011/012 验收记录描述当时版本，不代表当前仍提供指标或追踪。

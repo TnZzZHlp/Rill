@@ -71,37 +71,22 @@ pub struct Certificate {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ObservabilityStartup {
-    pub metrics: Option<SocketAddr>,
-    pub otlp_endpoint: String,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ObservabilityPolicy {
     pub access_log: bool,
     pub access_sample_per_mille: u16,
-    pub tracing: bool,
-    pub trace_sample_per_mille: u16,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ObservabilityConfig {
-    pub startup: ObservabilityStartup,
     pub policy: ObservabilityPolicy,
 }
 
 impl Default for ObservabilityConfig {
     fn default() -> Self {
         Self {
-            startup: ObservabilityStartup {
-                metrics: None,
-                otlp_endpoint: "http://127.0.0.1:4318/v1/traces".into(),
-            },
             policy: ObservabilityPolicy {
                 access_log: false,
                 access_sample_per_mille: 1000,
-                tracing: false,
-                trace_sample_per_mille: 100,
             },
         }
     }

@@ -16,7 +16,7 @@ use tokio::time::Instant;
 use super::app::{Phase, PhaseChannel};
 use super::request::{Forwarding, authority, connection_names, forwarding};
 use crate::observability::logging::Level;
-use crate::observability::{access::Outcome, metrics::UpstreamAttempt, request::RequestGuard};
+use crate::observability::{access::Outcome, request::RequestGuard};
 use crate::runtime::state::{PreparedRoute, RuntimeSnapshot, RuntimeState};
 
 pub struct Handler {
@@ -341,12 +341,6 @@ impl ProxyHttp for Handler {
     }
 
     async fn upstream_peer(&self, _: &mut Session, ctx: &mut Context) -> Result<Box<HttpPeer>> {
-        if self.state.observability.metrics_enabled {
-            self.state
-                .observability
-                .metrics
-                .upstream(UpstreamAttempt::Started);
-        }
         let (site, route) = ctx
             .selected
             .ok_or_else(|| Error::explain(ErrorType::InternalError, "route not selected"))?;
@@ -379,38 +373,22 @@ impl ProxyHttp for Handler {
         for name in ["traceparent", "tracestate", "baggage"] {
             request.remove_header(name);
         }
-        if let Some(traceparent) = ctx.observation.traceparent() {
-            request.insert_header("traceparent", traceparent)?;
-        }
         Ok(())
     }
 
     async fn connected_to_upstream(
         &self,
         _: &mut Session,
-        reused: bool,
+        _: bool,
         peer: &HttpPeer,
         _: RawFd,
         digest: Option<&Digest>,
         _: &mut Context,
     ) -> Result<()> {
-        let result = super::upstream_tls::verify(peer, digest).map_err(|mut error| {
+        super::upstream_tls::verify(peer, digest).map_err(|mut error| {
             error.set_retry(false);
             error
-        });
-        if self.state.observability.metrics_enabled {
-            self.state
-                .observability
-                .metrics
-                .upstream(if result.is_err() {
-                    UpstreamAttempt::TlsFail
-                } else if reused {
-                    UpstreamAttempt::Reused
-                } else {
-                    UpstreamAttempt::New
-                });
-        }
-        result
+        })
     }
 
     async fn response_filter(
@@ -448,20 +426,6 @@ impl ProxyHttp for Handler {
         ctx: &mut Context,
         mut error: Box<Error>,
     ) -> Box<Error> {
-        if self.state.observability.metrics_enabled {
-            let outcome = if matches!(
-                error.etype(),
-                ErrorType::TLSWantX509Lookup
-                    | ErrorType::TLSHandshakeFailure
-                    | ErrorType::TLSHandshakeTimedout
-                    | ErrorType::InvalidCert
-            ) {
-                UpstreamAttempt::TlsFail
-            } else {
-                UpstreamAttempt::Fail
-            };
-            self.state.observability.metrics.upstream(outcome);
-        }
         ctx.attempt += 1;
         let retry = ctx
             .addresses

@@ -119,17 +119,4 @@ PY
 
 延迟使用最近秩，区分窗口完成的 nominal 速率与含排空的 issue cohort 速率；预热边界、重连和事件循环 lag 是在线诊断，不能仅由逐请求 CSV 重建。压缩统计是编码后的 payload 字节，不是 TCP/HTTP 总线字节。客户端 CPU 达单核 90% 或事件循环 lag 达 100 ms 警告；闭环 RPS 不是容量。配置预算不等于实际使用量或命中率，不从 HTTP metrics 推断命中，缓存行为另由核心功能测试验证。
 
-## 可观测性 A/B 驱动
-
-`observability_ab.py` 为入口，`observability_ab_runner.py` 编排，复用 traffic、metrics 和 backend。预先提供同一 Rill 二进制、官方 Collector 可执行文件和父流程记录的 provenance JSON。必填键为 `binary_sha256`、`collector_sha256`、非空字符串 `collector_version` 及 `sdk_packages`；后者须包含 `opentelemetry`、`opentelemetry_sdk`、`opentelemetry-otlp`、`opentelemetry-http`、`reqwest` 五个包名及非空版本字符串。两个 hash 必须与实际文件匹配；版本由父流程从锁文件及已核 Collector 记录提供，脚本不从二进制独立提取或验证版本。可选 `source_manifest_sha256` 关联冻结源码清单。workdir 和 output 须为尚不存在的独立目录。选择当前允许 affinity 中互不重叠的 CPU，例如：
-
-```sh
-python3 scripts/bench/observability_ab.py --rill /input/rill \
-  --collector /input/otelcol --provenance-json /input/provenance.json \
-  --workdir /scratch/observe-work --output /scratch/observe-output \
-  --server-cpus 4,5 --client-cpus 6,7 --backend-cpus 8,9 --collector-cpus 10,11
-```
-
-驱动不提供 OS 隔离；须由外层提供只读根、UID 65534、零 capability、私有网络且仅 loopback，以及磁盘和墙钟限制。外层 CPU、NPROC、NOFILE 软限制须分别为有限正数且不超过 900 秒、128、512；本轮使用 8 GiB scratch 和 900 秒墙钟。驱动将自身 AS 设为软 2 GiB、硬最多 8 GiB，server/backend 软硬最多 2 GiB、Collector 最多 8 GiB；各角色文件大小最多 512 MiB，较低的继承硬限制优先。Collector AS 软限制会提高至截断后的硬限制，可能高于继承软限制；其他角色的 AS 软限制及所有文件大小软限制仍受较低继承软限制约束。AS 不是 RSS 上限，Collector 的 `GOMEMLIMIT=128MiB` 也不是进程硬内存上限。Collector 使用官方 receiver，后端与 Collector 使用独立 CPU 组。默认同一二进制、1 KiB 代理正文、五模式各三次，共 15 轮，每轮 30 秒、预热 2 秒、并发 8，轮换顺序；只选子集为 partial。off 不意味着 SDK owner 无线程。Collector marker 和 TCP ready 不等于已完成其他互操作及 H2 验证。
-
-客户端资源使用 pid-self，不把子进程算入客户端。单核 CPU 达 90% 或事件循环 lag 达 0.1 秒给出警告；闭环负载不是容量测试。原始窗口和逐请求记录支持独立复核计数与分位数。禁用指标的组计数为 null，原因是 unavailable，不为测量偷偷启用端点，也不能以 0 填充。指标快照覆盖 readiness、预热、cohort 和异步工作，不等于精确测量窗口；after 快照在 shutdown 前，不能反映尾部失败。RSS 求和可能重复共享页，HWM 是历史峰值，未测 cgroup 或 PSS；正文只计 payload，不是 TCP 线缆字节。结果不构成性能收益或最终验收结论。
+指标和 OTLP 追踪已移除，对应的可观测性 A/B 驱动不再提供。历史测量记录保留在 `docs/validation/011-observability.md`；资源采样模块 `metrics.py` 仍供其他基准驱动使用，不是服务端指标端点。

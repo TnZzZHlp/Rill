@@ -1,4 +1,4 @@
-use super::metrics::{Diagnostic, Identity, Method, Metrics};
+use super::identity::{Identity, Method};
 use serde::{Serialize, ser::SerializeMap};
 use std::io::{self, Write};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -30,14 +30,12 @@ impl<const N: usize> Serialize for HexId<N> {
 #[derive(Clone, Copy, Debug)]
 pub enum OpaqueRoute {
     Unknown,
-    Overflow,
     Identity(Identity),
 }
 impl Serialize for OpaqueRoute {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self {
             Self::Unknown => serializer.serialize_str("unknown"),
-            Self::Overflow => serializer.serialize_str("overflow"),
             Self::Identity(id) => serializer.serialize_str(&id.hex()),
         }
     }
@@ -55,8 +53,6 @@ pub struct AccessRecord {
     event: &'static str,
     pub timestamp_ms: u64,
     pub request_id: Option<HexId<32>>,
-    pub trace_id: Option<HexId<32>>,
-    pub span_id: Option<HexId<16>>,
     pub generation: u64,
     pub site: OpaqueRoute,
     pub route: OpaqueRoute,
@@ -79,8 +75,6 @@ impl AccessRecord {
             event: "access",
             timestamp_ms,
             request_id: None,
-            trace_id: None,
-            span_id: None,
             generation,
             site: OpaqueRoute::Unknown,
             route,
@@ -138,7 +132,6 @@ struct Inner {
     sender: Mutex<Option<mpsc::SyncSender<LogRecord>>>,
     stop: Arc<AtomicBool>,
     sequence: AtomicU64,
-    metrics: Arc<Metrics>,
     worker: Mutex<Option<JoinHandle<()>>>,
     finished: Mutex<mpsc::Receiver<()>>,
 }
@@ -152,12 +145,11 @@ impl std::fmt::Debug for AccessSink {
     }
 }
 impl AccessSink {
-    pub fn new(metrics: Arc<Metrics>) -> io::Result<Self> {
+    pub fn new() -> io::Result<Self> {
         let (sender, receiver) = mpsc::sync_channel::<LogRecord>(4096);
         let (finished_tx, finished) = mpsc::sync_channel(1);
         let stop = Arc::new(AtomicBool::new(false));
         let worker_stop = Arc::clone(&stop);
-        let worker_metrics = Arc::clone(&metrics);
         let worker = thread::Builder::new()
             .name("rill-access".into())
             .spawn(move || {
@@ -172,16 +164,13 @@ impl AccessSink {
                                 LogRecord::Access(record) => serde_json::to_vec(&record),
                                 LogRecord::Runtime(record) => serde_json::to_vec(&record),
                             };
-                            let result = encoded.map_err(io::Error::other).and_then(|mut bytes| {
+                            let _ = encoded.map_err(io::Error::other).and_then(|mut bytes| {
                                 if bytes.len() >= 4096 {
                                     return Err(io::Error::other("log record exceeds limit"));
                                 }
                                 bytes.push(b'\n');
                                 io::stderr().lock().write_all(&bytes)
                             });
-                            if result.is_err() {
-                                worker_metrics.diagnostic(Diagnostic::LogExportFailure);
-                            }
                         }
                         Err(mpsc::RecvTimeoutError::Timeout) => {}
                         Err(mpsc::RecvTimeoutError::Disconnected) => break,
@@ -191,7 +180,6 @@ impl AccessSink {
                     if receiver.try_recv().is_err() {
                         break;
                     }
-                    worker_metrics.diagnostic(Diagnostic::LogQueueDrop);
                 }
                 let _ = finished_tx.try_send(());
             })?;
@@ -200,7 +188,6 @@ impl AccessSink {
                 sender: Mutex::new(Some(sender)),
                 stop,
                 sequence: AtomicU64::new(0),
-                metrics,
                 worker: Mutex::new(Some(worker)),
                 finished: Mutex::new(finished),
             }),
@@ -215,15 +202,12 @@ impl AccessSink {
         self.submit_record(LogRecord::Access(record));
     }
     fn submit_record(&self, record: LogRecord) {
-        let sent = match self.inner.sender.try_lock() {
+        let _ = match self.inner.sender.try_lock() {
             Ok(sender) => sender
                 .as_ref()
                 .is_some_and(|sender| sender.try_send(record).is_ok()),
             Err(_) => false,
         };
-        if !sent {
-            self.inner.metrics.diagnostic(Diagnostic::LogQueueDrop);
-        }
     }
     pub fn submit_runtime(
         &self,
@@ -237,7 +221,6 @@ impl AccessSink {
                 .bytes()
                 .all(|byte| byte.is_ascii_graphic() || byte == b' ')
         {
-            self.inner.metrics.diagnostic(Diagnostic::LogQueueDrop);
             return;
         }
         let mut budget = 2800;
@@ -247,9 +230,6 @@ impl AccessSink {
                 bounded_field(key, 64, &mut budget),
                 bounded_field(value, 256, &mut budget),
             ));
-        }
-        if fields.len() > 16 {
-            self.inner.metrics.diagnostic(Diagnostic::LogQueueDrop);
         }
         self.submit_record(LogRecord::Runtime(RuntimeRecord {
             timestamp_ms,

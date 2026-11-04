@@ -176,7 +176,7 @@ inotify 内核事件队列以 50 ms 间隔有界 drain、每次最多 32 批，�
 
 ## 可观测性配置与运维
 
-`observability` 只允许位于 `server` 中：
+`observability` 只允许位于 `server` 中，仅配置访问日志：
 
 ```kdl
 server {
@@ -184,61 +184,17 @@ server {
     observability {
         access-log #true
         access-sample-per-mille 1000
-        metrics "127.0.0.1:19090"
-        tracing #false
-        trace-sample-per-mille 100
-        otlp-endpoint "http://127.0.0.1:4318/v1/traces"
     }
 }
 ```
 
-不写该块时访问日志和追踪关闭，指标监听未设置；访问日志采样默认 1000‰，追踪默认 100‰，OTLP 地址默认如上。布尔值使用 KDL `#true`/`#false`，采样为 0–1000 的整数。`metrics` 仅接受非零端口的字面量 IPv4 或 IPv6 loopback，不能使用域名、`0.0.0.0` 或端口 0。OTLP 地址最多 256 个 ASCII 字节，仅支持 `http`、字面量 loopback、显式非零端口和精确路径 `/v1/traces`，不能包含凭据、查询或片段；不跟随重定向、不使用代理。配置错误可定位来源，不回显环境变量的值。
+访问日志默认关闭，采样默认 1000‰；布尔值使用 `#true`/`#false`，采样为 0–1000 的整数。开关和采样随快照发布，已开始请求保留旧策略。运行事件和访问事件共享有界后台日志线程；关闭访问日志并不关闭运行日志线程。`check` 不启动日志 worker 或监听。
 
-指标地址和 OTLP 地址是启动项，Reload 修改会返回 `RESTART_REQUIRED`；开关和采样随快照发布，已开始请求保留旧策略。`check` 和准备失败的候选不会绑定指标端口或启动 exporter。正式服务即使默认关闭观测，也会启动共享 provider、日志线程和追踪 worker 以支持 Reload，并非零线程或零开销。
+[本地示例](../examples/observability/config.kdl) 监听 `127.0.0.1:18080`，Host 为 `observe.test`，开启访问日志。运行前为控制 Socket 配置服务 UID 所有的 0700 私有目录内路径。
 
-[本地示例](../examples/observability/config.kdl) 监听 `127.0.0.1:18080`，Host 为 `observe.test`，开启访问日志和 `127.0.0.1:19090` 指标，追踪默认关闭。运行前为控制 Socket 配置服务 UID 所有的 0700 私有目录内路径；`rill check --config examples/observability/config.kdl` 只检查，不开端口。要启用追踪，先启动本地 Collector，再将 `tracing` 改为 `#true`。Collector 不由 Rill 启动。
+Prometheus 指标和 OTLP tracing 已移除。`metrics`、`tracing`、`trace-sample-per-mille`、`otlp-endpoint` 均为未知字段，包括显式关闭的旧字段；迁移时从配置中删除这些节点，再执行 check。服务不创建指标监听、追踪 provider 或 exporter，也不读取 OpenTelemetry 配置环境变量；这些环境变量不再导致 `CONFIG_ENV` 拒启。上游 TLS 的 `SSL_CERT_FILE`/`SSL_CERT_DIR` 行为不变。
 
-指标端点仅允许 HTTP/1.0 或 HTTP/1.1 的 `GET /metrics`，不接收请求体：Content-Length 只能为 0，Transfer-Encoding、重复或非法分帧返回 400；其他路径 404，其他方法 405 并带 `Allow: GET`。最多 16 个连接任务，包含尚未回收的已完成任务；头部上限 8 KiB，读写各 2 秒，发送缓冲设置 16 KiB（内核可能加倍）。慢读取方可能收到短正文后连接关闭，不能当作完整抓取。抓取不计为业务请求。loopback 并非用户认证，本机其他用户也可能抓取，依赖 OS 隔离，不可当作管理授权。
-
-可用已有的 HTTP 客户端发送 `GET /metrics HTTP/1.1`，例如：
-
-```sh
-/usr/bin/curl --fail http://127.0.0.1:19090/metrics
-```
-
-Prometheus 查询示例，按实际抓取配置选择时间窗口：
-
-```promql
-sum(rate(rill_requests_completed_total[5m]))
-sum(rate(rill_requests_completed_total{status="5xx"}[5m]))
-histogram_quantile(0.95, sum by (route, le) (rate(rill_route_duration_seconds_bucket[5m])))
-rill_generation
-sum(rate(rill_reload_total{result="fail"}[5m]))
-sum(rate(rill_log_queue_drop_total[5m])) + sum(rate(rill_trace_queue_drop_total[5m]))
-```
-
-路由直方图没有 method/status 标签，不能按它们分组。计数器是进程累计值，重启后重置；失败计数也可查看 `rill_log_export_failure_total` 和 `rill_trace_export_failure_total`，后者按失败批次而非丢失 span 数计数。
-
-Collector 可使用经校验的官方 0.133.0 版本，按管理员批准的流程临时下载并核对官方校验和，不要求系统安装。以下是最小配置，实际运行命令及 OS 沙箱、生产隔离由运维按所用官方发行包安排：
-
-```yaml
-receivers:
-  otlp:
-    protocols:
-      http:
-        endpoint: 127.0.0.1:4318
-exporters:
-  debug: {}
-service:
-  pipelines:
-    traces:
-      receivers: [otlp]
-      exporters: [debug]
-```
-
-例如使用已校验的本地可执行文件 `./otelcol --config /private/collector.yaml`。Rill 只向同网络命名空间的 loopback HTTP Collector 发送，不支持直接连接 HTTPS、远程 Collector 或使用凭据和环境头认证；应使用受控本地 Collector 或 sidecar，不应暴露公网。
-
-服务启动时若 `OTEL_EXPORTER_OTLP_HEADERS`、`OTEL_EXPORTER_OTLP_TRACES_HEADERS`、`OTEL_EXPORTER_OTLP_COMPRESSION`、`OTEL_EXPORTER_OTLP_TRACES_COMPRESSION` 任一存在，即使追踪关闭也以脱敏 `CONFIG_ENV` 拒绝启动。`check` 不初始化 SDK，不替服务执行该检查。SDK 配置默认可能读取某些其他环境变量，但有效 endpoint、超时、协议、采样、resource 和 span 限制由 Rill 显式覆盖；这不改变上游 TLS 的 `SSL_CERT_FILE`/`SSL_CERT_DIR` 行为。
+访问日志保留本地 `request_id`，不再输出 `trace_id`/`span_id`。代理继续删除传入的 traceparent、tracestate 和 baggage，不注入新的 traceparent。日志尽力送达，队列、写出和关闭边界见[架构](architecture.md#11-访问日志运行边界)。
 
 ## 8. 原文示例逐项对照
 

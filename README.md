@@ -51,7 +51,7 @@ HTTPS 示例 `examples/deploy/https.kdl` 需要管理员自行提供证书及私
 - [008 P0 验证记录](docs/validation/008-p0-validation-deployment.md)
 - [008 部署验证记录](docs/validation/008-deployment.md)
 
-已交付静态 TLS、代理、静态文件、Reload、Snippet、可选 watch、静态增强、访问日志和指标，以及可选的官方 SDK 追踪。观测默认关闭，主入口保持精简；默认关闭仍有后台 owner 线程。ACME 和 HTTP/3 不属于当前目标。已有验证范围见 008、010、011 记录；012 将另行报告。闭环客户端受限 RPS 不是容量，不能据旧记录承诺长期稳定或性能领先。
+已交付静态 TLS、代理、静态文件、Reload、Snippet、可选 watch、静态增强和访问日志。访问日志默认关闭，主入口保持精简；运行日志与访问日志共用后台日志线程。ACME 和 HTTP/3 不属于当前目标。历史验证范围见 008–012 记录；其中指标和追踪的历史结果不代表当前仍支持这些功能。闭环客户端受限 RPS 不是容量，不能据旧记录承诺长期稳定或性能领先。
 
 ## 完整组合示例
 
@@ -66,6 +66,6 @@ rill reload --socket /run/rill/control.sock --timeout 35s
 
 上例的 curl 和 reload 在另一个终端执行，Socket 参数须与修改后的配置一致。`/api/*` 转发给同网络命名空间的 `127.0.0.1:18081`，需要管理员另行提供后端；`/api` 不匹配该前缀。三个域名共享 snippet，root 相对 snippet 定义文件解析；Profile 使用 `use`，snippet 使用 `use-snippet`。静态 fallback 启用 SPA 和预压缩，但未提供压缩文件：管理员可提供修改时间不早于原文件的真实 `.gz` 或 `.br`，缺失时可回退 identity。本示例只有 HTTP；HTTPS 另见 `examples/deploy/https.kdl`，由管理员提供证书和私钥。
 
-`check` 不做 DNS 查询、不 bind 端口，也不初始化 SDK 或检查运行时拒绝的环境变量。实例以启动时的主配置路径为入口构建快照，reload 重新读取该入口，不是 CLI 按路由逐项加载。监听、控制路径、watch、缓存预算、metrics 和 OTLP 地址是启动项，修改须重启；包括 tracing 关闭时的 OTLP 地址。其他配置、snippet、TLS 和策略按同一事务验证发布，观测开关和采样可热更新。详见[配置](docs/configuration.md)。
+`check` 不做 DNS 查询、不 bind 端口。实例以启动时的主配置路径为入口构建快照，reload 重新读取该入口，不是 CLI 按路由逐项加载。监听、控制路径、watch 和缓存预算是启动项，修改须重启。其他配置、snippet、TLS 和策略按同一事务验证发布，访问日志开关和采样可热更新。详见[配置](docs/configuration.md)。
 
-兼容已有 P0 配置：不添加新块时保持默认语义，但关闭观测并不意味着没有后台 owner 线程。KDL 2 布尔值须写 `#true`/`#false`，未知字段严格报错并指向来源。watch 默认关闭；开启后仅跟踪配置、导入和 TLS 依赖，不主动跟踪静态内容树。
+兼容已有 P0 配置：不添加新块时保持默认语义，但关闭访问日志并不意味着没有后台日志线程。KDL 2 布尔值须写 `#true`/`#false`，未知字段严格报错并指向来源。watch 默认关闭；开启后仅跟踪配置、导入和 TLS 依赖，不主动跟踪静态内容树。

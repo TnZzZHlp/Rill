@@ -1,9 +1,7 @@
-use std::collections::BTreeSet;
-use std::net::SocketAddr;
-
 use kdl::KdlNode;
+use std::collections::BTreeSet;
 
-use super::values::{at, boolean, once, shape, string, unknown};
+use super::values::{at, boolean, once, shape, unknown};
 use crate::config::error::{ConfigError, Result};
 use crate::config::model::ObservabilityConfig;
 use crate::config::source::Origin;
@@ -25,29 +23,6 @@ fn sample(node: &KdlNode, origin: &Origin, name: &'static str) -> Result<u16> {
         })
 }
 
-fn loopback_address(value: &str) -> Option<SocketAddr> {
-    value
-        .parse::<SocketAddr>()
-        .ok()
-        .filter(|address| address.ip().is_loopback() && address.port() != 0)
-}
-
-fn endpoint(value: &str) -> bool {
-    if value.len() > 256
-        || !value.is_ascii()
-        || value
-            .bytes()
-            .any(|byte| byte.is_ascii_whitespace() || byte.is_ascii_control())
-    {
-        return false;
-    }
-    value
-        .strip_prefix("http://")
-        .and_then(|value| value.strip_suffix("/v1/traces"))
-        .and_then(loopback_address)
-        .is_some()
-}
-
 pub fn parse(node: &KdlNode, origin: &Origin) -> Result<ObservabilityConfig> {
     shape(node, origin, "observability", 0..=0, true)?;
     let mut result = ObservabilityConfig::default();
@@ -64,34 +39,6 @@ pub fn parse(node: &KdlNode, origin: &Origin) -> Result<ObservabilityConfig> {
             "access-sample-per-mille" => {
                 result.policy.access_sample_per_mille =
                     sample(child, &origin, "access-sample-per-mille")?
-            }
-            "metrics" => {
-                let value = string(child, &origin, "metrics")?;
-                result.startup.metrics = Some(loopback_address(&value.value).ok_or_else(|| {
-                    ConfigError::new(
-                        "CONFIG_TYPE",
-                        "metrics",
-                        "expected a loopback IP socket address with nonzero port",
-                        &origin,
-                    )
-                })?);
-            }
-            "tracing" => result.policy.tracing = boolean(child, &origin, "tracing")?.value,
-            "trace-sample-per-mille" => {
-                result.policy.trace_sample_per_mille =
-                    sample(child, &origin, "trace-sample-per-mille")?
-            }
-            "otlp-endpoint" => {
-                let value = string(child, &origin, "otlp-endpoint")?;
-                if !endpoint(&value.value) {
-                    return Err(ConfigError::new(
-                        "CONFIG_TYPE",
-                        "otlp-endpoint",
-                        "expected a loopback HTTP endpoint with nonzero port and /v1/traces path",
-                        &origin,
-                    ));
-                }
-                result.startup.otlp_endpoint = value.value;
             }
             _ => return Err(unknown(child, &origin)),
         }

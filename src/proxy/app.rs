@@ -42,12 +42,6 @@ impl HttpServerApp for App {
         mut session: ServerSession,
         shutdown: &ShutdownWatch,
     ) -> Option<ReusedHttpStream> {
-        let _stream = session.is_http2().then(|| {
-            crate::observability::owner::GaugeGuard::new(
-                &self.state.observability,
-                crate::observability::metrics::Gauge::ActiveH2Streams,
-            )
-        });
         let shared = session
             .as_http1()
             .and_then(|session| session.stream().as_any().downcast_ref::<SharedStream>())
@@ -131,10 +125,7 @@ impl ServerApp for Transport {
         shutdown: &ShutdownWatch,
     ) -> Option<Stream> {
         self.app
-            .process_new(
-                Box::new(SharedStream::new(stream, &self.app.state.observability)),
-                shutdown,
-            )
+            .process_new(Box::new(SharedStream::new(stream)), shutdown)
             .await
     }
     async fn cleanup(&self) {

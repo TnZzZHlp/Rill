@@ -68,10 +68,8 @@ podman exec rill-local /usr/local/bin/rill reload --socket /run/rill/control.soc
 
 `examples/release/` 将 watch、8 MiB 正文缓存和 observability 放在 server，将 SPA、预压缩和目录浏览放在静态 route。保留目录结构并修改控制路径，配置、站点和私钥对服务身份只读；watch 不需要写权限。watch 默认关闭，开启后挂载配置目录而非单文件 bind，以观察普通文件原子替换；它跟踪配置、导入和 TLS 依赖，不主动跟踪静态树。缺失 glob 父目录及 inotify 预算边界见[配置文档](../../docs/configuration.md)。
 
-缓存默认 0，8 MiB 是正文 owner 生命周期的共享预算，不是 RSS、在途请求或元数据预算。预压缩和目录浏览默认关闭，错误页默认 none；管理员须提供不早于原文件的真实压缩 sidecar，缺失可回退 identity。目录浏览会公开相应可访问条目，不建议随意启用。监听、控制路径、watch、缓存预算、metrics 和 OTLP 地址为启动项，改变返回 `RESTART_REQUIRED`，tracing 关闭时修改 OTLP 地址也须重启；观测开关和采样可热更新，snippet、root、TLS 和策略同事务发布。不要用 SIGHUP 代替 reload。旧 P0 配置不写新块保持默认语义；KDL 2 布尔值须用 `#true`/`#false`，未知字段严格报来源。
+缓存默认 0，8 MiB 是正文 owner 生命周期的共享预算，不是 RSS、在途请求或元数据预算。预压缩和目录浏览默认关闭，错误页默认 none；管理员须提供不早于原文件的真实压缩 sidecar，缺失可回退 identity。目录浏览会公开相应可访问条目，不建议随意启用。监听、控制路径、watch 和缓存预算为启动项，改变返回 `RESTART_REQUIRED`；访问日志开关和采样可热更新，snippet、root、TLS 和策略同事务发布。不要用 SIGHUP 代替 reload。旧 P0 配置不写新块保持默认语义；KDL 2 布尔值须用 `#true`/`#false`，未知字段严格报来源。
 
-组合示例的业务监听为容器内 `127.0.0.1:18080`；桥接网络中仅发布端口不能使外部访问此 loopback 监听。需要容器外访问时，管理员须按网络策略将业务监听改为容器接口可达地址（例如 `0.0.0.0:18080`），并发布对应的 18080 端口；这是启动项变化，需要重启。metrics 仍保持 loopback，不随业务监听放宽。metrics 仅接受非零端口字面量 IPv4/IPv6 loopback 且没有认证。容器内 loopback 监听无法通过 `-p 127.0.0.1:19090:19090` 使外部访问；不要将 metrics 改成 `0.0.0.0`。可在容器内受控抓取，或使用共享同一网络命名空间的 sidecar；受控本地转发器需管理员另行设计，本示例不实现或安装。OTLP 只能连接同网络命名空间的 loopback HTTP `/v1/traces`，Collector 不由 Rill 启动；独立网络命名空间的 sidecar 的 localhost 不互通。远端认证和 HTTPS 不支持，不将 Collector、证书或私钥打包进镜像。
+组合示例的业务监听为容器内 `127.0.0.1:18080`；桥接网络中仅发布端口不能使外部访问此 loopback 监听。需要容器外访问时，管理员须按网络策略将业务监听改为容器接口可达地址（例如 `0.0.0.0:18080`），并发布对应的 18080 端口；这是启动项变化，需要重启。访问日志不含 URL、headers、客户端 IP，但管理员诊断可能包含路径和地址，opaque hash 不保证匿名化。运行日志与访问日志共享 4096 × 4 KiB 的 best-effort 队列，关闭最多等待 1 秒，不保证全部 flush；默认关闭访问日志仍有后台日志线程。详见[配置](../../docs/configuration.md)和[架构](../../docs/architecture.md)。
 
-`OTEL_EXPORTER_OTLP_HEADERS`、`OTEL_EXPORTER_OTLP_TRACES_HEADERS`、`OTEL_EXPORTER_OTLP_COMPRESSION`、`OTEL_EXPORTER_OTLP_TRACES_COMPRESSION` 任一存在时，即使追踪关闭，run 也以脱敏 `CONFIG_ENV` 拒绝启动；check 不执行该运行时检查，值不输出。SDK 可能读取其他环境变量，但有效 endpoint、超时、协议、采样、resource 和 span 限制由 Rill 覆盖，export 不使用代理；`SSL_CERT_FILE`/`SSL_CERT_DIR` 仍影响上游 TLS。默认关闭观测仍有 owner 线程。
-
-访问日志默认不含 URL、headers、客户端 IP，但管理员诊断可能包含路径和地址，opaque hash 不保证匿名化。日志与访问日志共享 4096 × 4 KiB 的 best-effort 队列，追踪队列 2048、批次 128，关闭等待分别为 1 秒和 3 秒，不保证全部 flush；监控丢弃及失败批次，后者不是丢失 span 数。详见[配置](../../docs/configuration.md)和[架构](../../docs/architecture.md)。资源限制示例不是容量承诺；rootless 仍是未执行指南，012 新范围另行验证。不要全局 prune、修改宿主 sysctl 或停止共享生产服务。
+指标和 OTLP 追踪已移除，部署旧配置时删除 `metrics`、`tracing`、`trace-sample-per-mille`、`otlp-endpoint`，不再提供额外抓取端口或 Collector 集成。`SSL_CERT_FILE`/`SSL_CERT_DIR` 仍影响上游 TLS；配置、证书和私钥不得打包进镜像。资源限制示例不是容量承诺；rootless 仍是未执行指南，历史预检不保证当前生产部署。不要全局 prune、修改宿主 sysctl 或停止共享生产服务。

@@ -151,7 +151,6 @@ pub struct StartupSettings {
     pub control_socket: PathBuf,
     pub watch: bool,
     pub static_cache_bytes: usize,
-    pub observability: crate::config::model::ObservabilityStartup,
 }
 
 impl StartupSettings {
@@ -172,7 +171,6 @@ impl StartupSettings {
             control_socket: configuration.server.control_socket.clone(),
             watch: configuration.server.watch,
             static_cache_bytes: configuration.server.static_cache_bytes,
-            observability: configuration.server.observability.startup.clone(),
         }
     }
 }
@@ -183,7 +181,7 @@ impl RuntimeSnapshot {
         generation: u64,
         observability: &crate::observability::owner::Observability,
     ) -> Self {
-        use crate::observability::{metrics::Identity, request::ObservationRoute};
+        use crate::observability::{identity::Identity, request::ObservationRoute};
         let identities: Vec<_> = prepared
             .configuration
             .sites
@@ -203,16 +201,9 @@ impl RuntimeSnapshot {
                 })
             })
             .collect();
-        let slots = observability.metrics.bind(
-            &identities
-                .iter()
-                .map(|(_, route)| *route)
-                .collect::<Vec<_>>(),
-        );
         let mut entries = identities
             .into_iter()
-            .zip(slots)
-            .map(|((site, route), slot)| ObservationRoute { site, route, slot });
+            .map(|(site, route)| ObservationRoute { site, route });
         let observation_routes = prepared
             .configuration
             .sites
@@ -275,26 +266,15 @@ impl RuntimeState {
             ConfigError::new("RESOURCE_IO", "static-cache-bytes", reason, &origin)
         })?;
         bind_static_routes(&mut prepared.resources, &cache, namespace, 1, &origin)?;
-        let observability = crate::observability::owner::Observability::new(
-            startup.observability.metrics.is_some(),
-            &startup.observability.otlp_endpoint,
-        )
-        .map_err(|error| {
-            let code = match error {
-                crate::observability::trace::TraceError::UnsupportedEnv => "CONFIG_ENV",
-                crate::observability::trace::TraceError::Startup => "RESOURCE_IO",
-            };
+        let observability = crate::observability::owner::Observability::new().map_err(|_| {
             ConfigError::new(
-                code,
+                "RESOURCE_IO",
                 "observability",
-                "cannot initialize observability",
+                "cannot initialize access logging",
                 &origin,
             )
         })?;
         let snapshot = RuntimeSnapshot::from_prepared(prepared, 1, &observability);
-        if observability.metrics_enabled {
-            observability.metrics.set_generation(1);
-        }
         let (shutdown, _) = watch::channel(false);
         Ok(Arc::new(Self {
             active: ArcSwap::from_pointee(snapshot),
@@ -456,9 +436,6 @@ impl RuntimeState {
         )?;
         let candidate = RuntimeSnapshot::from_prepared(prepared, generation, &self.observability);
         self.active.store(Arc::new(candidate));
-        if self.observability.metrics_enabled {
-            self.observability.metrics.set_generation(generation);
-        }
         gate.active_plan = Some(plan);
         gate.failed_plan = None;
         let mut old = gate.watch.replace(watch);
@@ -508,9 +485,6 @@ impl RuntimeState {
         )?;
         let candidate = RuntimeSnapshot::from_prepared(prepared, generation, &self.observability);
         self.active.store(Arc::new(candidate));
-        if self.observability.metrics_enabled {
-            self.observability.metrics.set_generation(generation);
-        }
         Ok(generation)
     }
 }

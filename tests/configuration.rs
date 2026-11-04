@@ -1156,37 +1156,25 @@ fn observability_defaults_and_explicit_fields() -> TestResult {
     )?;
     let config = build(&entry, &ConfigurationOnly)?.configuration;
     let observability = &config.server.observability;
-    assert!(!observability.policy.access_log && !observability.policy.tracing);
+    assert!(!observability.policy.access_log);
     assert_eq!(observability.policy.access_sample_per_mille, 1000);
-    assert_eq!(observability.policy.trace_sample_per_mille, 100);
-    assert_eq!(observability.startup.metrics, None);
-    assert_eq!(
-        observability.startup.otlp_endpoint,
-        "http://127.0.0.1:4318/v1/traces"
-    );
 
     fs::write(
         &entry,
         format!(
-            "server {{ http \"127.0.0.1:8080\"; observability {{ access-log #true; access-sample-per-mille 0; metrics \"[::1]:19090\"; tracing #true; trace-sample-per-mille 1000; otlp-endpoint \"http://[::1]:4318/v1/traces\"; }}; }}\n{site}"
+            "server {{ http \"127.0.0.1:8080\"; observability {{ access-log #true; access-sample-per-mille 0; }}; }}\n{site}"
         ),
     )?;
     let config = build(&entry, &ConfigurationOnly)?.configuration;
     let observability = &config.server.observability;
-    assert!(observability.policy.access_log && observability.policy.tracing);
+    assert!(observability.policy.access_log);
     assert_eq!(observability.policy.access_sample_per_mille, 0);
-    assert_eq!(observability.policy.trace_sample_per_mille, 1000);
-    assert_eq!(observability.startup.metrics, Some("[::1]:19090".parse()?));
-    assert_eq!(
-        observability.startup.otlp_endpoint,
-        "http://[::1]:4318/v1/traces"
-    );
     fs::remove_file(entry)?;
     Ok(())
 }
 
 #[test]
-fn observability_rejects_invalid_fields_and_endpoints() -> TestResult {
+fn observability_rejects_invalid_and_removed_fields() -> TestResult {
     let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
     let entry = std::env::temp_dir().join(format!(
         "rill-observability-invalid-{}-{unique}.kdl",
@@ -1194,8 +1182,13 @@ fn observability_rejects_invalid_fields_and_endpoints() -> TestResult {
     ));
     for fields in [
         "access-log \"true\";",
-        "tracing 1;",
+        "tracing #true;",
+        "tracing #false;",
+        "metrics \"127.0.0.1:19090\";",
+        "otlp-endpoint \"http://127.0.0.1:4318/v1/traces\";",
         "access-sample-per-mille -1;",
+        "access-sample-per-mille 1001;",
+        "access-sample-per-mille 1.5;",
         "trace-sample-per-mille 1001;",
         "trace-sample-per-mille 1.5;",
         "metrics \"0.0.0.0:19090\";",

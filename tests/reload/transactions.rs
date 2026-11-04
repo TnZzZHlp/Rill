@@ -164,7 +164,7 @@ fn changed_imported_profile_updates_proxy_timeout() -> Result {
     fs::write(
         &f.entry,
         format!(
-            "server {{ http \"{}\"; control-socket \"{}\"; observability {{ access-log #true; tracing #true; trace-sample-per-mille 1000; }}; }}\nimport \"profile.kdl\"\nsite \"example.test\" {{ use \"slow\"; proxy \"http://{backend}\"; }}\n",
+            "server {{ http \"{}\"; control-socket \"{}\"; observability {{ access-log #true; }}; }}\nimport \"profile.kdl\"\nsite \"example.test\" {{ use \"slow\"; proxy \"http://{backend}\"; }}\n",
             f.address,
             f.socket.display()
         ),
@@ -465,7 +465,7 @@ fn cache_budget_changes_require_restart() -> Result {
 }
 
 #[test]
-fn observability_policy_reloads_but_endpoint_requires_restart() -> Result {
+fn access_log_policy_reloads_and_removed_exporters_are_rejected() -> Result {
     let mut f = Fixture::new()?;
     let root = f.dir.join("root");
     fs::create_dir(&root)?;
@@ -479,7 +479,7 @@ fn observability_policy_reloads_but_endpoint_requires_restart() -> Result {
     f.start()?;
     let on = off.replace(
         "access-log #false",
-        "access-log #true; access-sample-per-mille 500; tracing #true; trace-sample-per-mille 1000",
+        "access-log #true; access-sample-per-mille 500",
     );
     fs::write(&f.entry, &on)?;
     assert_eq!(f.reload()?.generation, Some(2));
@@ -488,6 +488,8 @@ fn observability_policy_reloads_but_endpoint_requires_restart() -> Result {
         "otlp-endpoint \"http://127.0.0.1:4319/v1/traces\"; access-log #true",
     );
     fs::write(&f.entry, changed)?;
-    assert_eq!(f.reload()?.code.as_deref(), Some("RESTART_REQUIRED"));
+    assert_eq!(f.reload()?.code.as_deref(), Some("CONFIG_UNKNOWN"));
+    fs::write(&f.entry, off)?;
+    assert_eq!(f.reload()?.generation, Some(3));
     Ok(())
 }
