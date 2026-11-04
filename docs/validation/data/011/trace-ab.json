@@ -1,0 +1,118 @@
+{
+  "active_scenario": "B2",
+  "covered": [
+    "A: unsupported OTLP environment variables at startup",
+    "B1: real Collector and H1 root/privacy/reload",
+    "B2: TLS WS/SSE across reload and sampled process resources"
+  ],
+  "excluded": [
+    "C: exporter faults and recovery",
+    "H2: separate real-Collector fixture",
+    "origin propagation headers: separate Rust tests"
+  ],
+  "not_implemented": [],
+  "scenario_a": [
+    {
+      "config_env": true,
+      "exit_code": 1,
+      "listener_observed": false,
+      "log": "/scratch/probe-output/env-0/server.log",
+      "marker_in_log": false,
+      "observation_note": "listener and socket absence are sampled, not continuous",
+      "passed": true,
+      "socket_observed": false,
+      "timed_out": false,
+      "variable": "OTEL_EXPORTER_OTLP_HEADERS"
+    },
+    {
+      "config_env": true,
+      "exit_code": 1,
+      "listener_observed": false,
+      "log": "/scratch/probe-output/env-1/server.log",
+      "marker_in_log": false,
+      "observation_note": "listener and socket absence are sampled, not continuous",
+      "passed": true,
+      "socket_observed": false,
+      "timed_out": false,
+      "variable": "OTEL_EXPORTER_OTLP_TRACES_HEADERS"
+    },
+    {
+      "config_env": true,
+      "exit_code": 1,
+      "listener_observed": false,
+      "log": "/scratch/probe-output/env-2/server.log",
+      "marker_in_log": false,
+      "observation_note": "listener and socket absence are sampled, not continuous",
+      "passed": true,
+      "socket_observed": false,
+      "timed_out": false,
+      "variable": "OTEL_EXPORTER_OTLP_COMPRESSION"
+    },
+    {
+      "config_env": true,
+      "exit_code": 1,
+      "listener_observed": false,
+      "log": "/scratch/probe-output/env-3/server.log",
+      "marker_in_log": false,
+      "observation_note": "listener and socket absence are sampled, not continuous",
+      "passed": true,
+      "socket_observed": false,
+      "timed_out": false,
+      "variable": "OTEL_EXPORTER_OTLP_TRACES_COMPRESSION"
+    }
+  ],
+  "scenario_b1": {
+    "generation": 2,
+    "off_span_window_seconds": 0.3,
+    "on_correlated_span_count": 3,
+    "origin_header_note": "origin propagation not rechecked; covered by separate Rust tests",
+    "passed": true,
+    "tracing_off_access_count": 3
+  },
+  "scenario_b2": {
+    "after": {
+      "fd": 22,
+      "threads": 10
+    },
+    "baseline": {
+      "fd": 25,
+      "threads": 10
+    },
+    "evidence": "/scratch/probe-output/b2/streams.jsonl",
+    "final_generation": 22,
+    "off_observation_seconds": 0.2,
+    "old_generation": 1,
+    "passed": true,
+    "reload_samples": 22,
+    "sample_max": {
+      "fd": 27,
+      "threads": 10
+    },
+    "sampling_note": "discrete samples, not a full time-series or bound for arbitrary snapshots",
+    "sse_events": 3,
+    "streams": {
+      "sse": {
+        "access_duration_ns": 3006227037,
+        "body_bytes": 27,
+        "hold_ns": 3005383788,
+        "outcome": "error",
+        "span_duration_ns": 3006227037,
+        "span_id": "31d3ec52be7f28a4",
+        "status": 200,
+        "trace_id": "a8d8e91ee116d287bc1667d6dc1b7b40"
+      },
+      "ws": {
+        "access_duration_ns": 3005899836,
+        "body_bytes": 172,
+        "hold_ns": 3004578632,
+        "outcome": "completed",
+        "span_duration_ns": 3005899836,
+        "span_id": "d4c451f4ae491c37",
+        "status": 101,
+        "trace_id": "cd35ee60e3181aefdb821d17e021cd28"
+      }
+    }
+  },
+  "scope": "all",
+  "status": "scope_complete"
+}

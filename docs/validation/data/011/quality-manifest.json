@@ -1,0 +1,22 @@
+[
+  {
+    "path": "regression-red.log",
+    "bytes": 503,
+    "sha256": "414783dcbe99b0b9e5055b5e197085aacd4158ca82b92d5aa4472249e342756f"
+  },
+  {
+    "path": "timeout-collector.log",
+    "bytes": 5679,
+    "sha256": "7ae00a3609a2f67a7ddf098ad7a51ceac89a66265cea605285ea8e9720a2694f"
+  },
+  {
+    "path": "timeout-result.json",
+    "bytes": 725,
+    "sha256": "cbf576de90323d17704bcdae5e6c5f4a561a256f5fb4803797978c2fa800b0c8"
+  },
+  {
+    "path": "rill-built",
+    "bytes": 47683960,
+    "sha256": "70ef9fec3604f922eb8d9500ae1a6a3aff6d7d82608ceab3acdcab0ea2b67c7d"
+  }
+]

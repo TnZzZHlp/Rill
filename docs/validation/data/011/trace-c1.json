@@ -1,0 +1,157 @@
+{
+  "cases": [
+    {
+      "business_latency_seconds": 0.000768386060371995,
+      "business_status": 200,
+      "epoch": 2,
+      "metrics_after": 1,
+      "metrics_after_monotonic": 1149114.134073938,
+      "metrics_before": 0,
+      "mode": "content_length",
+      "peer_events": [
+        {
+          "authorization_present": false,
+          "body_bytes": 399,
+          "content_type": "application/x-protobuf",
+          "cookie_present": false,
+          "epoch": 2,
+          "method": "POST",
+          "mode": "content_length",
+          "path": "/v1/traces",
+          "timestamp": 1149114.083454174
+        }
+      ],
+      "redirect_accepts": 0,
+      "started_monotonic": 1149114.082277254
+    },
+    {
+      "business_latency_seconds": 0.0005405030678957701,
+      "business_status": 200,
+      "epoch": 3,
+      "metrics_after": 2,
+      "metrics_after_monotonic": 1149114.186548238,
+      "metrics_before": 1,
+      "mode": "chunked",
+      "peer_events": [
+        {
+          "authorization_present": false,
+          "body_bytes": 399,
+          "content_type": "application/x-protobuf",
+          "cookie_present": false,
+          "epoch": 3,
+          "method": "POST",
+          "mode": "chunked",
+          "path": "/v1/traces",
+          "timestamp": 1149114.135729477
+        }
+      ],
+      "redirect_accepts": 0,
+      "started_monotonic": 1149114.13483848
+    },
+    {
+      "business_latency_seconds": 0.0007657809183001518,
+      "business_status": 200,
+      "epoch": 4,
+      "metrics_after": 3,
+      "metrics_after_monotonic": 1149114.239208129,
+      "metrics_before": 2,
+      "mode": "redirect",
+      "peer_events": [
+        {
+          "authorization_present": false,
+          "body_bytes": 399,
+          "content_type": "application/x-protobuf",
+          "cookie_present": false,
+          "epoch": 4,
+          "method": "POST",
+          "mode": "redirect",
+          "path": "/v1/traces",
+          "timestamp": 1149114.188693723
+        }
+      ],
+      "redirect_accepts": 0,
+      "started_monotonic": 1149114.187483505
+    },
+    {
+      "business_latency_seconds": 0.0005537131801247597,
+      "business_status": 200,
+      "epoch": 5,
+      "metrics_after": 4,
+      "metrics_after_monotonic": 1149116.278484639,
+      "metrics_before": 3,
+      "mode": "stall",
+      "peer_events": [
+        {
+          "authorization_present": false,
+          "body_bytes": 399,
+          "content_type": "application/x-protobuf",
+          "cookie_present": false,
+          "epoch": 5,
+          "method": "POST",
+          "mode": "stall",
+          "path": "/v1/traces",
+          "timestamp": 1149114.240726223
+        }
+      ],
+      "redirect_accepts": 0,
+      "started_monotonic": 1149114.23994057
+    }
+  ],
+  "cleanup_failures": [],
+  "limitations": [
+    "HTTP transport input validation only; not OTLP decoding or Collector acceptance",
+    "burst, collector recovery and timeout are not implemented"
+  ],
+  "partial": true,
+  "passed": true,
+  "peer_errors": [],
+  "peer_events": [
+    {
+      "authorization_present": false,
+      "body_bytes": 399,
+      "content_type": "application/x-protobuf",
+      "cookie_present": false,
+      "epoch": 2,
+      "method": "POST",
+      "mode": "content_length",
+      "path": "/v1/traces",
+      "timestamp": 1149114.083454174
+    },
+    {
+      "authorization_present": false,
+      "body_bytes": 399,
+      "content_type": "application/x-protobuf",
+      "cookie_present": false,
+      "epoch": 3,
+      "method": "POST",
+      "mode": "chunked",
+      "path": "/v1/traces",
+      "timestamp": 1149114.135729477
+    },
+    {
+      "authorization_present": false,
+      "body_bytes": 399,
+      "content_type": "application/x-protobuf",
+      "cookie_present": false,
+      "epoch": 4,
+      "method": "POST",
+      "mode": "redirect",
+      "path": "/v1/traces",
+      "timestamp": 1149114.188693723
+    },
+    {
+      "authorization_present": false,
+      "body_bytes": 399,
+      "content_type": "application/x-protobuf",
+      "cookie_present": false,
+      "epoch": 5,
+      "method": "POST",
+      "mode": "stall",
+      "path": "/v1/traces",
+      "timestamp": 1149114.240726223
+    }
+  ],
+  "redirect_accepts": 0,
+  "rill_pid": 7,
+  "scope": "C1_transport"
+}

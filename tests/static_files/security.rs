@@ -171,7 +171,9 @@ fn directory_index_symlink_remains_confined_to_original_root() -> TestResult {
     fs::write(f.dir.join("outside.html"), b"outside-marker")?;
     symlink("../safe.html", f.root.join("page/index.html"))?;
     f.start("")?;
-    assert_eq!(f.request("GET", "/page/", "")?.2, b"safe");
+    let (status, headers, body) = f.request("GET", "/page/", "")?;
+    assert_eq!(status, 200, "{headers}");
+    assert_eq!(body, b"safe");
     symlink("../../outside.html", f.root.join("page/next"))?;
     fs::rename(f.root.join("page/next"), f.root.join("page/index.html"))?;
     assert_eq!(f.request("GET", "/page/", "")?.0, 403);
@@ -180,6 +182,50 @@ fn directory_index_symlink_remains_confined_to_original_root() -> TestResult {
     fs::create_dir(f.root.join("page"))?;
     fs::write(f.root.join("page/index.html"), b"replacement")?;
     assert_eq!(f.request("GET", "/page/", "")?.0, 403);
+    Ok(())
+}
+
+#[test]
+fn unrelated_renames_preserve_in_root_index_symlinks() -> TestResult {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::thread;
+
+    let mut f = Fixture::new()?;
+    fs::create_dir(f.root.join("page"))?;
+    fs::write(f.root.join("safe.html"), b"safe")?;
+    symlink("../safe.html", f.root.join("page/index.html"))?;
+    let unrelated = f.dir.join("unrelated");
+    fs::create_dir(&unrelated)?;
+    f.start("")?;
+    let stop = Arc::new(AtomicBool::new(false));
+    let running = stop.clone();
+    let worker = thread::spawn(move || -> TestResult<u64> {
+        let mut renames = 0;
+        while !running.load(Ordering::Relaxed) {
+            for target in ["one", "two"] {
+                symlink(target, unrelated.join("next"))?;
+                fs::rename(unrelated.join("next"), unrelated.join("link"))?;
+                renames += 1;
+            }
+        }
+        Ok(renames)
+    });
+    let requests = (|| -> TestResult {
+        for _ in 0..1000 {
+            let (status, headers, body) = f.request("GET", "/page/", "")?;
+            if status != 200 || body != b"safe" {
+                return Err(format!("in-root index failed: {status}; {headers}").into());
+            }
+        }
+        Ok(())
+    })();
+    stop.store(true, Ordering::Relaxed);
+    let renames = worker.join().map_err(|_| "rename worker panicked")??;
+    requests?;
+    if renames == 0 {
+        return Err("rename worker made no progress".into());
+    }
     Ok(())
 }
 

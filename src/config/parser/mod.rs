@@ -1,3 +1,4 @@
+mod observability;
 mod server;
 mod site;
 mod values;

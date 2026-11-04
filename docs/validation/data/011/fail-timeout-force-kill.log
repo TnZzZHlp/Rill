@@ -1,0 +1,11 @@
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 28 filtered out; finished in 0.18s
+
+Traceback (most recent call last):
+  File "/validate-timeout.py", line 29, in <module>
+    assert len(spans) == 2, spans
+           ^^^^^^^^^^^^^^^
+AssertionError: [{'trace_id': 'b4587ee89a411a34434356b5bea8f41e', 'span_id': '777ec682244d463d', 'parent': '', 'kind': 'Server', 'name': 'rill.request', 'status': None, 'outcome': 'timeout', 'generation': '1', 'body_bytes_known': 'false', 'body_bytes': None}]
+{"promoted": [{"path": "timeout-collector.log", "bytes": 4148, "sha256": "80752559601853482bd1f604461917b63b87832e4129681db12b41844d4af402"}]}

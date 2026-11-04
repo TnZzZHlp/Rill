@@ -1,0 +1,33 @@
+{
+  "passed": true,
+  "fixture_asserted_http_statuses": [
+    504,
+    200
+  ],
+  "spans": [
+    {
+      "trace_id": "0af1ec7a4605d0a8835e92b3e5167618",
+      "span_id": "b54c2ba4230d2541",
+      "parent": "",
+      "kind": "Server",
+      "name": "rill.request",
+      "status": null,
+      "outcome": "timeout",
+      "generation": "1",
+      "body_bytes_known": "false",
+      "body_bytes": null
+    },
+    {
+      "trace_id": "1f453d56d0d5bb465f5b633f841f3fbe",
+      "span_id": "8be57fd14fedfad2",
+      "parent": "",
+      "kind": "Server",
+      "name": "rill.request",
+      "status": "200",
+      "outcome": "completed",
+      "generation": "2",
+      "body_bytes_known": "true",
+      "body_bytes": "2"
+    }
+  ]
+}

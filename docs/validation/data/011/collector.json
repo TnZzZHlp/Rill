@@ -1,0 +1,42 @@
+{
+  "version": "v0.133.0",
+  "architecture": "linux/amd64",
+  "release_api_url": "https://api.github.com/repos/open-telemetry/opentelemetry-collector-releases/releases/tags/v0.133.0",
+  "release_api_file": "release-api.json",
+  "archive": {
+    "name": "otelcol_0.133.0_linux_amd64.tar.gz",
+    "url": "https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v0.133.0/otelcol_0.133.0_linux_amd64.tar.gz",
+    "api_size_bytes": 37846204,
+    "bytes": 37846204,
+    "sha256": "4e8a9dc074d86c312ef8608f5a1c89b66d97003e7c03d58e0d3dc1f8897e317e",
+    "expected_sha256": "4e8a9dc074d86c312ef8608f5a1c89b66d97003e7c03d58e0d3dc1f8897e317e"
+  },
+  "checksums": {
+    "name": "opentelemetry-collector-releases_otelcol_checksums.txt",
+    "url": "https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v0.133.0/opentelemetry-collector-releases_otelcol_checksums.txt",
+    "api_size_bytes": 4808,
+    "signature_assets_present": true,
+    "signature_verified": false,
+    "trust_note": "SHA-256 matches a checksum from the same release source; this is not an independent trust verification."
+  },
+  "binary": {
+    "name": "otelcol",
+    "bytes": 135585976,
+    "sha256": "24b4f75796d6734f402d65f7a91cd102dead29a0156aa3d3428e277b8d9a056e",
+    "mode": "0555",
+    "executed": false
+  },
+  "archive_members": [
+    {
+      "name": "README.md",
+      "bytes": 848,
+      "type": "regular file"
+    },
+    {
+      "name": "otelcol",
+      "bytes": 135585976,
+      "type": "regular file"
+    }
+  ],
+  "validation_history": "Initial stricter root-otelcol-only policy stopped after identifying README.md. The user was informed; parent authorized one retry allowing only root regular otelcol and README.md (README at most 1 MiB), with all members validated and only otelcol streamed to disk."
+}

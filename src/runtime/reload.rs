@@ -35,6 +35,24 @@ impl ReloadCoordinator {
     }
 
     pub async fn reload(&self) -> Result<u64> {
+        let result = self.reload_inner().await;
+        if self.state.observability.metrics_enabled {
+            use crate::observability::metrics::Reload;
+            let outcome = match &result {
+                Ok(_) => Reload::Success,
+                Err(error) => match error.code {
+                    "BUSY" => Reload::Busy,
+                    "PREPARE_TIMEOUT" => Reload::Timeout,
+                    "SHUTTING_DOWN" => Reload::Shutdown,
+                    _ => Reload::Fail,
+                },
+            };
+            self.state.observability.metrics.reload(outcome);
+        }
+        result
+    }
+
+    async fn reload_inner(&self) -> Result<u64> {
         let mut shutdown = self.state.shutdown_receiver();
         if *shutdown.borrow() {
             return Err(self

@@ -1,0 +1,34 @@
+{
+  "diagnostic_only_instrumented_binary": true,
+  "quiet_before": [
+    200,
+    200,
+    200
+  ],
+  "quiet_after": [
+    200,
+    200,
+    200
+  ],
+  "fixed_pressure_requests": 2000,
+  "pressure_statuses": {
+    "200": 1981,
+    "403": 19
+  },
+  "openat2_errors": {
+    "11": 19
+  },
+  "first_failure": {
+    "status": 403,
+    "body_bytes": 0,
+    "headers": {
+      "content-length": "0",
+      "vary": "Accept-Encoding",
+      "Date": "Wed, 04 Nov 2026 08:43:07 GMT",
+      "Connection": "close"
+    }
+  },
+  "unrelated_renames": 49134,
+  "worker_errors": [],
+  "exit_code": 0
+}

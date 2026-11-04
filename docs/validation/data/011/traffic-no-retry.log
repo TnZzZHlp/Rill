@@ -1,0 +1,3 @@
+{"passed": true, "controlled_fault": "second physical request ends before response headers", "results": [{"allow_retries": true, "valid": true, "samples": 2208, "physical_attempts": 2209, "errors": {}, "raw_error_rows": 0}, {"allow_retries": false, "valid": false, "samples": 2297, "physical_attempts": 2297, "errors": {"EmptyResponse": 1}, "raw_error_rows": 1}]}
+
+

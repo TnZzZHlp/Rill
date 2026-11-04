@@ -99,7 +99,7 @@ def record_window(path, start, measure, deadline):
         out.write('\n')
 
 
-async def round_http(path, tls, warm, ca, seconds, warmup, concurrency, raw_path, window_path=None):
+async def round_http(path, tls, warm, ca, seconds, warmup, concurrency, raw_path, window_path=None, allow_retries=True):
     errors = Counter()
     latencies = []
     successful_bytes = attempted = reused_count = connect_events = reconnects = idle_reconnects = 0
@@ -154,7 +154,7 @@ async def round_http(path, tls, warm, ca, seconds, warmup, concurrency, raw_path
                                 status, size, server_close = await exchange(reader, writer, path, warm)
                                 break
                             except (EmptyResponse, HeaderReset) as exc:
-                                if not warm or not reused or attempt_count != 1:
+                                if not allow_retries or not warm or not reused or attempt_count != 1:
                                     raise
                                 reset_retries += isinstance(exc, HeaderReset)
                                 idle_closes += 1
@@ -167,6 +167,8 @@ async def round_http(path, tls, warm, ca, seconds, warmup, concurrency, raw_path
                         error = type(exc).__name__
                         await close(writer)
                         reader = writer = None
+                        if not measured and not allow_retries:
+                            raise RuntimeError('warmup request failed: ' + error) from exc
                     end = time.monotonic()
                     if begin < measure <= end:
                         boundary += 1
@@ -225,8 +227,8 @@ async def round_http(path, tls, warm, ca, seconds, warmup, concurrency, raw_path
             'measured_reused_requests': reused_count, 'measured_reuse_ratio': reuse_ratio,
             'connect_events': connect_events, 'reconnects': reconnects, 'idle_close_reconnects': idle_reconnects,
             'header_reset_retries': header_reset_retries, 'physical_attempts': physical_attempts,
-            'retry_policy': 'GET only; at most one fresh connection retry after empty headers or header-phase reset on an existing warm connection; never retry body failures',
-            'event_loop_lag_max_seconds': lag_max, 'valid': bool(successes) and not errors and (reuse_ratio >= .95 if warm else reused_count == 0),
+            'retry_policy': ('GET only; at most one fresh connection retry after empty headers or header-phase reset on an existing warm connection; never retry body failures' if allow_retries else 'disabled; preemptive idle connection replacement is not a request retry'),
+            'event_loop_lag_max_seconds': lag_max, 'valid': bool(successes) and not errors and (reuse_ratio >= .95 if warm else reused_count == 0) and (allow_retries or physical_attempts == attempted),
             'sample_limit': LIMIT, 'percentile_method': 'nearest rank on successful issue cohort'}
 
 

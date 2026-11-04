@@ -4,7 +4,7 @@
 
 ## 1. 目录与职责
 
-当前 main 仅委托 `cli::run`，CLI 使用 Clap 解析参数，check 调用统一配置构建入口。002 已提供 config 模块，003 已提供 routing、proxy、runtime 和结构化日志。001 的技术验证仍隔离在 tests/feasibility/；003 的真实服务验证在 tests/http_proxy/，004 的 TLS/HTTP2 验证在 tests/https/。004 已增加 tls 模块，005 已增加 static_files 模块，007 已增加控制面，高级观测仍后续实现，不在 main 或 CLI 中堆业务逻辑。
+当前 main 仅委托 `cli::run`，CLI 使用 Clap 解析参数，check 调用统一配置构建入口。002 已提供 config 模块，003 已提供 routing、proxy、runtime 和结构化日志。001 的技术验证仍隔离在 tests/feasibility/；003 的真实服务验证在 tests/http_proxy/，004 的 TLS/HTTP2 验证在 tests/https/。004 已增加 tls 模块，005 已增加 static_files 模块，007 已增加控制面，可观测性由独立模块实现，不在 main 或 CLI 中堆业务逻辑。
 
 | 拟议模块 | 负责 | 不负责 |
 | --- | --- | --- |
@@ -174,3 +174,21 @@ watch 使用独立于快照的 inotify FD 生命周期，最多活动和候选�
 001 解除技术机制可行性阻塞，002 提供配置语义检查，003 提供 HTTP/1.x run 和基础代理，004 提供真实 HTTPS/SNI、HTTP/2、证书检查及安全重定向。005 已准备静态 root；006 支持 HTTPS 上游和 WS/SSE。check 仍不宣称 DNS、连通性或上游 TLS 信任已验证。007 已实现 Reload；未执行独立全代码库安全审计或生产性能测试。合同如需改变通配层级、路径映射、Host/SNI 或快照代次边界，必须先更新计划并获得确认。
 
 006 的合法 101 是最终响应头，先检查请求头总期限再进入 Streaming；SSE 在普通最终头后逐段流式传输，不聚合且无响应总时长限制。read-timeout 为上游相邻读取期限，idle-timeout 用于下游读写和连接池；不承诺单向数据刷新共享双向 idle，也不承诺通用 TCP 半关闭。响应头后故障仅中止，不追加 HTTP；保留既有 30 秒排空。
+
+## 11. 可观测性运行边界
+
+配置与操作见 [可观测性配置与运维](configuration.md#可观测性配置与运维)。生产状态拥有一个 provider、日志线程和追踪 worker；候选准备和 check 不产生监听或 exporter 副作用。请求持有原快照策略，Reload 不改变进行中的请求。
+
+访问事件 `event=access` 使用 `timestamp_ms`、可为 null 的 32 位十六进制 `request_id`、32 位 `trace_id` 和 16 位 `span_id`、`generation`、不透明 `site`/`route`、`method`、`status`、`body_bytes`、`duration_ns`、`outcome`。方法固定 GET、HEAD、POST、PUT、DELETE、OPTIONS、PATCH、CONNECT、OTHER；outcome 为 completed、error、cancelled、timeout。status 和正文计数未知时为 null 而非 0；App 预算取消时上下文未记录已发响应，不能把随后尝试的 504 当作已写入。普通、静态、代理和 WS/SSE 在请求或会话结束时记录，而非响应头时。升级流的字节只能解释为已知框架正文计数，不是 WS 应用 payload 或 TCP 线缆字节。
+
+访问事件和 span 不包含原 URL、查询、Host、客户 IP、头、cookie、密钥或原始错误。site/route 标识不是加密匿名化：知道配置的人可计算并关联。P0 运行事件保留原有 `time_ms` schema 和管理员配置诊断字段，可能包含文件名或监听地址，不能声称所有日志都不含地址。
+
+运行事件与访问事件共享最多 4096 条、每条序列化不超过 4 KiB 的队列和唯一 stderr writer。生产者在级别或访问采样后有界复制并尝试非阻塞锁和发送，满、关闭或锁竞争丢弃并计入 `rill_log_queue_drop_total`；写出失败计入 `rill_log_export_failure_total`。访问开关独立于运行日志级别，log-level off 不关闭访问日志。尚未绑定 owner 的 check 和早期启动错误仍走原同步路径，且此时尚未接受业务请求。关闭先停止准入并最多等待 1 秒正常 flush；超时后 worker 停止新写并清理队列，但已阻塞的 stderr 写无法取消，余下丢弃计数可能在 shutdown 返回后才发生，不保证送达。
+
+指标使用 128 个进程永久路由身份槽及 unknown、overflow，共 130 个；失败候选不占槽，超出后归 overflow 并继续服务。身份为最小规范化站点域名和路由模式的长度前缀 SHA-256 前 16 字节，不按路由序号；Reload 改变域名集合可能改变身份。未匹配 Host 归 unknown，未知方法归 OTHER。标签不含代次、原 Host、URI 或地址。全局请求计数为 9 种方法乘 7 种状态分类；每路由有完成计数和 12 个有限边界加 +Inf、sum、count 的耗时直方图。另有正文、活跃量、上游、Reload、代次和四项诊断，最坏 2162 条序列，最大 u64 数字下输出不超过 1 MiB。独占桶采样后前缀累加，保证 +Inf 与 count 一致；抓取不是全事务，sum 和其他计数可因并发近似。
+
+`rill_body_bytes_total` 累计已知正文；`rill_inflight_requests`、`rill_active_transports`、`rill_active_h2_streams` 分别表示请求、HTTP 接管的底层传输和 H2 流。传输在共享底层流最后释放时递减，TLS 握手前不计 HTTP 活跃连接。框架建立上下文前的异常头不计已解析请求。`rill_upstream_attempts_total` 的 started/new/reused/fail/tls_fail 是事件而非当前连接数：连接尝试开始计 started，连接后校验通过按新建或复用计 new/reused；连接失败中的 TLS 握手、超时或证书错误及连接后校验失败计 tls_fail，其他连接失败计 fail。`rill_reload_total` 的 success/fail/busy/timeout/shutdown 是各出口事件计数。请求耗时覆盖完整根请求会话，WS/SSE 可以很长，取消时可能只有部分计数。
+
+追踪使用官方 SDK 根 span 和官方 OTLP exporter，由自定义 SDK SpanProcessor 的独立线程有界批处理，不是 SDK 内置 BSP。队列及在途合计最多 2048，单批最多 128；存活请求 span 不在此预算内，不能视作 RSS 上限。头采样是每千分比周期计数而非随机独立概率：0 不创建 span、1000 全采；日志采样独立，trace ID 使用 OS 随机数。不信任外来 traceparent、tracestate、baggage；向上游无条件移除这些头，仅本地有效且选中的 span 插入 flags 为 01 的新 traceparent，不传播 baggage。provider 不设置为全局 provider，resource 仅有 service.name/version，属性数限制 16，events/links 为 0，值是受控短字段。
+
+导出只向配置端点 POST，不重定向、不代理、不重试，HTTP 总时间及连接超时均为 2 秒，请求体最多 1 MiB、响应体最多 64 KiB，超长响应立即失败。发送额外复制最多 1 MiB，响应缓冲和分配器开销也不属于 span 队列预算。客户端构造及析构在 OS 线程进行。关闭最多等待 3 秒以尝试尾批，其余丢弃计数；无法强制取消失控外部库或恶意本地文件系统的阻塞，不保证全部 flush。Collector 故障不在请求热路径等待，可观察对应诊断计数。

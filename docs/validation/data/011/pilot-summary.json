@@ -1,0 +1,767 @@
+{
+  "status": "complete",
+  "rounds": [
+    {
+      "round": 1,
+      "mode": "off",
+      "config": "/scratch/work/round-01-off.kdl",
+      "config_sha256": "5b37a39c75fd2f1db151b121fe33d8223cea2a2be79c93a6c4b5b27f697f5157",
+      "valid": true,
+      "stop": {
+        "server": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        },
+        "backend": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        }
+      },
+      "counter_availability": "unavailable_no_metrics_endpoint",
+      "metrics_before": null,
+      "metrics_after": null,
+      "counter_delta": null,
+      "metrics_before_monotonic": null,
+      "metrics_after_monotonic": null,
+      "child_limits": {
+        "backend": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        },
+        "server": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        }
+      },
+      "http": {
+        "samples": 27327,
+        "issue_window_samples": 27327,
+        "successes": 27327,
+        "measurement_seconds": 2.0,
+        "completed_within_window": 27319,
+        "bytes_within_window": 27974656,
+        "completed_rps_nominal": 13659.5,
+        "completed_bytes_per_second_nominal": 13987328.0,
+        "cohort_rps_including_drain": 13659.232050605318,
+        "drain_seconds": 0.0006249179132282734,
+        "late_completions": 8,
+        "warmup_boundary_excluded_completions": 8,
+        "bytes": 27982848,
+        "error_rate": 0.0,
+        "p50_ms": 0.549,
+        "p95_ms": 0.782,
+        "p99_ms": 0.99,
+        "errors": {},
+        "measured_reused_requests": 27327,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "reconnects": 0,
+        "idle_close_reconnects": 0,
+        "header_reset_retries": 0,
+        "physical_attempts": 27327,
+        "retry_policy": "disabled; preemptive idle connection replacement is not a request retry",
+        "event_loop_lag_max_seconds": 0.0008439298253506422,
+        "valid": true,
+        "sample_limit": 2000000,
+        "percentile_method": "nearest rank on successful issue cohort"
+      },
+      "resources": {
+        "server": {
+          "cpu_percent": 133.6959460219465,
+          "rss_bytes": 17764352,
+          "hwm_sum_bytes": 17793024,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "backend": {
+          "cpu_percent": 93.786708403455,
+          "rss_bytes": 27353088,
+          "hwm_sum_bytes": 27353088,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "client": {
+          "cpu_percent": 96.84545701439625,
+          "rss_bytes": 30236672,
+          "hwm_sum_bytes": 30236672,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        }
+      },
+      "client_warning": true,
+      "backend_summary": {
+        "errors": 0,
+        "rejected": 0
+      },
+      "ports_removed": true,
+      "repeat": 1
+    },
+    {
+      "round": 2,
+      "mode": "access",
+      "config": "/scratch/work/round-02-access.kdl",
+      "config_sha256": "f594d3369bb8b9459b0560626156c4013dd82e8ec70bbafc9a086d8b5683d4d4",
+      "valid": true,
+      "stop": {
+        "server": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        },
+        "backend": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        }
+      },
+      "counter_availability": "unavailable_no_metrics_endpoint",
+      "metrics_before": null,
+      "metrics_after": null,
+      "counter_delta": null,
+      "metrics_before_monotonic": null,
+      "metrics_after_monotonic": null,
+      "child_limits": {
+        "backend": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        },
+        "server": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        }
+      },
+      "http": {
+        "samples": 19319,
+        "issue_window_samples": 19319,
+        "successes": 19319,
+        "measurement_seconds": 2.0,
+        "completed_within_window": 19311,
+        "bytes_within_window": 19774464,
+        "completed_rps_nominal": 9655.5,
+        "completed_bytes_per_second_nominal": 9887232.0,
+        "cohort_rps_including_drain": 9654.580691803485,
+        "drain_seconds": 0.0010190620087087154,
+        "late_completions": 8,
+        "warmup_boundary_excluded_completions": 8,
+        "bytes": 19782656,
+        "error_rate": 0.0,
+        "p50_ms": 0.757,
+        "p95_ms": 1.234,
+        "p99_ms": 1.984,
+        "errors": {},
+        "measured_reused_requests": 19319,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "reconnects": 0,
+        "idle_close_reconnects": 0,
+        "header_reset_retries": 0,
+        "physical_attempts": 19319,
+        "retry_policy": "disabled; preemptive idle connection replacement is not a request retry",
+        "event_loop_lag_max_seconds": 0.0011305499356240034,
+        "valid": true,
+        "sample_limit": 2000000,
+        "percentile_method": "nearest rank on successful issue cohort"
+      },
+      "resources": {
+        "server": {
+          "cpu_percent": 156.74307865699382,
+          "rss_bytes": 18288640,
+          "hwm_sum_bytes": 18288640,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "backend": {
+          "cpu_percent": 94.84453804085612,
+          "rss_bytes": 27332608,
+          "hwm_sum_bytes": 27332608,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "client": {
+          "cpu_percent": 93.84617448253132,
+          "rss_bytes": 30060544,
+          "hwm_sum_bytes": 30138368,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        }
+      },
+      "client_warning": true,
+      "backend_summary": {
+        "errors": 0,
+        "rejected": 0
+      },
+      "ports_removed": true,
+      "repeat": 1
+    },
+    {
+      "round": 3,
+      "mode": "metrics",
+      "config": "/scratch/work/round-03-metrics.kdl",
+      "config_sha256": "b278656179f6d5c1d7b757a9f06ec201441d71b8c8c3e2a6a3dc8694f7ea7a5a",
+      "valid": true,
+      "stop": {
+        "server": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        },
+        "backend": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        }
+      },
+      "counter_availability": "available",
+      "metrics_before": {
+        "rill_generation": 1.0,
+        "rill_log_queue_drop_total": 0.0,
+        "rill_trace_queue_drop_total": 0.0,
+        "rill_log_export_failure_total": 0.0,
+        "rill_trace_export_failure_total": 0.0
+      },
+      "metrics_after": {
+        "rill_generation": 1.0,
+        "rill_log_queue_drop_total": 0.0,
+        "rill_trace_queue_drop_total": 0.0,
+        "rill_log_export_failure_total": 0.0,
+        "rill_trace_export_failure_total": 0.0
+      },
+      "counter_delta": {
+        "rill_log_queue_drop_total": 0.0,
+        "rill_trace_queue_drop_total": 0.0,
+        "rill_log_export_failure_total": 0.0,
+        "rill_trace_export_failure_total": 0.0
+      },
+      "metrics_before_monotonic": {
+        "start": 1149136.746036036,
+        "end": 1149136.747042397
+      },
+      "metrics_after_monotonic": {
+        "start": 1149140.771448421,
+        "end": 1149140.772353106
+      },
+      "child_limits": {
+        "backend": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        },
+        "server": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        }
+      },
+      "http": {
+        "samples": 20757,
+        "issue_window_samples": 20757,
+        "successes": 20757,
+        "measurement_seconds": 2.0,
+        "completed_within_window": 20749,
+        "bytes_within_window": 21246976,
+        "completed_rps_nominal": 10374.5,
+        "completed_bytes_per_second_nominal": 10623488.0,
+        "cohort_rps_including_drain": 10373.501885555932,
+        "drain_seconds": 0.0009636310860514641,
+        "late_completions": 8,
+        "warmup_boundary_excluded_completions": 8,
+        "bytes": 21255168,
+        "error_rate": 0.0,
+        "p50_ms": 0.661,
+        "p95_ms": 1.355,
+        "p99_ms": 2.739,
+        "errors": {},
+        "measured_reused_requests": 20757,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "reconnects": 0,
+        "idle_close_reconnects": 0,
+        "header_reset_retries": 0,
+        "physical_attempts": 20757,
+        "retry_policy": "disabled; preemptive idle connection replacement is not a request retry",
+        "event_loop_lag_max_seconds": 0.0010721508879214525,
+        "valid": true,
+        "sample_limit": 2000000,
+        "percentile_method": "nearest rank on successful issue cohort"
+      },
+      "resources": {
+        "server": {
+          "cpu_percent": 112.67798231753885,
+          "rss_bytes": 18202624,
+          "hwm_sum_bytes": 18202624,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "backend": {
+          "cpu_percent": 94.8716041668508,
+          "rss_bytes": 27394048,
+          "hwm_sum_bytes": 27394048,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "client": {
+          "cpu_percent": 82.76347373766129,
+          "rss_bytes": 30199808,
+          "hwm_sum_bytes": 30199808,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        }
+      },
+      "client_warning": false,
+      "backend_summary": {
+        "errors": 0,
+        "rejected": 0
+      },
+      "ports_removed": true,
+      "repeat": 1
+    },
+    {
+      "round": 4,
+      "mode": "trace",
+      "config": "/scratch/work/round-04-trace.kdl",
+      "config_sha256": "ca2f9a4097a52b9675508639af847bbaaf6e1d3ad0bdc28adb3ef12ef47c2c3e",
+      "valid": true,
+      "stop": {
+        "server": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        },
+        "collector": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        },
+        "backend": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        }
+      },
+      "counter_availability": "unavailable_no_metrics_endpoint",
+      "metrics_before": null,
+      "metrics_after": null,
+      "counter_delta": null,
+      "metrics_before_monotonic": null,
+      "metrics_after_monotonic": null,
+      "child_limits": {
+        "backend": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        },
+        "collector": {
+          "RLIMIT_AS": [
+            8589934592,
+            8589934592
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        },
+        "server": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        }
+      },
+      "http": {
+        "samples": 20303,
+        "issue_window_samples": 20303,
+        "successes": 20303,
+        "measurement_seconds": 2.0,
+        "completed_within_window": 20295,
+        "bytes_within_window": 20782080,
+        "completed_rps_nominal": 10147.5,
+        "completed_bytes_per_second_nominal": 10391040.0,
+        "cohort_rps_including_drain": 10146.484912223612,
+        "drain_seconds": 0.0009885369800031185,
+        "late_completions": 8,
+        "warmup_boundary_excluded_completions": 8,
+        "bytes": 20790272,
+        "error_rate": 0.0,
+        "p50_ms": 0.69,
+        "p95_ms": 1.294,
+        "p99_ms": 2.077,
+        "errors": {},
+        "measured_reused_requests": 20303,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "reconnects": 0,
+        "idle_close_reconnects": 0,
+        "header_reset_retries": 0,
+        "physical_attempts": 20303,
+        "retry_policy": "disabled; preemptive idle connection replacement is not a request retry",
+        "event_loop_lag_max_seconds": 0.0013042790815234184,
+        "valid": true,
+        "sample_limit": 2000000,
+        "percentile_method": "nearest rank on successful issue cohort"
+      },
+      "resources": {
+        "server": {
+          "cpu_percent": 130.69432415766988,
+          "rss_bytes": 18649088,
+          "hwm_sum_bytes": 18653184,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "backend": {
+          "cpu_percent": 88.71486562750243,
+          "rss_bytes": 27328512,
+          "hwm_sum_bytes": 27328512,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "client": {
+          "cpu_percent": 132.94826114190363,
+          "rss_bytes": 30355456,
+          "hwm_sum_bytes": 30355456,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "collector": {
+          "cpu_percent": 4.990330411197917,
+          "rss_bytes": 91275264,
+          "hwm_sum_bytes": 91275264,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        }
+      },
+      "client_warning": true,
+      "backend_summary": {
+        "errors": 0,
+        "rejected": 0
+      },
+      "ports_removed": true,
+      "repeat": 1
+    },
+    {
+      "round": 5,
+      "mode": "all",
+      "config": "/scratch/work/round-05-all.kdl",
+      "config_sha256": "6204e73aca3b697e00fc62d53f13e16b6d705808d338bd7c98b7af07671e6a6c",
+      "valid": true,
+      "stop": {
+        "server": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        },
+        "collector": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        },
+        "backend": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        }
+      },
+      "counter_availability": "available",
+      "metrics_before": {
+        "rill_generation": 1.0,
+        "rill_log_queue_drop_total": 0.0,
+        "rill_trace_queue_drop_total": 0.0,
+        "rill_log_export_failure_total": 0.0,
+        "rill_trace_export_failure_total": 0.0
+      },
+      "metrics_after": {
+        "rill_generation": 1.0,
+        "rill_log_queue_drop_total": 2851.0,
+        "rill_trace_queue_drop_total": 28.0,
+        "rill_log_export_failure_total": 0.0,
+        "rill_trace_export_failure_total": 0.0
+      },
+      "counter_delta": {
+        "rill_log_queue_drop_total": 2851.0,
+        "rill_trace_queue_drop_total": 28.0,
+        "rill_log_export_failure_total": 0.0,
+        "rill_trace_export_failure_total": 0.0
+      },
+      "metrics_before_monotonic": {
+        "start": 1149145.457797077,
+        "end": 1149145.458484218
+      },
+      "metrics_after_monotonic": {
+        "start": 1149149.480134271,
+        "end": 1149149.480726176
+      },
+      "child_limits": {
+        "backend": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        },
+        "collector": {
+          "RLIMIT_AS": [
+            8589934592,
+            8589934592
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        },
+        "server": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        }
+      },
+      "http": {
+        "samples": 19939,
+        "issue_window_samples": 19939,
+        "successes": 19939,
+        "measurement_seconds": 2.0,
+        "completed_within_window": 19931,
+        "bytes_within_window": 20409344,
+        "completed_rps_nominal": 9965.5,
+        "completed_bytes_per_second_nominal": 10204672.0,
+        "cohort_rps_including_drain": 9964.395375380278,
+        "drain_seconds": 0.0010245728772133589,
+        "late_completions": 8,
+        "warmup_boundary_excluded_completions": 8,
+        "bytes": 20417536,
+        "error_rate": 0.0,
+        "p50_ms": 0.702,
+        "p95_ms": 1.325,
+        "p99_ms": 2.08,
+        "errors": {},
+        "measured_reused_requests": 19939,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "reconnects": 0,
+        "idle_close_reconnects": 0,
+        "header_reset_retries": 0,
+        "physical_attempts": 19939,
+        "retry_policy": "disabled; preemptive idle connection replacement is not a request retry",
+        "event_loop_lag_max_seconds": 0.0015672547742724419,
+        "valid": true,
+        "sample_limit": 2000000,
+        "percentile_method": "nearest rank on successful issue cohort"
+      },
+      "resources": {
+        "server": {
+          "cpu_percent": 137.67395021507042,
+          "rss_bytes": 18194432,
+          "hwm_sum_bytes": 18194432,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "backend": {
+          "cpu_percent": 90.78499615631455,
+          "rss_bytes": 27377664,
+          "hwm_sum_bytes": 27377664,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "client": {
+          "cpu_percent": 89.14902212118544,
+          "rss_bytes": 30314496,
+          "hwm_sum_bytes": 30314496,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "collector": {
+          "cpu_percent": 4.991641078314357,
+          "rss_bytes": 91148288,
+          "hwm_sum_bytes": 91148288,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        }
+      },
+      "client_warning": false,
+      "backend_summary": {
+        "errors": 0,
+        "rejected": 0
+      },
+      "ports_removed": true,
+      "repeat": 1
+    }
+  ],
+  "provenance_sha256": "6a17a49a739098c54154a9e746aa9f6da78dd17f61eecbf8bf8f70773ab738d8",
+  "parameters": {
+    "rill": "/opt/rill",
+    "collector": "/opt/otelcol",
+    "workdir": "/scratch/work",
+    "output": "/scratch/output",
+    "provenance_json": "/provenance.json",
+    "seconds": 2.0,
+    "repeats": 1,
+    "warmup": 2.0,
+    "concurrency": 8,
+    "server_cpus": [
+      4,
+      5
+    ],
+    "client_cpus": [
+      6,
+      7
+    ],
+    "backend_cpus": [
+      8,
+      9
+    ],
+    "collector_cpus": [
+      10,
+      11
+    ],
+    "only": null
+  },
+  "selected_modes": [
+    "off",
+    "access",
+    "metrics",
+    "trace",
+    "all"
+  ],
+  "rill_sha256": "c27d76720c61ea99018a5483b6b409eed1b9b47c2e48eb45e6a449801c078b70",
+  "collector_sha256": "24b4f75796d6734f402d65f7a91cd102dead29a0156aa3d3428e277b8d9a056e",
+  "collector_config_sha256": "2da7a8187b50d48fccd159a9e5818d5d227cb458f607eb785f3022c4279dd186",
+  "collector_version": "0.133.0",
+  "sdk_versions": {
+    "opentelemetry": "0.31.0",
+    "opentelemetry_sdk": "0.31.0",
+    "opentelemetry-otlp": "0.31.1",
+    "opentelemetry-http": "0.31.0",
+    "reqwest": "0.12.28"
+  },
+  "source_manifest_sha256": "bb93a9e81b06307362673a5aa12a0e55456daae058c58ed1d9ad556bdbdcafd3",
+  "provenance_scope": "Versions and source manifest supplied by parent; binary hashes matched, package metadata not extracted from binary or independently verified.",
+  "kernel": "7.2.11-x64v3-xanmod1",
+  "python": "3.13.5 (main, Aug 10 2026, 12:06:59) [GCC 14.2.0]",
+  "environment_keys": [
+    "PATH",
+    "HOME",
+    "TMPDIR",
+    "LANG",
+    "LC_ALL"
+  ],
+  "inherited_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11
+  ],
+  "inherited_limits": {
+    "RLIMIT_AS": [
+      8589934592,
+      8589934592
+    ],
+    "RLIMIT_CPU": [
+      900,
+      900
+    ],
+    "RLIMIT_NPROC": [
+      128,
+      128
+    ],
+    "RLIMIT_NOFILE": [
+      512,
+      512
+    ],
+    "RLIMIT_FSIZE": [
+      536870912,
+      536870912
+    ]
+  },
+  "client_limits": {
+    "RLIMIT_AS": [
+      2147483648,
+      8589934592
+    ],
+    "RLIMIT_CPU": [
+      900,
+      900
+    ],
+    "RLIMIT_NPROC": [
+      128,
+      128
+    ],
+    "RLIMIT_NOFILE": [
+      512,
+      512
+    ],
+    "RLIMIT_FSIZE": [
+      536870912,
+      536870912
+    ]
+  },
+  "collector_as_cap": 8589934592,
+  "clock": "time.monotonic",
+  "offered_load": "closed-loop; RPS is not capacity",
+  "nominal_payload_bytes": 1024,
+  "sampling_scope": "immediately before warmup through request completion including drain; excludes shutdown; CPU peaks are one-second samples",
+  "memory_scope": "RSS sums may double count shared pages; HWM is historical; no PSS or cgroup accounting",
+  "counter_scope": "Snapshots are cumulative since process start and may include readiness, warmup, cohort and asynchronous callbacks before the after scrape. Delta excludes events already reflected in the before snapshot. Neither is an exact measurement-window count; after scrape precedes SDK shutdown, so final shutdown outcomes and tail failures may be missing. Generation is a gauge, not a counter.",
+  "readiness_scope": "correctness proxy request precedes metrics baseline and measurement, and may emit access records and spans",
+  "logs_scope": "raw whole-round logs include readiness, warmup, measurement and shutdown; no window counts inferred",
+  "off_scope": "off may still have provider threads or other resource use; not zero-resource",
+  "collector_readiness": "TCP connect and live process plus JSON service ready marker in collector stderr; receiver protocol correctness independently validated"
+}

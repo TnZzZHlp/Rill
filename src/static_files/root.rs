@@ -39,10 +39,17 @@ fn parse_mount_id(bytes: &[u8]) -> io::Result<u64> {
 }
 
 fn constrained_open_with_flags(root: &File, path: &Path, flags: OFlag) -> io::Result<OwnedFd> {
-    let how = OpenHow::new()
-        .flags(OFlag::O_PATH | OFlag::O_CLOEXEC | flags)
-        .resolve(ResolveFlag::RESOLVE_BENEATH | ResolveFlag::RESOLVE_NO_MAGICLINKS);
-    openat2(root, path, how).map_err(io_error)
+    let mut attempts = 0;
+    loop {
+        attempts += 1;
+        let how = OpenHow::new()
+            .flags(OFlag::O_PATH | OFlag::O_CLOEXEC | flags)
+            .resolve(ResolveFlag::RESOLVE_BENEATH | ResolveFlag::RESOLVE_NO_MAGICLINKS);
+        match openat2(root, path, how) {
+            Err(Errno::EAGAIN) if attempts < 8 => std::thread::yield_now(),
+            result => return result.map_err(io_error),
+        }
+    }
 }
 
 fn constrained_open(root: &File, path: &Path) -> io::Result<OwnedFd> {

@@ -1,0 +1,484 @@
+{
+  "passed": true,
+  "scope": "matrix raw only; not stage 011 AC all-through",
+  "raw_metadata": {
+    "file_count": 47,
+    "bytes": 27757495,
+    "total_request_rows": 107645,
+    "manifest_sha256": "07a5d41b15c4b256b6c185e044ef1e85bf315dd7cca4ff9a7bf7d6192dac1db4",
+    "rill_sha256": "c27d76720c61ea99018a5483b6b409eed1b9b47c2e48eb45e6a449801c078b70",
+    "collector_sha256": "24b4f75796d6734f402d65f7a91cd102dead29a0156aa3d3428e277b8d9a056e",
+    "provenance": {
+      "binary_sha256": "c27d76720c61ea99018a5483b6b409eed1b9b47c2e48eb45e6a449801c078b70",
+      "binary_bytes": 21796728,
+      "collector_sha256": "24b4f75796d6734f402d65f7a91cd102dead29a0156aa3d3428e277b8d9a056e",
+      "collector_version": "0.133.0",
+      "sdk_packages": {
+        "opentelemetry": "0.31.0",
+        "opentelemetry_sdk": "0.31.0",
+        "opentelemetry-otlp": "0.31.1",
+        "opentelemetry-http": "0.31.0",
+        "reqwest": "0.12.28"
+      },
+      "source_manifest_sha256": "bb93a9e81b06307362673a5aa12a0e55456daae058c58ed1d9ad556bdbdcafd3",
+      "cargo_lock_sha256": "8e3b94586d66ead70f8fc82ee38d15b9ef9d0d2e08c0b6abb82e0f6ae48eecb6",
+      "source_snapshot": "source-final-v2",
+      "base_commit": "ecca04df85d969ec716cd1e3999242694f08a06f",
+      "metadata_scope": "Parent records from actual frozen source Cargo.lock and source/binary file hashes, not metadata extracted from executable; SDK effective features separately inspected in isolated offline Cargo tree.",
+      "collector_integrity_scope": "Official fixed release archive checked against same-origin official checksum; signature not verified."
+    }
+  },
+  "rounds": [
+    {
+      "round": 1,
+      "repeat": 1,
+      "mode": "off",
+      "window": {
+        "warmup_start_monotonic": 1149128.25838342,
+        "measure_start_monotonic": 1149130.25838342,
+        "deadline_monotonic": 1149132.25838342,
+        "clock": "time.monotonic"
+      },
+      "http": {
+        "samples": 27327,
+        "issue_window_samples": 27327,
+        "successes": 27327,
+        "measurement_seconds": 2,
+        "completed_within_window": 27319,
+        "bytes_within_window": 27974656,
+        "completed_rps_nominal": 13659.5,
+        "completed_bytes_per_second_nominal": 13987328.0,
+        "cohort_rps_including_drain": 13659.232050605318,
+        "drain_seconds": 0.0006249179132282734,
+        "late_completions": 8,
+        "bytes": 27982848,
+        "error_rate": 0,
+        "errors": {},
+        "measured_reused_requests": 27327,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "idle_close_reconnects": 0,
+        "header_reset_retries": 0,
+        "physical_attempts": 27327,
+        "p50_ms": 0.549,
+        "p95_ms": 0.782,
+        "p99_ms": 0.99
+      },
+      "resources": {
+        "server": {
+          "cpu_percent": 133.6959460219465,
+          "rss_bytes": 17764352,
+          "hwm_sum_bytes": 17793024,
+          "pss_bytes": null,
+          "missing_root_samples": 0,
+          "threads_max": 7,
+          "fds_max": 32,
+          "samples": 6
+        },
+        "backend": {
+          "cpu_percent": 93.786708403455,
+          "rss_bytes": 27353088,
+          "hwm_sum_bytes": 27353088,
+          "pss_bytes": null,
+          "missing_root_samples": 0,
+          "threads_max": 1,
+          "fds_max": 15,
+          "samples": 6
+        },
+        "client": {
+          "cpu_percent": 96.84545701439625,
+          "rss_bytes": 30236672,
+          "hwm_sum_bytes": 30236672,
+          "pss_bytes": null,
+          "missing_root_samples": 0,
+          "threads_max": 1,
+          "fds_max": 27,
+          "samples": 6
+        }
+      },
+      "counters": null,
+      "client_warning": true,
+      "event_loop_lag_max_seconds": 0.0008439298253506422
+    },
+    {
+      "round": 2,
+      "repeat": 1,
+      "mode": "access",
+      "window": {
+        "warmup_start_monotonic": 1149132.45761335,
+        "measure_start_monotonic": 1149134.45761335,
+        "deadline_monotonic": 1149136.45761335,
+        "clock": "time.monotonic"
+      },
+      "http": {
+        "samples": 19319,
+        "issue_window_samples": 19319,
+        "successes": 19319,
+        "measurement_seconds": 2,
+        "completed_within_window": 19311,
+        "bytes_within_window": 19774464,
+        "completed_rps_nominal": 9655.5,
+        "completed_bytes_per_second_nominal": 9887232.0,
+        "cohort_rps_including_drain": 9654.580691803485,
+        "drain_seconds": 0.0010190620087087154,
+        "late_completions": 8,
+        "bytes": 19782656,
+        "error_rate": 0,
+        "errors": {},
+        "measured_reused_requests": 19319,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "idle_close_reconnects": 0,
+        "header_reset_retries": 0,
+        "physical_attempts": 19319,
+        "p50_ms": 0.757,
+        "p95_ms": 1.234,
+        "p99_ms": 1.984
+      },
+      "resources": {
+        "server": {
+          "cpu_percent": 156.74307865699382,
+          "rss_bytes": 18288640,
+          "hwm_sum_bytes": 18288640,
+          "pss_bytes": null,
+          "missing_root_samples": 0,
+          "threads_max": 7,
+          "fds_max": 32,
+          "samples": 6
+        },
+        "backend": {
+          "cpu_percent": 94.84453804085612,
+          "rss_bytes": 27332608,
+          "hwm_sum_bytes": 27332608,
+          "pss_bytes": null,
+          "missing_root_samples": 0,
+          "threads_max": 1,
+          "fds_max": 15,
+          "samples": 6
+        },
+        "client": {
+          "cpu_percent": 93.84617448253132,
+          "rss_bytes": 30060544,
+          "hwm_sum_bytes": 30138368,
+          "pss_bytes": null,
+          "missing_root_samples": 0,
+          "threads_max": 1,
+          "fds_max": 27,
+          "samples": 6
+        }
+      },
+      "counters": null,
+      "client_warning": true,
+      "event_loop_lag_max_seconds": 0.0011305499356240034
+    },
+    {
+      "round": 3,
+      "repeat": 1,
+      "mode": "metrics",
+      "window": {
+        "warmup_start_monotonic": 1149136.749459951,
+        "measure_start_monotonic": 1149138.749459951,
+        "deadline_monotonic": 1149140.749459951,
+        "clock": "time.monotonic"
+      },
+      "http": {
+        "samples": 20757,
+        "issue_window_samples": 20757,
+        "successes": 20757,
+        "measurement_seconds": 2,
+        "completed_within_window": 20749,
+        "bytes_within_window": 21246976,
+        "completed_rps_nominal": 10374.5,
+        "completed_bytes_per_second_nominal": 10623488.0,
+        "cohort_rps_including_drain": 10373.501885555932,
+        "drain_seconds": 0.0009636310860514641,
+        "late_completions": 8,
+        "bytes": 21255168,
+        "error_rate": 0,
+        "errors": {},
+        "measured_reused_requests": 20757,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "idle_close_reconnects": 0,
+        "header_reset_retries": 0,
+        "physical_attempts": 20757,
+        "p50_ms": 0.661,
+        "p95_ms": 1.355,
+        "p99_ms": 2.739
+      },
+      "resources": {
+        "server": {
+          "cpu_percent": 112.67798231753885,
+          "rss_bytes": 18202624,
+          "hwm_sum_bytes": 18202624,
+          "pss_bytes": null,
+          "missing_root_samples": 0,
+          "threads_max": 7,
+          "fds_max": 33,
+          "samples": 6
+        },
+        "backend": {
+          "cpu_percent": 94.8716041668508,
+          "rss_bytes": 27394048,
+          "hwm_sum_bytes": 27394048,
+          "pss_bytes": null,
+          "missing_root_samples": 0,
+          "threads_max": 1,
+          "fds_max": 15,
+          "samples": 6
+        },
+        "client": {
+          "cpu_percent": 82.76347373766129,
+          "rss_bytes": 30199808,
+          "hwm_sum_bytes": 30199808,
+          "pss_bytes": null,
+          "missing_root_samples": 0,
+          "threads_max": 1,
+          "fds_max": 27,
+          "samples": 6
+        }
+      },
+      "counters": {
+        "before": {
+          "rill_generation": 1.0,
+          "rill_log_queue_drop_total": 0.0,
+          "rill_trace_queue_drop_total": 0.0,
+          "rill_log_export_failure_total": 0.0,
+          "rill_trace_export_failure_total": 0.0
+        },
+        "after": {
+          "rill_generation": 1.0,
+          "rill_log_queue_drop_total": 0.0,
+          "rill_trace_queue_drop_total": 0.0,
+          "rill_log_export_failure_total": 0.0,
+          "rill_trace_export_failure_total": 0.0
+        },
+        "delta": {
+          "rill_log_queue_drop_total": 0.0,
+          "rill_trace_queue_drop_total": 0.0,
+          "rill_log_export_failure_total": 0.0,
+          "rill_trace_export_failure_total": 0.0
+        },
+        "before_monotonic": {
+          "start": 1149136.746036036,
+          "end": 1149136.747042397
+        },
+        "after_monotonic": {
+          "start": 1149140.771448421,
+          "end": 1149140.772353106
+        }
+      },
+      "client_warning": false,
+      "event_loop_lag_max_seconds": 0.0010721508879214525
+    },
+    {
+      "round": 4,
+      "repeat": 1,
+      "mode": "trace",
+      "window": {
+        "warmup_start_monotonic": 1149141.078449376,
+        "measure_start_monotonic": 1149143.078449376,
+        "deadline_monotonic": 1149145.078449376,
+        "clock": "time.monotonic"
+      },
+      "http": {
+        "samples": 20303,
+        "issue_window_samples": 20303,
+        "successes": 20303,
+        "measurement_seconds": 2,
+        "completed_within_window": 20295,
+        "bytes_within_window": 20782080,
+        "completed_rps_nominal": 10147.5,
+        "completed_bytes_per_second_nominal": 10391040.0,
+        "cohort_rps_including_drain": 10146.484912223612,
+        "drain_seconds": 0.0009885369800031185,
+        "late_completions": 8,
+        "bytes": 20790272,
+        "error_rate": 0,
+        "errors": {},
+        "measured_reused_requests": 20303,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "idle_close_reconnects": 0,
+        "header_reset_retries": 0,
+        "physical_attempts": 20303,
+        "p50_ms": 0.69,
+        "p95_ms": 1.294,
+        "p99_ms": 2.077
+      },
+      "resources": {
+        "server": {
+          "cpu_percent": 130.69432415766988,
+          "rss_bytes": 18649088,
+          "hwm_sum_bytes": 18653184,
+          "pss_bytes": null,
+          "missing_root_samples": 0,
+          "threads_max": 7,
+          "fds_max": 33,
+          "samples": 6
+        },
+        "backend": {
+          "cpu_percent": 88.71486562750243,
+          "rss_bytes": 27328512,
+          "hwm_sum_bytes": 27328512,
+          "pss_bytes": null,
+          "missing_root_samples": 0,
+          "threads_max": 1,
+          "fds_max": 15,
+          "samples": 6
+        },
+        "client": {
+          "cpu_percent": 132.94826114190363,
+          "rss_bytes": 30355456,
+          "hwm_sum_bytes": 30355456,
+          "pss_bytes": null,
+          "missing_root_samples": 0,
+          "threads_max": 1,
+          "fds_max": 30,
+          "samples": 6
+        },
+        "collector": {
+          "cpu_percent": 4.990330411197917,
+          "rss_bytes": 91275264,
+          "hwm_sum_bytes": 91275264,
+          "pss_bytes": null,
+          "missing_root_samples": 0,
+          "threads_max": 7,
+          "fds_max": 7,
+          "samples": 6
+        }
+      },
+      "counters": null,
+      "client_warning": true,
+      "event_loop_lag_max_seconds": 0.0013042790815234184
+    },
+    {
+      "round": 5,
+      "repeat": 1,
+      "mode": "all",
+      "window": {
+        "warmup_start_monotonic": 1149145.460386306,
+        "measure_start_monotonic": 1149147.460386306,
+        "deadline_monotonic": 1149149.460386306,
+        "clock": "time.monotonic"
+      },
+      "http": {
+        "samples": 19939,
+        "issue_window_samples": 19939,
+        "successes": 19939,
+        "measurement_seconds": 2,
+        "completed_within_window": 19931,
+        "bytes_within_window": 20409344,
+        "completed_rps_nominal": 9965.5,
+        "completed_bytes_per_second_nominal": 10204672.0,
+        "cohort_rps_including_drain": 9964.395375380278,
+        "drain_seconds": 0.0010245728772133589,
+        "late_completions": 8,
+        "bytes": 20417536,
+        "error_rate": 0,
+        "errors": {},
+        "measured_reused_requests": 19939,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "idle_close_reconnects": 0,
+        "header_reset_retries": 0,
+        "physical_attempts": 19939,
+        "p50_ms": 0.702,
+        "p95_ms": 1.325,
+        "p99_ms": 2.08
+      },
+      "resources": {
+        "server": {
+          "cpu_percent": 137.67395021507042,
+          "rss_bytes": 18194432,
+          "hwm_sum_bytes": 18194432,
+          "pss_bytes": null,
+          "missing_root_samples": 0,
+          "threads_max": 7,
+          "fds_max": 34,
+          "samples": 6
+        },
+        "backend": {
+          "cpu_percent": 90.78499615631455,
+          "rss_bytes": 27377664,
+          "hwm_sum_bytes": 27377664,
+          "pss_bytes": null,
+          "missing_root_samples": 0,
+          "threads_max": 1,
+          "fds_max": 15,
+          "samples": 6
+        },
+        "client": {
+          "cpu_percent": 89.14902212118544,
+          "rss_bytes": 30314496,
+          "hwm_sum_bytes": 30314496,
+          "pss_bytes": null,
+          "missing_root_samples": 0,
+          "threads_max": 1,
+          "fds_max": 30,
+          "samples": 6
+        },
+        "collector": {
+          "cpu_percent": 4.991641078314357,
+          "rss_bytes": 91148288,
+          "hwm_sum_bytes": 91148288,
+          "pss_bytes": null,
+          "missing_root_samples": 0,
+          "threads_max": 8,
+          "fds_max": 7,
+          "samples": 6
+        }
+      },
+      "counters": {
+        "before": {
+          "rill_generation": 1.0,
+          "rill_log_queue_drop_total": 0.0,
+          "rill_trace_queue_drop_total": 0.0,
+          "rill_log_export_failure_total": 0.0,
+          "rill_trace_export_failure_total": 0.0
+        },
+        "after": {
+          "rill_generation": 1.0,
+          "rill_log_queue_drop_total": 2851.0,
+          "rill_trace_queue_drop_total": 28.0,
+          "rill_log_export_failure_total": 0.0,
+          "rill_trace_export_failure_total": 0.0
+        },
+        "delta": {
+          "rill_log_queue_drop_total": 2851.0,
+          "rill_trace_queue_drop_total": 28.0,
+          "rill_log_export_failure_total": 0.0,
+          "rill_trace_export_failure_total": 0.0
+        },
+        "before_monotonic": {
+          "start": 1149145.457797077,
+          "end": 1149145.458484218
+        },
+        "after_monotonic": {
+          "start": 1149149.480134271,
+          "end": 1149149.480726176
+        }
+      },
+      "client_warning": false,
+      "event_loop_lag_max_seconds": 0.0015672547742724419
+    }
+  ],
+  "per_mode_three_repeat_statistics": {},
+  "client_warning_count": 3,
+  "limitations": [
+    "Closed-loop results are client-bound and are not capacity or statistical significance claims.",
+    "Raw CPU peaks cannot independently validate the underlying /proc collector; client uses pid-self, other groups include descendants.",
+    "RSS sums may double count shared pages; HWM is historical, not a global RAM cap; PSS and cgroup accounting are unavailable.",
+    "Counters include readiness, warmup and asynchronous activity; after scrape precedes shutdown and can miss tail outcomes; generation is a gauge.",
+    "Collector debug basic provides summaries, not a proof of span counts or timestamp accuracy.",
+    "Binary and collector hashes and SDK versions are parent-supplied provenance; binaries and lockfile are absent and binary package metadata was not extracted."
+  ],
+  "unverified_with_reason": {
+    "reconnects": "worker identity and warmup connections are absent from raw rows",
+    "warmup_boundary_excluded_completions": "warmup requests are not retained as raw rows",
+    "event_loop_lag_max_seconds": "individual lag observations are not retained",
+    "warmup_requests": "warmup requests are not retained; valid status is not per-request evidence",
+    "cpu_source_accuracy": "raw samples do not retain underlying process ticks",
+    "binary_identity": "binary and lockfile are absent from raw; hashes and versions are parent-provided metadata"
+  }
+}

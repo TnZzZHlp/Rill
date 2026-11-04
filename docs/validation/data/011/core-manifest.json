@@ -1,0 +1,37 @@
+[
+  {
+    "path": "blocked/config.kdl",
+    "bytes": 378,
+    "sha256": "8862a8ef5adb3c76873e7b599b7d648c0d2285b8381b7b4d87d2d75527975da4"
+  },
+  {
+    "path": "blocked/stderr-captured.log",
+    "bytes": 63623,
+    "sha256": "0d989409a1d45cfe0737ffd1fa36816fb9d1a3051106bcc5cd54eaf3a158fc20"
+  },
+  {
+    "path": "blocked/www/small",
+    "bytes": 1024,
+    "sha256": "49abd65bbf7f7e40c7055093ed2e3fd75f2f602f2c5fcf955c213e3135eb03f7"
+  },
+  {
+    "path": "regular/config.kdl",
+    "bytes": 376,
+    "sha256": "f4ef2bf0911e9a2f98277885b34ed794fc1aa3b5053d4a4b19c97383417e23d7"
+  },
+  {
+    "path": "regular/stderr.log",
+    "bytes": 2248,
+    "sha256": "bf6d29116f45af098c63a33980cf9075e2d98ca2188f4fb23996c7da98ca2f81"
+  },
+  {
+    "path": "regular/www/small",
+    "bytes": 1024,
+    "sha256": "49abd65bbf7f7e40c7055093ed2e3fd75f2f602f2c5fcf955c213e3135eb03f7"
+  },
+  {
+    "path": "report.json",
+    "bytes": 18548,
+    "sha256": "0619d213fc9c3dc8e320f079f8b32edfd33f9cfb066aa1a5fd89ae08047ecfe2"
+  }
+]

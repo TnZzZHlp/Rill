@@ -141,6 +141,7 @@ pub struct RuntimeSnapshot {
     pub routes: Vec<Vec<PreparedRoute>>,
     pub tls: PreparedTls,
     pub logger: Logger,
+    pub observation_routes: Vec<Vec<crate::observability::request::ObservationRoute>>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -150,6 +151,7 @@ pub struct StartupSettings {
     pub control_socket: PathBuf,
     pub watch: bool,
     pub static_cache_bytes: usize,
+    pub observability: crate::config::model::ObservabilityStartup,
 }
 
 impl StartupSettings {
@@ -170,16 +172,63 @@ impl StartupSettings {
             control_socket: configuration.server.control_socket.clone(),
             watch: configuration.server.watch,
             static_cache_bytes: configuration.server.static_cache_bytes,
+            observability: configuration.server.observability.startup.clone(),
         }
     }
 }
 
 impl RuntimeSnapshot {
-    fn from_prepared(prepared: PreparedSnapshot<HttpResources>, generation: u64) -> Self {
+    fn from_prepared(
+        prepared: PreparedSnapshot<HttpResources>,
+        generation: u64,
+        observability: &crate::observability::owner::Observability,
+    ) -> Self {
+        use crate::observability::{metrics::Identity, request::ObservationRoute};
+        let identities: Vec<_> = prepared
+            .configuration
+            .sites
+            .iter()
+            .flat_map(|site| {
+                let name = site
+                    .domains
+                    .iter()
+                    .map(|domain| domain.value.as_str())
+                    .min()
+                    .unwrap_or("");
+                site.routes.iter().map(move |route| {
+                    (
+                        Identity::from_config(name, ""),
+                        Identity::from_config(name, &route.pattern.value),
+                    )
+                })
+            })
+            .collect();
+        let slots = observability.metrics.bind(
+            &identities
+                .iter()
+                .map(|(_, route)| *route)
+                .collect::<Vec<_>>(),
+        );
+        let mut entries = identities
+            .into_iter()
+            .zip(slots)
+            .map(|((site, route), slot)| ObservationRoute { site, route, slot });
+        let observation_routes = prepared
+            .configuration
+            .sites
+            .iter()
+            .map(|site| {
+                (0..site.routes.len())
+                    .filter_map(|_| entries.next())
+                    .collect()
+            })
+            .collect();
         Self {
             generation,
+            observation_routes,
             router: Router::build(&prepared.configuration),
-            logger: Logger::new(&prepared.configuration.server.log_level),
+            logger: Logger::new(&prepared.configuration.server.log_level)
+                .with_sink(observability.access.clone()),
             configuration: prepared.configuration,
             routes: prepared.resources.routes,
             tls: prepared.resources.tls,
@@ -200,6 +249,7 @@ struct Gate {
 #[derive(Debug)]
 pub struct RuntimeState {
     active: ArcSwap<RuntimeSnapshot>,
+    pub observability: Arc<crate::observability::owner::Observability>,
     entry: PathBuf,
     startup: StartupSettings,
     cache: Option<Arc<CachePool>>,
@@ -225,10 +275,30 @@ impl RuntimeState {
             ConfigError::new("RESOURCE_IO", "static-cache-bytes", reason, &origin)
         })?;
         bind_static_routes(&mut prepared.resources, &cache, namespace, 1, &origin)?;
-        let snapshot = RuntimeSnapshot::from_prepared(prepared, 1);
+        let observability = crate::observability::owner::Observability::new(
+            startup.observability.metrics.is_some(),
+            &startup.observability.otlp_endpoint,
+        )
+        .map_err(|error| {
+            let code = match error {
+                crate::observability::trace::TraceError::UnsupportedEnv => "CONFIG_ENV",
+                crate::observability::trace::TraceError::Startup => "RESOURCE_IO",
+            };
+            ConfigError::new(
+                code,
+                "observability",
+                "cannot initialize observability",
+                &origin,
+            )
+        })?;
+        let snapshot = RuntimeSnapshot::from_prepared(prepared, 1, &observability);
+        if observability.metrics_enabled {
+            observability.metrics.set_generation(1);
+        }
         let (shutdown, _) = watch::channel(false);
         Ok(Arc::new(Self {
             active: ArcSwap::from_pointee(snapshot),
+            observability,
             entry,
             startup,
             cache,
@@ -384,8 +454,11 @@ impl RuntimeState {
             generation,
             &Origin::file(&self.entry),
         )?;
-        let candidate = RuntimeSnapshot::from_prepared(prepared, generation);
+        let candidate = RuntimeSnapshot::from_prepared(prepared, generation, &self.observability);
         self.active.store(Arc::new(candidate));
+        if self.observability.metrics_enabled {
+            self.observability.metrics.set_generation(generation);
+        }
         gate.active_plan = Some(plan);
         gate.failed_plan = None;
         let mut old = gate.watch.replace(watch);
@@ -433,8 +506,11 @@ impl RuntimeState {
             generation,
             &Origin::file(&self.entry),
         )?;
-        let candidate = RuntimeSnapshot::from_prepared(prepared, generation);
+        let candidate = RuntimeSnapshot::from_prepared(prepared, generation, &self.observability);
         self.active.store(Arc::new(candidate));
+        if self.observability.metrics_enabled {
+            self.observability.metrics.set_generation(generation);
+        }
         Ok(generation)
     }
 }
@@ -533,6 +609,7 @@ mod tests {
         state.active.store(Arc::new(RuntimeSnapshot::from_prepared(
             build(path, &HttpPreparer)?,
             u64::MAX,
+            &state.observability,
         )));
         let old = state.snapshot();
         let error = state

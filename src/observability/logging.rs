@@ -13,6 +13,7 @@ pub enum Level {
 #[derive(Clone, Debug)]
 pub struct Logger {
     threshold: u8,
+    sink: Option<super::access::AccessSink>,
 }
 
 fn quoted(value: &str) -> String {
@@ -34,6 +35,7 @@ fn quoted(value: &str) -> String {
 impl Logger {
     pub fn new(level: &str) -> Self {
         Self {
+            sink: None,
             threshold: match level {
                 "off" => 0,
                 "error" => 1,
@@ -43,6 +45,11 @@ impl Logger {
                 _ => 3,
             },
         }
+    }
+
+    pub fn with_sink(mut self, sink: super::access::AccessSink) -> Self {
+        self.sink = Some(sink);
+        self
     }
 
     pub fn event(&self, level: Level, event: &'static str, fields: &[(&str, &str)]) {
@@ -59,6 +66,10 @@ impl Logger {
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_millis();
+        if let Some(sink) = &self.sink {
+            sink.submit_runtime(timestamp, name, event, fields);
+            return;
+        }
         let mut record = format!(
             "{{\"time_ms\":{timestamp},\"level\":{},\"event\":{}",
             quoted(name),

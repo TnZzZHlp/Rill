@@ -1,0 +1,74 @@
+opentelemetry v0.31.0
+├── opentelemetry-otlp v0.31.1
+│   ├── opentelemetry-otlp feature "http"
+│   │   └── opentelemetry-otlp feature "http-proto"
+│   │       └── rill v0.1.0 (/work)
+│   │           └── rill feature "default" (command-line)
+│   ├── opentelemetry-otlp feature "http-proto" (*)
+│   ├── opentelemetry-otlp feature "metrics"
+│   │   └── opentelemetry-otlp feature "http-proto" (*)
+│   ├── opentelemetry-otlp feature "opentelemetry-http"
+│   │   ├── opentelemetry-otlp feature "http-proto" (*)
+│   │   └── opentelemetry-otlp feature "reqwest-blocking-client"
+│   │       └── rill v0.1.0 (/work) (*)
+│   ├── opentelemetry-otlp feature "prost"
+│   │   └── opentelemetry-otlp feature "http-proto" (*)
+│   ├── opentelemetry-otlp feature "reqwest"
+│   │   └── opentelemetry-otlp feature "reqwest-blocking-client" (*)
+│   ├── opentelemetry-otlp feature "reqwest-blocking-client" (*)
+│   └── opentelemetry-otlp feature "trace"
+│       └── rill v0.1.0 (/work) (*)
+│       └── opentelemetry-otlp feature "http-proto" (*)
+├── opentelemetry-proto v0.31.0
+│   └── opentelemetry-otlp v0.31.1 (*)
+│   ├── opentelemetry-proto feature "gen-tonic-messages"
+│   │   └── opentelemetry-otlp feature "http-proto" (*)
+│   ├── opentelemetry-proto feature "metrics"
+│   │   └── opentelemetry-otlp feature "metrics" (*)
+│   ├── opentelemetry-proto feature "prost"
+│   │   └── opentelemetry-proto feature "gen-tonic-messages" (*)
+│   ├── opentelemetry-proto feature "tonic"
+│   │   └── opentelemetry-proto feature "gen-tonic-messages" (*)
+│   ├── opentelemetry-proto feature "tonic-prost"
+│   │   └── opentelemetry-proto feature "gen-tonic-messages" (*)
+│   └── opentelemetry-proto feature "trace"
+│       └── opentelemetry-otlp feature "trace" (*)
+└── opentelemetry_sdk v0.31.0
+    ├── opentelemetry-otlp v0.31.1 (*)
+    └── opentelemetry-proto v0.31.0 (*)
+    ├── opentelemetry_sdk feature "metrics"
+    │   ├── opentelemetry-otlp feature "metrics" (*)
+    │   └── opentelemetry-proto feature "metrics" (*)
+    ├── opentelemetry_sdk feature "percent-encoding"
+    │   └── opentelemetry_sdk feature "trace"
+    │       └── rill v0.1.0 (/work) (*)
+    │       ├── opentelemetry-otlp feature "trace" (*)
+    │       └── opentelemetry-proto feature "trace" (*)
+    ├── opentelemetry_sdk feature "rand"
+    │   └── opentelemetry_sdk feature "trace" (*)
+    └── opentelemetry_sdk feature "trace" (*)
+├── opentelemetry feature "futures"
+│   └── opentelemetry feature "trace"
+│       ├── opentelemetry-http v0.31.0
+│       │   └── opentelemetry-otlp v0.31.1 (*)
+│       │   ├── opentelemetry-http feature "reqwest"
+│       │   │   └── opentelemetry-http feature "reqwest-blocking"
+│       │   │       └── opentelemetry-otlp feature "reqwest-blocking-client" (*)
+│       │   └── opentelemetry-http feature "reqwest-blocking" (*)
+│       └── rill v0.1.0 (/work) (*)
+│       ├── opentelemetry-otlp feature "trace" (*)
+│       ├── opentelemetry-proto feature "trace" (*)
+│       └── opentelemetry_sdk feature "trace" (*)
+├── opentelemetry feature "futures-core"
+│   └── opentelemetry feature "futures" (*)
+├── opentelemetry feature "futures-sink"
+│   └── opentelemetry feature "futures" (*)
+├── opentelemetry feature "metrics"
+│   ├── opentelemetry-otlp feature "metrics" (*)
+│   ├── opentelemetry-proto feature "metrics" (*)
+│   └── opentelemetry_sdk feature "metrics" (*)
+├── opentelemetry feature "pin-project-lite"
+│   └── opentelemetry feature "futures" (*)
+├── opentelemetry feature "thiserror"
+│   └── opentelemetry feature "trace" (*)
+└── opentelemetry feature "trace" (*)

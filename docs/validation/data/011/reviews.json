@@ -1,0 +1,58 @@
+{
+  "scope": "011 only; independent static reviews do not replace sandboxed dynamic results",
+  "implementation_final": {
+    "run": "1c4054b3-a6ed-4293-92e4-fe749f5ceb65",
+    "result": "NoIssues / MergeOK",
+    "boundary": "Read-only production implementation/config/runtime/proxy review, including untracked files; no execution or third-party advisory research."
+  },
+  "raw_data_final": {
+    "run": "2c554a1a-762f-4bec-a1c7-d651ab0d6231",
+    "result": "passed; 7306995 request rows, 135 files, 1100820560 bytes",
+    "report": "independent-raw-check-full.json",
+    "sha256": "001f165cf9d740eaae0abc6a8611edcbf15fabc517548ffce8dd1627d2606cad",
+    "boundary": "Independent stdlib calculations in OS sandbox. Reconnects, warmup boundary, lag observations and underlying CPU ticks are not independently reconstructable; parent provenance is not binary package metadata extraction."
+  },
+  "delivery_final": {
+    "run": "c598aa82-5c67-48a7-abb7-eaabea6e25c4",
+    "result": "NoIssues / MergeOK for delivery",
+    "evidence_leaves": 44,
+    "boundary": "Read-only consistency review: source snapshots, final 176-test log, 44 file sizes and SHA values against repository/external evidence, report/plan status and preserved v2 provenance. No rerun of target, 7306995 raw rows, Collector or security audit."
+  },
+  "closed_findings": [
+    {
+      "scope": "TLS handshake failure classification, log shutdown drain, stopped/early-return guard",
+      "closure_run": "8966f825-33a2-434d-bb8e-94f1a2698352",
+      "evidence": "core-report.json and quality.log"
+    },
+    {
+      "scope": "Bounded trace processor/exporter and propagation",
+      "closure_run": "585c83a1-d332-4593-b089-8f402f2d858c",
+      "evidence": "trace-ab.json, trace-c1.json, trace-c2.json, h2-result.json, timeout-result.json"
+    },
+    {
+      "scope": "Actual AS/file limits and hidden warm request retries",
+      "closure_run": "bc31992f-8fca-434e-bced-2805b67a4780",
+      "evidence": "traffic-no-retry.log; full-summary.json child_limits; independent-raw-check-full.json"
+    },
+    {
+      "scope": "EAGAIN transient rejection of unchanged in-root index under unrelated rename",
+      "closure_run": "c2941cb1-ca81-41f0-b6fa-c7d27e0165fc",
+      "evidence": "static-race-diagnostic.json, static-regression-red.log, quality.log",
+      "boundary": "Eight retries only, identical constrained flags, no fallback; not an escape vulnerability or guarantee for all races."
+    },
+    {
+      "scope": "Provenance required fields and Collector inherited AS soft/hard semantics",
+      "closure_run": "9638d8ca-8641-42de-810f-8a1a88bacb64",
+      "result": "Both Medium closed / DocMergeOK"
+    }
+  ],
+  "dynamic_execution_runs": {
+    "core": "7b18c331-f86c-46a2-9592-84ef993053f9",
+    "h2_collector": "a3194314-af3d-4afb-8f3c-7fce4d6abe41",
+    "final_quality": "e27ccb7d-ef04-4904-a847-12a2c3d1508f",
+    "release": "f83d3d2d-69f2-4ca8-a4bc-f42df5816529",
+    "release_probes_and_pilot": "4924e9fc-464c-4f10-9be0-8287beac2d22",
+    "full_matrix": "cc828569-80e2-4ed9-9ccf-b21239766211",
+    "final_fixture_quality": "158c797a-2c19-461e-911e-2e225f7bc86b"
+  }
+}

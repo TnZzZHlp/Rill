@@ -1,0 +1,10 @@
+{
+  "observability_example": "passed",
+  "access_records": 2,
+  "business_requests": 2,
+  "scrapes_excluded_from_business_count": true,
+  "trace_ids": null,
+  "privacy_marker_absent": true,
+  "exit_code": 0,
+  "control_socket_removed": true
+}

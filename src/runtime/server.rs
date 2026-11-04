@@ -101,8 +101,8 @@ pub fn run(path: &Path) -> u8 {
     };
     let state = match RuntimeState::new(prepared) {
         Ok(state) => state,
-        Err(_) => {
-            Logger::new("info").event(Level::Error, "runtime_failed", &[]);
+        Err(error) => {
+            Logger::new("info").event(Level::Error, "runtime_failed", &[("code", error.code)]);
             return 1;
         }
     };
@@ -121,6 +121,7 @@ pub fn run(path: &Path) -> u8 {
                 .snapshot()
                 .logger
                 .event(Level::Error, "runtime_failed", &[]);
+            state.observability.shutdown();
             return 1;
         }
     };
@@ -129,7 +130,16 @@ pub fn run(path: &Path) -> u8 {
     status
 }
 
+struct ObservabilityShutdown(Arc<crate::observability::owner::Observability>);
+
+impl Drop for ObservabilityShutdown {
+    fn drop(&mut self) {
+        self.0.shutdown();
+    }
+}
+
 pub async fn serve(state: Arc<RuntimeState>) -> u8 {
+    let _observability_shutdown = ObservabilityShutdown(state.observability.clone());
     let snapshot = state.snapshot();
     let logger = snapshot.logger.clone();
     if state.watch_enabled() {
@@ -188,6 +198,18 @@ pub async fn serve(state: Arc<RuntimeState>) -> u8 {
             }
         }
     }
+    let metrics_listener =
+        if let Some(address) = snapshot.configuration.server.observability.startup.metrics {
+            match tokio::net::TcpListener::bind(address).await {
+                Ok(listener) => Some(listener),
+                Err(_) => {
+                    logger.event(Level::Error, "metrics_listen_failed", &[]);
+                    return 1;
+                }
+            }
+        } else {
+            None
+        };
     let resolver = match crate::tls::resolver::Resolver::new(state.clone()) {
         Ok(resolver) => resolver,
         Err(_) => {
@@ -239,6 +261,15 @@ pub async fn serve(state: Arc<RuntimeState>) -> u8 {
     let capacity = Arc::new(Semaphore::new(1024));
     let (shutdown, receiver) = watch::channel(false);
     let mut workers = JoinSet::new();
+    if let Some(listener) = metrics_listener {
+        let metrics = state.observability.metrics.clone();
+        let shutdown = receiver.clone();
+        workers.spawn(async move {
+            crate::observability::metrics_server::serve(listener, metrics, shutdown)
+                .await
+                .map_err(|_| "metrics listener failed")
+        });
+    }
     workers.spawn(crate::control::server::serve(
         control,
         coordinator.clone(),

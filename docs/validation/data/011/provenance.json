@@ -1,0 +1,19 @@
+{
+  "binary_sha256": "c27d76720c61ea99018a5483b6b409eed1b9b47c2e48eb45e6a449801c078b70",
+  "binary_bytes": 21796728,
+  "collector_sha256": "24b4f75796d6734f402d65f7a91cd102dead29a0156aa3d3428e277b8d9a056e",
+  "collector_version": "0.133.0",
+  "sdk_packages": {
+    "opentelemetry": "0.31.0",
+    "opentelemetry_sdk": "0.31.0",
+    "opentelemetry-otlp": "0.31.1",
+    "opentelemetry-http": "0.31.0",
+    "reqwest": "0.12.28"
+  },
+  "source_manifest_sha256": "bb93a9e81b06307362673a5aa12a0e55456daae058c58ed1d9ad556bdbdcafd3",
+  "cargo_lock_sha256": "8e3b94586d66ead70f8fc82ee38d15b9ef9d0d2e08c0b6abb82e0f6ae48eecb6",
+  "source_snapshot": "source-final-v2",
+  "base_commit": "ecca04df85d969ec716cd1e3999242694f08a06f",
+  "metadata_scope": "Parent records from actual frozen source Cargo.lock and source/binary file hashes, not metadata extracted from executable; SDK effective features separately inspected in isolated offline Cargo tree.",
+  "collector_integrity_scope": "Official fixed release archive checked against same-origin official checksum; signature not verified."
+}

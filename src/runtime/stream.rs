@@ -26,10 +26,11 @@ pub struct SharedStream {
 struct StreamState {
     stream: Stream,
     preface: Option<(usize, Pin<Box<tokio::time::Sleep>>)>,
+    _transport: crate::observability::owner::GaugeGuard,
 }
 
 impl SharedStream {
-    pub fn new(stream: Stream) -> Self {
+    pub fn new(stream: Stream, owner: &crate::observability::owner::Observability) -> Self {
         let alpn = stream.selected_alpn_proto();
         let preface = (alpn == Some(ALPN::H2))
             .then(|| (24, Box::pin(tokio::time::sleep(Duration::from_secs(10)))));
@@ -42,7 +43,14 @@ impl SharedStream {
             },
             id: stream.id(),
             alpn,
-            io: Arc::new(Mutex::new(StreamState { stream, preface })),
+            io: Arc::new(Mutex::new(StreamState {
+                stream,
+                preface,
+                _transport: crate::observability::owner::GaugeGuard::new(
+                    owner,
+                    crate::observability::metrics::Gauge::ActiveTransports,
+                ),
+            })),
         }
     }
 }

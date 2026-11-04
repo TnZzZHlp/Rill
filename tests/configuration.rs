@@ -1141,3 +1141,100 @@ fn static_enhancement_strict_config_and_budget() -> TestResult {
     fs::remove_file(entry)?;
     Ok(())
 }
+
+#[test]
+fn observability_defaults_and_explicit_fields() -> TestResult {
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let entry = std::env::temp_dir().join(format!(
+        "rill-observability-{}-{unique}.kdl",
+        std::process::id()
+    ));
+    let site = "site \"example.test\" { proxy \"http://127.0.0.1:3000\"; }\n";
+    fs::write(
+        &entry,
+        format!("server {{ http \"127.0.0.1:8080\"; }}\n{site}"),
+    )?;
+    let config = build(&entry, &ConfigurationOnly)?.configuration;
+    let observability = &config.server.observability;
+    assert!(!observability.policy.access_log && !observability.policy.tracing);
+    assert_eq!(observability.policy.access_sample_per_mille, 1000);
+    assert_eq!(observability.policy.trace_sample_per_mille, 100);
+    assert_eq!(observability.startup.metrics, None);
+    assert_eq!(
+        observability.startup.otlp_endpoint,
+        "http://127.0.0.1:4318/v1/traces"
+    );
+
+    fs::write(
+        &entry,
+        format!(
+            "server {{ http \"127.0.0.1:8080\"; observability {{ access-log #true; access-sample-per-mille 0; metrics \"[::1]:19090\"; tracing #true; trace-sample-per-mille 1000; otlp-endpoint \"http://[::1]:4318/v1/traces\"; }}; }}\n{site}"
+        ),
+    )?;
+    let config = build(&entry, &ConfigurationOnly)?.configuration;
+    let observability = &config.server.observability;
+    assert!(observability.policy.access_log && observability.policy.tracing);
+    assert_eq!(observability.policy.access_sample_per_mille, 0);
+    assert_eq!(observability.policy.trace_sample_per_mille, 1000);
+    assert_eq!(observability.startup.metrics, Some("[::1]:19090".parse()?));
+    assert_eq!(
+        observability.startup.otlp_endpoint,
+        "http://[::1]:4318/v1/traces"
+    );
+    fs::remove_file(entry)?;
+    Ok(())
+}
+
+#[test]
+fn observability_rejects_invalid_fields_and_endpoints() -> TestResult {
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let entry = std::env::temp_dir().join(format!(
+        "rill-observability-invalid-{}-{unique}.kdl",
+        std::process::id()
+    ));
+    for fields in [
+        "access-log \"true\";",
+        "tracing 1;",
+        "access-sample-per-mille -1;",
+        "trace-sample-per-mille 1001;",
+        "trace-sample-per-mille 1.5;",
+        "metrics \"0.0.0.0:19090\";",
+        "metrics \"localhost:19090\";",
+        "metrics \"127.0.0.1:0\";",
+        "otlp-endpoint \"http://192.0.2.1:4318/v1/traces\";",
+        "otlp-endpoint \"http://user:secret@127.0.0.1:4318/v1/traces\";",
+        "otlp-endpoint \"http://127.0.0.1:4318/v1/traces?secret\";",
+        "otlp-endpoint \"http://127.0.0.1:4318/v1/traces#fragment\";",
+        "otlp-endpoint \"http://localhost:4318/v1/traces\";",
+        "otlp-endpoint \"https://127.0.0.1:4318/v1/traces\";",
+        "otlp-endpoint \"http://127.0.0.1:0/v1/traces\";",
+        "otlp-endpoint \"http://127.0.0.1:4318//v1/traces\";",
+        "access-log #true; access-log #false;",
+        "unknown #true;",
+    ] {
+        fs::write(
+            &entry,
+            format!(
+                "server {{ http \"127.0.0.1:8080\"; observability {{ {fields} }}; }}\nsite \"example.test\" {{ proxy \"http://127.0.0.1:3000\"; }}\n"
+            ),
+        )?;
+        let error = build(&entry, &ConfigurationOnly).expect_err("invalid observability accepted");
+        assert!(!error.to_string().contains("secret"), "{fields}: {error}");
+        assert!(
+            matches!(error.code, "CONFIG_TYPE" | "DUPLICATE" | "CONFIG_UNKNOWN"),
+            "{fields}: {error}"
+        );
+    }
+    fs::write(
+        &entry,
+        "server { http \"127.0.0.1:8080\"; observability {}; observability {}; }\nsite \"example.test\" { proxy \"http://127.0.0.1:3000\"; }\n",
+    )?;
+    assert_eq!(
+        build(&entry, &ConfigurationOnly)
+            .expect_err("duplicate block accepted")
+            .code,
+        "DUPLICATE"
+    );
+    fs::remove_file(entry)?;
+    Ok(())
+}

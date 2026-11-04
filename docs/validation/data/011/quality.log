@@ -1,0 +1,56 @@
+RED_CONFIRMED original constrained-open code rejected stable in-root index under unrelated rename; raw log retained
+     Removed 20 files, 122.9MiB total
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 28 filtered out; finished in 0.19s
+
+{"timeout_collector_validation": "passed", "span_count": 2, "cancelled_context_status": null}
+
+running 43 tests
+...........................................
+test result: ok. 43 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 27 tests
+...........................
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.00s
+
+
+running 7 tests
+...TLS library: OpenSSL 3.6.3 9 Jun 2026
+....
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.11s
+
+
+running 22 tests
+......................
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.88s
+
+
+running 21 tests
+.....................
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.33s
+
+
+running 29 tests
+.............................
+test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 32.30s
+
+
+running 27 tests
+.....VmRSS/VmHWM KiB before=(24192, 24192) paused=(25728, 25728)
+......................
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.63s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+{"promoted": [{"path": "regression-red.log", "bytes": 503, "sha256": "414783dcbe99b0b9e5055b5e197085aacd4158ca82b92d5aa4472249e342756f"}, {"path": "timeout-collector.log", "bytes": 5679, "sha256": "7ae00a3609a2f67a7ddf098ad7a51ceac89a66265cea605285ea8e9720a2694f"}, {"path": "timeout-result.json", "bytes": 725, "sha256": "cbf576de90323d17704bcdae5e6c5f4a561a256f5fb4803797978c2fa800b0c8"}, {"path": "rill-built", "bytes": 47683960, "sha256": "70ef9fec3604f922eb8d9500ae1a6a3aff6d7d82608ceab3acdcab0ea2b67c7d"}]}

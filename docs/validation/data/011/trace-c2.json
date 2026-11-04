@@ -1,0 +1,93 @@
+{
+  "access_records_before_proxy": 5801,
+  "burst": {
+    "completed": 6000,
+    "concurrency": 16,
+    "failures": 0,
+    "first_errors": [],
+    "max_latency_seconds": 0.03239889279939234,
+    "requested": 6000,
+    "successes": 6000,
+    "wall_seconds": 0.8206085111014545
+  },
+  "cleanup_failures": [],
+  "correlated_root": {
+    "generation": 1,
+    "kind": "Server",
+    "name": "rill.request",
+    "parent": "",
+    "proxy_access_count": 20,
+    "span_id": "0c1b3c4622ce36a0",
+    "trace_id": "b4a2eed0c2bc8298100f668ed107cc09"
+  },
+  "limitations": [
+    "C1 runs separately; no same-PID claim across C1 and C2",
+    "HTTP peer validates transport only, not OTLP",
+    "resource counts are point samples, not full-timing bounds",
+    "queue occupancy cap is not measured by this probe",
+    "timeout, H2, WS and overall C/011 are not covered",
+    "child address-space limits inherit the parent sandbox"
+  ],
+  "metrics": {
+    "after-recovery": {
+      "rill_generation": 1,
+      "rill_log_export_failure_total": 0,
+      "rill_log_queue_drop_total": 199,
+      "rill_trace_export_failure_total": 17,
+      "rill_trace_queue_drop_total": 3952
+    },
+    "before": {
+      "rill_generation": 1,
+      "rill_log_export_failure_total": 0,
+      "rill_log_queue_drop_total": 0,
+      "rill_trace_export_failure_total": 0,
+      "rill_trace_queue_drop_total": 0
+    },
+    "stall": {
+      "rill_generation": 1,
+      "rill_log_export_failure_total": 0,
+      "rill_log_queue_drop_total": 199,
+      "rill_trace_export_failure_total": 1,
+      "rill_trace_queue_drop_total": 3952
+    }
+  },
+  "partial": true,
+  "passed": true,
+  "peer_errors": [],
+  "peer_events": [
+    {
+      "authorization_present": false,
+      "body_bytes": 399,
+      "content_type": "application/x-protobuf",
+      "cookie_present": false,
+      "epoch": 1,
+      "method": "POST",
+      "mode": "stall",
+      "path": "/v1/traces",
+      "timestamp": 1149122.619316366
+    },
+    {
+      "authorization_present": false,
+      "body_bytes": 42438,
+      "content_type": "application/x-protobuf",
+      "cookie_present": false,
+      "epoch": 1,
+      "method": "POST",
+      "mode": "stall",
+      "path": "/v1/traces",
+      "timestamp": 1149124.619796884
+    }
+  ],
+  "proxy_route_identity": "455c30c9d68128043fd6b5255403576c",
+  "resources_after_recovery": {
+    "fd": 21,
+    "threads": 22
+  },
+  "resources_warm_after_burst": {
+    "fd": 20,
+    "threads": 22
+  },
+  "rill_pid": 6,
+  "rill_pid_after_recovery": 6,
+  "scope": "C2_recovery"
+}

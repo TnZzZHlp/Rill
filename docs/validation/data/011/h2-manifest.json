@@ -1,0 +1,17 @@
+[
+  {
+    "path": "h2-collector.log",
+    "bytes": 7146,
+    "sha256": "2b9bf56a786cfedd42711b4c1b4ccc2622229ddedc3268e52162426bf8c522dd"
+  },
+  {
+    "path": "h2-result.json",
+    "bytes": 765,
+    "sha256": "05da1dd672e7a55b7a21380fdda5bd113308c74a01afb22e883788fb3bd69cfb"
+  },
+  {
+    "path": "rill-built",
+    "bytes": 47683536,
+    "sha256": "fb1d9ddb86ee7163e827c0730b2ad10b26ccf7c3db9ec06d80d60d99c9a06dad"
+  }
+]

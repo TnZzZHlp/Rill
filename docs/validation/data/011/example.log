@@ -1,0 +1,6 @@
+{"time_ms":1793783488183,"level":"info","event":"starting","generation":"1"}
+{"time_ms":1793783488184,"level":"info","event":"started","listeners":"1"}
+{"event":"access","timestamp_ms":1793783488211,"request_id":"0d7a8fdcb46b18560000000000000000","trace_id":null,"span_id":null,"generation":1,"site":"585c531732322d1476df4ad771716dce","route":"a7b91cea55dd202ced3830e37b8439f0","method":"GET","status":200,"body_bytes":198,"duration_ns":416702,"outcome":"completed"}
+{"event":"access","timestamp_ms":1793783488211,"request_id":"0d7a8fdcb46b18560000000000000001","trace_id":null,"span_id":null,"generation":1,"site":"585c531732322d1476df4ad771716dce","route":"a7b91cea55dd202ced3830e37b8439f0","method":"GET","status":200,"body_bytes":198,"duration_ns":291931,"outcome":"completed"}
+{"time_ms":1793783488212,"level":"info","event":"shutdown_started"}
+{"time_ms":1793783488212,"level":"info","event":"stopped","status":"0"}

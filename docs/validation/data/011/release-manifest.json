@@ -1,0 +1,27 @@
+[
+  {
+    "path": "rill",
+    "bytes": 21796728,
+    "sha256": "c27d76720c61ea99018a5483b6b409eed1b9b47c2e48eb45e6a449801c078b70"
+  },
+  {
+    "path": "release-smoke/example.log",
+    "bytes": 292,
+    "sha256": "08d37eb96182621e1be965a3f3f542f8258d4ee02a14515b6c06eec9b48e1bda"
+  },
+  {
+    "path": "release-smoke/observe-example.log",
+    "bytes": 922,
+    "sha256": "f48aec8c5c50c413c04680e13e1bb5662976cbff45e4f35eb3c5550e2c303511"
+  },
+  {
+    "path": "release-smoke/observe-example-result.json",
+    "bytes": 243,
+    "sha256": "d7f12d953b7ec77e4ae506816a3463d3db7e3fe6cb2328248f05d4401fa792f8"
+  },
+  {
+    "path": "release-smoke/observe-example-metrics.txt",
+    "bytes": 7897,
+    "sha256": "493d89ed1918a5db4e51f9f2925e9e31ffa96b0fddd825b6f3f3c6a6633c5b49"
+  }
+]

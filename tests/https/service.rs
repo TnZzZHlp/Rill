@@ -91,6 +91,11 @@ async fn http2_carries_real_requests_and_rejects_host_coalescing_on_the_same_con
         address,
         backend.local_addr()?,
         "site \"app.test\" \"alias.test\" { tls \"default\"; proxy \"http://$UPSTREAM\"; }",
+    )
+    .replacen(
+        "server {",
+        "server { observability { tracing #true; trace-sample-per-mille 1000; };",
+        1,
     );
     let worker = thread::spawn(move || -> TestResult {
         for _ in 0..2 {

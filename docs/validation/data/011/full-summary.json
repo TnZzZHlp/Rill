@@ -1,0 +1,2037 @@
+{
+  "status": "complete",
+  "rounds": [
+    {
+      "round": 1,
+      "mode": "off",
+      "config": "/scratch/work/round-01-off.kdl",
+      "config_sha256": "5b37a39c75fd2f1db151b121fe33d8223cea2a2be79c93a6c4b5b27f697f5157",
+      "valid": true,
+      "stop": {
+        "server": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        },
+        "backend": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        }
+      },
+      "counter_availability": "unavailable_no_metrics_endpoint",
+      "metrics_before": null,
+      "metrics_after": null,
+      "counter_delta": null,
+      "metrics_before_monotonic": null,
+      "metrics_after_monotonic": null,
+      "child_limits": {
+        "backend": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        },
+        "server": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        }
+      },
+      "http": {
+        "samples": 428307,
+        "issue_window_samples": 428307,
+        "successes": 428307,
+        "measurement_seconds": 30.0,
+        "completed_within_window": 428299,
+        "bytes_within_window": 438578176,
+        "completed_rps_nominal": 14276.633333333333,
+        "completed_bytes_per_second_nominal": 14619272.533333333,
+        "cohort_rps_including_drain": 14276.656531125798,
+        "drain_seconds": 0.0005116090178489685,
+        "late_completions": 8,
+        "warmup_boundary_excluded_completions": 8,
+        "bytes": 438586368,
+        "error_rate": 0.0,
+        "p50_ms": 0.52,
+        "p95_ms": 0.757,
+        "p99_ms": 0.958,
+        "errors": {},
+        "measured_reused_requests": 428307,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "reconnects": 0,
+        "idle_close_reconnects": 0,
+        "header_reset_retries": 0,
+        "physical_attempts": 428307,
+        "retry_policy": "disabled; preemptive idle connection replacement is not a request retry",
+        "event_loop_lag_max_seconds": 0.0019105738028883934,
+        "valid": true,
+        "sample_limit": 2000000,
+        "percentile_method": "nearest rank on successful issue cohort"
+      },
+      "resources": {
+        "server": {
+          "cpu_percent": 139.74568411719451,
+          "rss_bytes": 19238912,
+          "hwm_sum_bytes": 19238912,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "backend": {
+          "cpu_percent": 93.83499856116984,
+          "rss_bytes": 27344896,
+          "hwm_sum_bytes": 27344896,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "client": {
+          "cpu_percent": 97.85507682637076,
+          "rss_bytes": 45821952,
+          "hwm_sum_bytes": 51490816,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        }
+      },
+      "client_warning": true,
+      "backend_summary": {
+        "errors": 0,
+        "rejected": 0
+      },
+      "ports_removed": true,
+      "repeat": 1
+    },
+    {
+      "round": 2,
+      "mode": "access",
+      "config": "/scratch/work/round-02-access.kdl",
+      "config_sha256": "f594d3369bb8b9459b0560626156c4013dd82e8ec70bbafc9a086d8b5683d4d4",
+      "valid": true,
+      "stop": {
+        "server": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        },
+        "backend": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        }
+      },
+      "counter_availability": "unavailable_no_metrics_endpoint",
+      "metrics_before": null,
+      "metrics_after": null,
+      "counter_delta": null,
+      "metrics_before_monotonic": null,
+      "metrics_after_monotonic": null,
+      "child_limits": {
+        "backend": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        },
+        "server": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        }
+      },
+      "http": {
+        "samples": 495949,
+        "issue_window_samples": 495949,
+        "successes": 495949,
+        "measurement_seconds": 30.0,
+        "completed_within_window": 495941,
+        "bytes_within_window": 507843584,
+        "completed_rps_nominal": 16531.366666666665,
+        "completed_bytes_per_second_nominal": 16928119.466666665,
+        "cohort_rps_including_drain": 16531.36987889781,
+        "drain_seconds": 0.000478099100291729,
+        "late_completions": 8,
+        "warmup_boundary_excluded_completions": 8,
+        "bytes": 507851776,
+        "error_rate": 0.0,
+        "p50_ms": 0.435,
+        "p95_ms": 0.677,
+        "p99_ms": 0.867,
+        "errors": {},
+        "measured_reused_requests": 495949,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "reconnects": 0,
+        "idle_close_reconnects": 0,
+        "header_reset_retries": 0,
+        "physical_attempts": 495949,
+        "retry_policy": "disabled; preemptive idle connection replacement is not a request retry",
+        "event_loop_lag_max_seconds": 0.0020072897896170616,
+        "valid": true,
+        "sample_limit": 2000000,
+        "percentile_method": "nearest rank on successful issue cohort"
+      },
+      "resources": {
+        "server": {
+          "cpu_percent": 172.76957359463273,
+          "rss_bytes": 19103744,
+          "hwm_sum_bytes": 19173376,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "backend": {
+          "cpu_percent": 96.88764917397592,
+          "rss_bytes": 27353088,
+          "hwm_sum_bytes": 27353088,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "client": {
+          "cpu_percent": 95.8835582318672,
+          "rss_bytes": 50151424,
+          "hwm_sum_bytes": 54956032,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        }
+      },
+      "client_warning": true,
+      "backend_summary": {
+        "errors": 0,
+        "rejected": 0
+      },
+      "ports_removed": true,
+      "repeat": 1
+    },
+    {
+      "round": 3,
+      "mode": "metrics",
+      "config": "/scratch/work/round-03-metrics.kdl",
+      "config_sha256": "b278656179f6d5c1d7b757a9f06ec201441d71b8c8c3e2a6a3dc8694f7ea7a5a",
+      "valid": true,
+      "stop": {
+        "server": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        },
+        "backend": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        }
+      },
+      "counter_availability": "available",
+      "metrics_before": {
+        "rill_generation": 1.0,
+        "rill_log_queue_drop_total": 0.0,
+        "rill_trace_queue_drop_total": 0.0,
+        "rill_log_export_failure_total": 0.0,
+        "rill_trace_export_failure_total": 0.0
+      },
+      "metrics_after": {
+        "rill_generation": 1.0,
+        "rill_log_queue_drop_total": 0.0,
+        "rill_trace_queue_drop_total": 0.0,
+        "rill_log_export_failure_total": 0.0,
+        "rill_trace_export_failure_total": 0.0
+      },
+      "counter_delta": {
+        "rill_log_queue_drop_total": 0.0,
+        "rill_trace_queue_drop_total": 0.0,
+        "rill_log_export_failure_total": 0.0,
+        "rill_trace_export_failure_total": 0.0
+      },
+      "metrics_before_monotonic": {
+        "start": 1149514.689279496,
+        "end": 1149514.689803506
+      },
+      "metrics_after_monotonic": {
+        "start": 1149546.93250605,
+        "end": 1149546.933093553
+      },
+      "child_limits": {
+        "backend": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        },
+        "server": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        }
+      },
+      "http": {
+        "samples": 497213,
+        "issue_window_samples": 497213,
+        "successes": 497213,
+        "measurement_seconds": 30.0,
+        "completed_within_window": 497205,
+        "bytes_within_window": 509137920,
+        "completed_rps_nominal": 16573.5,
+        "completed_bytes_per_second_nominal": 16971264.0,
+        "cohort_rps_including_drain": 16573.45329854489,
+        "drain_seconds": 0.0005672350525856018,
+        "late_completions": 8,
+        "warmup_boundary_excluded_completions": 8,
+        "bytes": 509146112,
+        "error_rate": 0.0,
+        "p50_ms": 0.433,
+        "p95_ms": 0.671,
+        "p99_ms": 0.888,
+        "errors": {},
+        "measured_reused_requests": 497213,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "reconnects": 0,
+        "idle_close_reconnects": 0,
+        "header_reset_retries": 0,
+        "physical_attempts": 497213,
+        "retry_policy": "disabled; preemptive idle connection replacement is not a request retry",
+        "event_loop_lag_max_seconds": 0.000855565769597888,
+        "valid": true,
+        "sample_limit": 2000000,
+        "percentile_method": "nearest rank on successful issue cohort"
+      },
+      "resources": {
+        "server": {
+          "cpu_percent": 150.81445824843064,
+          "rss_bytes": 18677760,
+          "hwm_sum_bytes": 18677760,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "backend": {
+          "cpu_percent": 95.87625636190788,
+          "rss_bytes": 27332608,
+          "hwm_sum_bytes": 27332608,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "client": {
+          "cpu_percent": 97.15953681347638,
+          "rss_bytes": 49053696,
+          "hwm_sum_bytes": 55615488,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        }
+      },
+      "client_warning": true,
+      "backend_summary": {
+        "errors": 0,
+        "rejected": 0
+      },
+      "ports_removed": true,
+      "repeat": 1
+    },
+    {
+      "round": 4,
+      "mode": "trace",
+      "config": "/scratch/work/round-04-trace.kdl",
+      "config_sha256": "ca2f9a4097a52b9675508639af847bbaaf6e1d3ad0bdc28adb3ef12ef47c2c3e",
+      "valid": true,
+      "stop": {
+        "server": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        },
+        "collector": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        },
+        "backend": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        }
+      },
+      "counter_availability": "unavailable_no_metrics_endpoint",
+      "metrics_before": null,
+      "metrics_after": null,
+      "counter_delta": null,
+      "metrics_before_monotonic": null,
+      "metrics_after_monotonic": null,
+      "child_limits": {
+        "backend": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        },
+        "collector": {
+          "RLIMIT_AS": [
+            8589934592,
+            8589934592
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        },
+        "server": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        }
+      },
+      "http": {
+        "samples": 478218,
+        "issue_window_samples": 478218,
+        "successes": 478218,
+        "measurement_seconds": 30.0,
+        "completed_within_window": 478210,
+        "bytes_within_window": 489687040,
+        "completed_rps_nominal": 15940.333333333334,
+        "completed_bytes_per_second_nominal": 16322901.333333334,
+        "cohort_rps_including_drain": 15940.284341492063,
+        "drain_seconds": 0.0005940769333392382,
+        "late_completions": 8,
+        "warmup_boundary_excluded_completions": 8,
+        "bytes": 489695232,
+        "error_rate": 0.0,
+        "p50_ms": 0.441,
+        "p95_ms": 0.734,
+        "p99_ms": 0.95,
+        "errors": {},
+        "measured_reused_requests": 478218,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "reconnects": 0,
+        "idle_close_reconnects": 0,
+        "header_reset_retries": 0,
+        "physical_attempts": 478218,
+        "retry_policy": "disabled; preemptive idle connection replacement is not a request retry",
+        "event_loop_lag_max_seconds": 0.0009223879314959049,
+        "valid": true,
+        "sample_limit": 2000000,
+        "percentile_method": "nearest rank on successful issue cohort"
+      },
+      "resources": {
+        "server": {
+          "cpu_percent": 156.7671872377376,
+          "rss_bytes": 19521536,
+          "hwm_sum_bytes": 19521536,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "backend": {
+          "cpu_percent": 94.87699908594567,
+          "rss_bytes": 27357184,
+          "hwm_sum_bytes": 27357184,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "client": {
+          "cpu_percent": 95.88950801163499,
+          "rss_bytes": 49139712,
+          "hwm_sum_bytes": 55615488,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "collector": {
+          "cpu_percent": 7.988891494784695,
+          "rss_bytes": 96309248,
+          "hwm_sum_bytes": 96309248,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        }
+      },
+      "client_warning": true,
+      "backend_summary": {
+        "errors": 0,
+        "rejected": 0
+      },
+      "ports_removed": true,
+      "repeat": 1
+    },
+    {
+      "round": 5,
+      "mode": "all",
+      "config": "/scratch/work/round-05-all.kdl",
+      "config_sha256": "6204e73aca3b697e00fc62d53f13e16b6d705808d338bd7c98b7af07671e6a6c",
+      "valid": true,
+      "stop": {
+        "server": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        },
+        "collector": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        },
+        "backend": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        }
+      },
+      "counter_availability": "available",
+      "metrics_before": {
+        "rill_generation": 1.0,
+        "rill_log_queue_drop_total": 0.0,
+        "rill_trace_queue_drop_total": 0.0,
+        "rill_log_export_failure_total": 0.0,
+        "rill_trace_export_failure_total": 0.0
+      },
+      "metrics_after": {
+        "rill_generation": 1.0,
+        "rill_log_queue_drop_total": 11140.0,
+        "rill_trace_queue_drop_total": 226.0,
+        "rill_log_export_failure_total": 0.0,
+        "rill_trace_export_failure_total": 0.0
+      },
+      "counter_delta": {
+        "rill_log_queue_drop_total": 11140.0,
+        "rill_trace_queue_drop_total": 226.0,
+        "rill_log_export_failure_total": 0.0,
+        "rill_trace_export_failure_total": 0.0
+      },
+      "metrics_before_monotonic": {
+        "start": 1149579.639228423,
+        "end": 1149579.639761644
+      },
+      "metrics_after_monotonic": {
+        "start": 1149611.882653398,
+        "end": 1149611.883231424
+      },
+      "child_limits": {
+        "backend": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        },
+        "collector": {
+          "RLIMIT_AS": [
+            8589934592,
+            8589934592
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        },
+        "server": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        }
+      },
+      "http": {
+        "samples": 466026,
+        "issue_window_samples": 466026,
+        "successes": 466026,
+        "measurement_seconds": 30.0,
+        "completed_within_window": 466018,
+        "bytes_within_window": 477202432,
+        "completed_rps_nominal": 15533.933333333332,
+        "completed_bytes_per_second_nominal": 15906747.733333332,
+        "cohort_rps_including_drain": 15533.87732822896,
+        "drain_seconds": 0.0006231639999896288,
+        "late_completions": 8,
+        "warmup_boundary_excluded_completions": 8,
+        "bytes": 477210624,
+        "error_rate": 0.0,
+        "p50_ms": 0.443,
+        "p95_ms": 0.796,
+        "p99_ms": 0.971,
+        "errors": {},
+        "measured_reused_requests": 466026,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "reconnects": 0,
+        "idle_close_reconnects": 0,
+        "header_reset_retries": 0,
+        "physical_attempts": 466026,
+        "retry_policy": "disabled; preemptive idle connection replacement is not a request retry",
+        "event_loop_lag_max_seconds": 0.0028355808462947607,
+        "valid": true,
+        "sample_limit": 2000000,
+        "percentile_method": "nearest rank on successful issue cohort"
+      },
+      "resources": {
+        "server": {
+          "cpu_percent": 175.7106472804133,
+          "rss_bytes": 19574784,
+          "hwm_sum_bytes": 19574784,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "backend": {
+          "cpu_percent": 94.80257448609956,
+          "rss_bytes": 27410432,
+          "hwm_sum_bytes": 27410432,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "client": {
+          "cpu_percent": 92.96386560101872,
+          "rss_bytes": 51544064,
+          "hwm_sum_bytes": 55615488,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "collector": {
+          "cpu_percent": 7.989777774435399,
+          "rss_bytes": 96460800,
+          "hwm_sum_bytes": 96460800,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        }
+      },
+      "client_warning": true,
+      "backend_summary": {
+        "errors": 0,
+        "rejected": 0
+      },
+      "ports_removed": true,
+      "repeat": 1
+    },
+    {
+      "round": 6,
+      "mode": "off",
+      "config": "/scratch/work/round-06-off.kdl",
+      "config_sha256": "09cd4168ee2df8eee77d649ddd7d9d432953738dfb67755f6d4b3f620e72203f",
+      "valid": true,
+      "stop": {
+        "server": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        },
+        "backend": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        }
+      },
+      "counter_availability": "unavailable_no_metrics_endpoint",
+      "metrics_before": null,
+      "metrics_after": null,
+      "counter_delta": null,
+      "metrics_before_monotonic": null,
+      "metrics_after_monotonic": null,
+      "child_limits": {
+        "backend": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        },
+        "server": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        }
+      },
+      "http": {
+        "samples": 503356,
+        "issue_window_samples": 503356,
+        "successes": 503356,
+        "measurement_seconds": 30.0,
+        "completed_within_window": 503349,
+        "bytes_within_window": 515429376,
+        "completed_rps_nominal": 16778.3,
+        "completed_bytes_per_second_nominal": 17180979.2,
+        "cohort_rps_including_drain": 16778.262094937723,
+        "drain_seconds": 0.000484981806948781,
+        "late_completions": 7,
+        "warmup_boundary_excluded_completions": 8,
+        "bytes": 515436544,
+        "error_rate": 0.0,
+        "p50_ms": 0.43,
+        "p95_ms": 0.668,
+        "p99_ms": 0.882,
+        "errors": {},
+        "measured_reused_requests": 503356,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "reconnects": 0,
+        "idle_close_reconnects": 0,
+        "header_reset_retries": 0,
+        "physical_attempts": 503356,
+        "retry_policy": "disabled; preemptive idle connection replacement is not a request retry",
+        "event_loop_lag_max_seconds": 0.0017652451060712337,
+        "valid": true,
+        "sample_limit": 2000000,
+        "percentile_method": "nearest rank on successful issue cohort"
+      },
+      "resources": {
+        "server": {
+          "cpu_percent": 153.81268523494046,
+          "rss_bytes": 18853888,
+          "hwm_sum_bytes": 18944000,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "backend": {
+          "cpu_percent": 96.88226500057618,
+          "rss_bytes": 27242496,
+          "hwm_sum_bytes": 27242496,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "client": {
+          "cpu_percent": 96.88201602460536,
+          "rss_bytes": 51785728,
+          "hwm_sum_bytes": 55771136,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        }
+      },
+      "client_warning": true,
+      "backend_summary": {
+        "errors": 0,
+        "rejected": 0
+      },
+      "ports_removed": true,
+      "repeat": 2
+    },
+    {
+      "round": 7,
+      "mode": "all",
+      "config": "/scratch/work/round-07-all.kdl",
+      "config_sha256": "2c0c0cc8cd4f55cbf9331c4faa22d228b4534b7283dea576f58bc54938e3d078",
+      "valid": true,
+      "stop": {
+        "server": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        },
+        "collector": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        },
+        "backend": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        }
+      },
+      "counter_availability": "available",
+      "metrics_before": {
+        "rill_generation": 1.0,
+        "rill_log_queue_drop_total": 0.0,
+        "rill_trace_queue_drop_total": 0.0,
+        "rill_log_export_failure_total": 0.0,
+        "rill_trace_export_failure_total": 0.0
+      },
+      "metrics_after": {
+        "rill_generation": 1.0,
+        "rill_log_queue_drop_total": 12429.0,
+        "rill_trace_queue_drop_total": 262.0,
+        "rill_log_export_failure_total": 0.0,
+        "rill_trace_export_failure_total": 0.0
+      },
+      "counter_delta": {
+        "rill_log_queue_drop_total": 12429.0,
+        "rill_trace_queue_drop_total": 262.0,
+        "rill_log_export_failure_total": 0.0,
+        "rill_trace_export_failure_total": 0.0
+      },
+      "metrics_before_monotonic": {
+        "start": 1149644.551996731,
+        "end": 1149644.552582806
+      },
+      "metrics_after_monotonic": {
+        "start": 1149676.788976135,
+        "end": 1149676.789562826
+      },
+      "child_limits": {
+        "backend": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        },
+        "collector": {
+          "RLIMIT_AS": [
+            8589934592,
+            8589934592
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        },
+        "server": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        }
+      },
+      "http": {
+        "samples": 477946,
+        "issue_window_samples": 477946,
+        "successes": 477946,
+        "measurement_seconds": 30.0,
+        "completed_within_window": 477938,
+        "bytes_within_window": 489408512,
+        "completed_rps_nominal": 15931.266666666666,
+        "completed_bytes_per_second_nominal": 16313617.066666666,
+        "cohort_rps_including_drain": 15931.255356342774,
+        "drain_seconds": 0.0005234559066593647,
+        "late_completions": 8,
+        "warmup_boundary_excluded_completions": 8,
+        "bytes": 489416704,
+        "error_rate": 0.0,
+        "p50_ms": 0.438,
+        "p95_ms": 0.772,
+        "p99_ms": 0.96,
+        "errors": {},
+        "measured_reused_requests": 477946,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "reconnects": 0,
+        "idle_close_reconnects": 0,
+        "header_reset_retries": 0,
+        "physical_attempts": 477946,
+        "retry_policy": "disabled; preemptive idle connection replacement is not a request retry",
+        "event_loop_lag_max_seconds": 0.004894128069281578,
+        "valid": true,
+        "sample_limit": 2000000,
+        "percentile_method": "nearest rank on successful issue cohort"
+      },
+      "resources": {
+        "server": {
+          "cpu_percent": 175.77255978923384,
+          "rss_bytes": 19525632,
+          "hwm_sum_bytes": 19525632,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "backend": {
+          "cpu_percent": 94.86479358052487,
+          "rss_bytes": 28139520,
+          "hwm_sum_bytes": 28139520,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "client": {
+          "cpu_percent": 96.32474231197111,
+          "rss_bytes": 51941376,
+          "hwm_sum_bytes": 55771136,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "collector": {
+          "cpu_percent": 8.987784818948747,
+          "rss_bytes": 95825920,
+          "hwm_sum_bytes": 95825920,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        }
+      },
+      "client_warning": true,
+      "backend_summary": {
+        "errors": 0,
+        "rejected": 0
+      },
+      "ports_removed": true,
+      "repeat": 2
+    },
+    {
+      "round": 8,
+      "mode": "trace",
+      "config": "/scratch/work/round-08-trace.kdl",
+      "config_sha256": "808d890568ec0eba79a9079df29fafd30470036d772354f7d10d3f902196b95b",
+      "valid": true,
+      "stop": {
+        "server": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        },
+        "collector": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        },
+        "backend": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        }
+      },
+      "counter_availability": "unavailable_no_metrics_endpoint",
+      "metrics_before": null,
+      "metrics_after": null,
+      "counter_delta": null,
+      "metrics_before_monotonic": null,
+      "metrics_after_monotonic": null,
+      "child_limits": {
+        "backend": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        },
+        "collector": {
+          "RLIMIT_AS": [
+            8589934592,
+            8589934592
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        },
+        "server": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        }
+      },
+      "http": {
+        "samples": 488897,
+        "issue_window_samples": 488897,
+        "successes": 488897,
+        "measurement_seconds": 30.0,
+        "completed_within_window": 488890,
+        "bytes_within_window": 500623360,
+        "completed_rps_nominal": 16296.333333333334,
+        "completed_bytes_per_second_nominal": 16687445.333333334,
+        "cohort_rps_including_drain": 16296.2930024585,
+        "drain_seconds": 0.0005037910304963589,
+        "late_completions": 7,
+        "warmup_boundary_excluded_completions": 8,
+        "bytes": 500630528,
+        "error_rate": 0.0,
+        "p50_ms": 0.433,
+        "p95_ms": 0.714,
+        "p99_ms": 0.914,
+        "errors": {},
+        "measured_reused_requests": 488897,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "reconnects": 0,
+        "idle_close_reconnects": 0,
+        "header_reset_retries": 0,
+        "physical_attempts": 488897,
+        "retry_policy": "disabled; preemptive idle connection replacement is not a request retry",
+        "event_loop_lag_max_seconds": 0.005996743915602565,
+        "valid": true,
+        "sample_limit": 2000000,
+        "percentile_method": "nearest rank on successful issue cohort"
+      },
+      "resources": {
+        "server": {
+          "cpu_percent": 156.69932548922117,
+          "rss_bytes": 19066880,
+          "hwm_sum_bytes": 19132416,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "backend": {
+          "cpu_percent": 94.87196922533707,
+          "rss_bytes": 27955200,
+          "hwm_sum_bytes": 27955200,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "client": {
+          "cpu_percent": 95.86289782602245,
+          "rss_bytes": 51986432,
+          "hwm_sum_bytes": 55963648,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "collector": {
+          "cpu_percent": 6.9904241267396765,
+          "rss_bytes": 98033664,
+          "hwm_sum_bytes": 98033664,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        }
+      },
+      "client_warning": true,
+      "backend_summary": {
+        "errors": 0,
+        "rejected": 0
+      },
+      "ports_removed": true,
+      "repeat": 2
+    },
+    {
+      "round": 9,
+      "mode": "metrics",
+      "config": "/scratch/work/round-09-metrics.kdl",
+      "config_sha256": "881ce6bdf38d828c162851d4a923208e893b039ca426cea870b5f8bff256f731",
+      "valid": true,
+      "stop": {
+        "server": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        },
+        "backend": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        }
+      },
+      "counter_availability": "available",
+      "metrics_before": {
+        "rill_generation": 1.0,
+        "rill_log_queue_drop_total": 0.0,
+        "rill_trace_queue_drop_total": 0.0,
+        "rill_log_export_failure_total": 0.0,
+        "rill_trace_export_failure_total": 0.0
+      },
+      "metrics_after": {
+        "rill_generation": 1.0,
+        "rill_log_queue_drop_total": 0.0,
+        "rill_trace_queue_drop_total": 0.0,
+        "rill_log_export_failure_total": 0.0,
+        "rill_trace_export_failure_total": 0.0
+      },
+      "counter_delta": {
+        "rill_log_queue_drop_total": 0.0,
+        "rill_trace_queue_drop_total": 0.0,
+        "rill_log_export_failure_total": 0.0,
+        "rill_trace_export_failure_total": 0.0
+      },
+      "metrics_before_monotonic": {
+        "start": 1149709.438945314,
+        "end": 1149709.439477849
+      },
+      "metrics_after_monotonic": {
+        "start": 1149741.689972641,
+        "end": 1149741.690547241
+      },
+      "child_limits": {
+        "backend": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        },
+        "server": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        }
+      },
+      "http": {
+        "samples": 514994,
+        "issue_window_samples": 514994,
+        "successes": 514994,
+        "measurement_seconds": 30.0,
+        "completed_within_window": 514986,
+        "bytes_within_window": 527345664,
+        "completed_rps_nominal": 17166.2,
+        "completed_bytes_per_second_nominal": 17578188.8,
+        "cohort_rps_including_drain": 17166.157543048932,
+        "drain_seconds": 0.000540232053026557,
+        "late_completions": 8,
+        "warmup_boundary_excluded_completions": 8,
+        "bytes": 527353856,
+        "error_rate": 0.0,
+        "p50_ms": 0.426,
+        "p95_ms": 0.64,
+        "p99_ms": 0.856,
+        "errors": {},
+        "measured_reused_requests": 514994,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "reconnects": 0,
+        "idle_close_reconnects": 0,
+        "header_reset_retries": 0,
+        "physical_attempts": 514994,
+        "retry_policy": "disabled; preemptive idle connection replacement is not a request retry",
+        "event_loop_lag_max_seconds": 0.0017225539777427912,
+        "valid": true,
+        "sample_limit": 2000000,
+        "percentile_method": "nearest rank on successful issue cohort"
+      },
+      "resources": {
+        "server": {
+          "cpu_percent": 154.80591425653026,
+          "rss_bytes": 18612224,
+          "hwm_sum_bytes": 18612224,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "backend": {
+          "cpu_percent": 95.88531194412906,
+          "rss_bytes": 27512832,
+          "hwm_sum_bytes": 27512832,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "client": {
+          "cpu_percent": 95.88575193754355,
+          "rss_bytes": 52396032,
+          "hwm_sum_bytes": 56598528,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        }
+      },
+      "client_warning": true,
+      "backend_summary": {
+        "errors": 0,
+        "rejected": 0
+      },
+      "ports_removed": true,
+      "repeat": 2
+    },
+    {
+      "round": 10,
+      "mode": "access",
+      "config": "/scratch/work/round-10-access.kdl",
+      "config_sha256": "f0a8c61a3c642ec33852ecc97f5ce31982a241a5a210c9b524d0aa3346082aa3",
+      "valid": true,
+      "stop": {
+        "server": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        },
+        "backend": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        }
+      },
+      "counter_availability": "unavailable_no_metrics_endpoint",
+      "metrics_before": null,
+      "metrics_after": null,
+      "counter_delta": null,
+      "metrics_before_monotonic": null,
+      "metrics_after_monotonic": null,
+      "child_limits": {
+        "backend": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        },
+        "server": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        }
+      },
+      "http": {
+        "samples": 501502,
+        "issue_window_samples": 501502,
+        "successes": 501502,
+        "measurement_seconds": 30.0,
+        "completed_within_window": 501495,
+        "bytes_within_window": 513530880,
+        "completed_rps_nominal": 16716.5,
+        "completed_bytes_per_second_nominal": 17117696.0,
+        "cohort_rps_including_drain": 16716.495068726632,
+        "drain_seconds": 0.000427597900852561,
+        "late_completions": 7,
+        "warmup_boundary_excluded_completions": 8,
+        "bytes": 513538048,
+        "error_rate": 0.0,
+        "p50_ms": 0.432,
+        "p95_ms": 0.675,
+        "p99_ms": 0.869,
+        "errors": {},
+        "measured_reused_requests": 501502,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "reconnects": 0,
+        "idle_close_reconnects": 0,
+        "header_reset_retries": 0,
+        "physical_attempts": 501502,
+        "retry_policy": "disabled; preemptive idle connection replacement is not a request retry",
+        "event_loop_lag_max_seconds": 0.001133651938289404,
+        "valid": true,
+        "sample_limit": 2000000,
+        "percentile_method": "nearest rank on successful issue cohort"
+      },
+      "resources": {
+        "server": {
+          "cpu_percent": 173.7781681527457,
+          "rss_bytes": 18931712,
+          "hwm_sum_bytes": 18931712,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "backend": {
+          "cpu_percent": 95.88710079717158,
+          "rss_bytes": 27455488,
+          "hwm_sum_bytes": 27455488,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "client": {
+          "cpu_percent": 96.8756849490542,
+          "rss_bytes": 52404224,
+          "hwm_sum_bytes": 56598528,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        }
+      },
+      "client_warning": true,
+      "backend_summary": {
+        "errors": 0,
+        "rejected": 0
+      },
+      "ports_removed": true,
+      "repeat": 2
+    },
+    {
+      "round": 11,
+      "mode": "metrics",
+      "config": "/scratch/work/round-11-metrics.kdl",
+      "config_sha256": "893303e05a2e25b159fd3d5eb42c19bd14a966dec46b6f8e7a0b27fb4b1d2c0b",
+      "valid": true,
+      "stop": {
+        "server": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        },
+        "backend": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        }
+      },
+      "counter_availability": "available",
+      "metrics_before": {
+        "rill_generation": 1.0,
+        "rill_log_queue_drop_total": 0.0,
+        "rill_trace_queue_drop_total": 0.0,
+        "rill_log_export_failure_total": 0.0,
+        "rill_trace_export_failure_total": 0.0
+      },
+      "metrics_after": {
+        "rill_generation": 1.0,
+        "rill_log_queue_drop_total": 0.0,
+        "rill_trace_queue_drop_total": 0.0,
+        "rill_log_export_failure_total": 0.0,
+        "rill_trace_export_failure_total": 0.0
+      },
+      "counter_delta": {
+        "rill_log_queue_drop_total": 0.0,
+        "rill_trace_queue_drop_total": 0.0,
+        "rill_log_export_failure_total": 0.0,
+        "rill_trace_export_failure_total": 0.0
+      },
+      "metrics_before_monotonic": {
+        "start": 1149774.281838157,
+        "end": 1149774.282395017
+      },
+      "metrics_after_monotonic": {
+        "start": 1149806.528253354,
+        "end": 1149806.528846275
+      },
+      "child_limits": {
+        "backend": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        },
+        "server": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        }
+      },
+      "http": {
+        "samples": 506661,
+        "issue_window_samples": 506661,
+        "successes": 506661,
+        "measurement_seconds": 30.0,
+        "completed_within_window": 506653,
+        "bytes_within_window": 518812672,
+        "completed_rps_nominal": 16888.433333333334,
+        "completed_bytes_per_second_nominal": 17293755.733333334,
+        "cohort_rps_including_drain": 16888.316117197617,
+        "drain_seconds": 0.0006819202098995447,
+        "late_completions": 8,
+        "warmup_boundary_excluded_completions": 8,
+        "bytes": 518820864,
+        "error_rate": 0.0,
+        "p50_ms": 0.428,
+        "p95_ms": 0.658,
+        "p99_ms": 0.859,
+        "errors": {},
+        "measured_reused_requests": 506661,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "reconnects": 0,
+        "idle_close_reconnects": 0,
+        "header_reset_retries": 0,
+        "physical_attempts": 506661,
+        "retry_policy": "disabled; preemptive idle connection replacement is not a request retry",
+        "event_loop_lag_max_seconds": 0.001079264096915722,
+        "valid": true,
+        "sample_limit": 2000000,
+        "percentile_method": "nearest rank on successful issue cohort"
+      },
+      "resources": {
+        "server": {
+          "cpu_percent": 151.81565102509148,
+          "rss_bytes": 18870272,
+          "hwm_sum_bytes": 18870272,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "backend": {
+          "cpu_percent": 95.8835690684788,
+          "rss_bytes": 27328512,
+          "hwm_sum_bytes": 27328512,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "client": {
+          "cpu_percent": 95.88654416777456,
+          "rss_bytes": 52404224,
+          "hwm_sum_bytes": 56598528,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        }
+      },
+      "client_warning": true,
+      "backend_summary": {
+        "errors": 0,
+        "rejected": 0
+      },
+      "ports_removed": true,
+      "repeat": 3
+    },
+    {
+      "round": 12,
+      "mode": "trace",
+      "config": "/scratch/work/round-12-trace.kdl",
+      "config_sha256": "d07514c341700200879253e47236628412c1ad6ef80ae57075696930567c4530",
+      "valid": true,
+      "stop": {
+        "server": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        },
+        "collector": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        },
+        "backend": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        }
+      },
+      "counter_availability": "unavailable_no_metrics_endpoint",
+      "metrics_before": null,
+      "metrics_after": null,
+      "counter_delta": null,
+      "metrics_before_monotonic": null,
+      "metrics_after_monotonic": null,
+      "child_limits": {
+        "backend": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        },
+        "collector": {
+          "RLIMIT_AS": [
+            8589934592,
+            8589934592
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        },
+        "server": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        }
+      },
+      "http": {
+        "samples": 483858,
+        "issue_window_samples": 483858,
+        "successes": 483858,
+        "measurement_seconds": 30.0,
+        "completed_within_window": 483850,
+        "bytes_within_window": 495462400,
+        "completed_rps_nominal": 16128.333333333334,
+        "completed_bytes_per_second_nominal": 16515413.333333334,
+        "cohort_rps_including_drain": 16128.224729589943,
+        "drain_seconds": 0.0006980379112064838,
+        "late_completions": 8,
+        "warmup_boundary_excluded_completions": 8,
+        "bytes": 495470592,
+        "error_rate": 0.0,
+        "p50_ms": 0.434,
+        "p95_ms": 0.73,
+        "p99_ms": 0.925,
+        "errors": {},
+        "measured_reused_requests": 483858,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "reconnects": 0,
+        "idle_close_reconnects": 0,
+        "header_reset_retries": 0,
+        "physical_attempts": 483858,
+        "retry_policy": "disabled; preemptive idle connection replacement is not a request retry",
+        "event_loop_lag_max_seconds": 0.0011334738228470087,
+        "valid": true,
+        "sample_limit": 2000000,
+        "percentile_method": "nearest rank on successful issue cohort"
+      },
+      "resources": {
+        "server": {
+          "cpu_percent": 162.74667160378917,
+          "rss_bytes": 19525632,
+          "hwm_sum_bytes": 19525632,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "backend": {
+          "cpu_percent": 95.86572950382384,
+          "rss_bytes": 27398144,
+          "hwm_sum_bytes": 27398144,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "client": {
+          "cpu_percent": 93.87246684603977,
+          "rss_bytes": 52404224,
+          "hwm_sum_bytes": 56598528,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "collector": {
+          "cpu_percent": 7.988608899104611,
+          "rss_bytes": 110600192,
+          "hwm_sum_bytes": 110600192,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        }
+      },
+      "client_warning": true,
+      "backend_summary": {
+        "errors": 0,
+        "rejected": 0
+      },
+      "ports_removed": true,
+      "repeat": 3
+    },
+    {
+      "round": 13,
+      "mode": "all",
+      "config": "/scratch/work/round-13-all.kdl",
+      "config_sha256": "43f04c47aff5504d041c4ab8c4f2b2adc2938ba3a59134fa94cef5dcddacdb3c",
+      "valid": true,
+      "stop": {
+        "server": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        },
+        "collector": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        },
+        "backend": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        }
+      },
+      "counter_availability": "available",
+      "metrics_before": {
+        "rill_generation": 1.0,
+        "rill_log_queue_drop_total": 0.0,
+        "rill_trace_queue_drop_total": 0.0,
+        "rill_log_export_failure_total": 0.0,
+        "rill_trace_export_failure_total": 0.0
+      },
+      "metrics_after": {
+        "rill_generation": 1.0,
+        "rill_log_queue_drop_total": 9831.0,
+        "rill_trace_queue_drop_total": 248.0,
+        "rill_log_export_failure_total": 0.0,
+        "rill_trace_export_failure_total": 0.0
+      },
+      "counter_delta": {
+        "rill_log_queue_drop_total": 9831.0,
+        "rill_trace_queue_drop_total": 248.0,
+        "rill_log_export_failure_total": 0.0,
+        "rill_trace_export_failure_total": 0.0
+      },
+      "metrics_before_monotonic": {
+        "start": 1149839.224538156,
+        "end": 1149839.225052538
+      },
+      "metrics_after_monotonic": {
+        "start": 1149871.462062214,
+        "end": 1149871.462714951
+      },
+      "child_limits": {
+        "backend": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        },
+        "collector": {
+          "RLIMIT_AS": [
+            8589934592,
+            8589934592
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        },
+        "server": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        }
+      },
+      "http": {
+        "samples": 468039,
+        "issue_window_samples": 468039,
+        "successes": 468039,
+        "measurement_seconds": 30.0,
+        "completed_within_window": 468032,
+        "bytes_within_window": 479264768,
+        "completed_rps_nominal": 15601.066666666668,
+        "completed_bytes_per_second_nominal": 15975492.266666668,
+        "cohort_rps_including_drain": 15601.059687486391,
+        "drain_seconds": 0.00046210805885493755,
+        "late_completions": 7,
+        "warmup_boundary_excluded_completions": 8,
+        "bytes": 479271936,
+        "error_rate": 0.0,
+        "p50_ms": 0.444,
+        "p95_ms": 0.784,
+        "p99_ms": 0.959,
+        "errors": {},
+        "measured_reused_requests": 468039,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "reconnects": 0,
+        "idle_close_reconnects": 0,
+        "header_reset_retries": 0,
+        "physical_attempts": 468039,
+        "retry_policy": "disabled; preemptive idle connection replacement is not a request retry",
+        "event_loop_lag_max_seconds": 0.0009842049330472946,
+        "valid": true,
+        "sample_limit": 2000000,
+        "percentile_method": "nearest rank on successful issue cohort"
+      },
+      "resources": {
+        "server": {
+          "cpu_percent": 172.76171456951926,
+          "rss_bytes": 19648512,
+          "hwm_sum_bytes": 19648512,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "backend": {
+          "cpu_percent": 94.86748757632462,
+          "rss_bytes": 27373568,
+          "hwm_sum_bytes": 27373568,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "client": {
+          "cpu_percent": 96.05278448202783,
+          "rss_bytes": 52408320,
+          "hwm_sum_bytes": 56598528,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "collector": {
+          "cpu_percent": 7.989094980884357,
+          "rss_bytes": 110182400,
+          "hwm_sum_bytes": 110182400,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        }
+      },
+      "client_warning": true,
+      "backend_summary": {
+        "errors": 0,
+        "rejected": 0
+      },
+      "ports_removed": true,
+      "repeat": 3
+    },
+    {
+      "round": 14,
+      "mode": "off",
+      "config": "/scratch/work/round-14-off.kdl",
+      "config_sha256": "f6e687029c2ec7e31b587b0c9d158c00b6ae1f266062656220c55952d3011d8e",
+      "valid": true,
+      "stop": {
+        "server": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        },
+        "backend": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        }
+      },
+      "counter_availability": "unavailable_no_metrics_endpoint",
+      "metrics_before": null,
+      "metrics_after": null,
+      "counter_delta": null,
+      "metrics_before_monotonic": null,
+      "metrics_after_monotonic": null,
+      "child_limits": {
+        "backend": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        },
+        "server": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        }
+      },
+      "http": {
+        "samples": 500805,
+        "issue_window_samples": 500805,
+        "successes": 500805,
+        "measurement_seconds": 30.0,
+        "completed_within_window": 500797,
+        "bytes_within_window": 512816128,
+        "completed_rps_nominal": 16693.233333333334,
+        "completed_bytes_per_second_nominal": 17093870.933333334,
+        "cohort_rps_including_drain": 16693.223393967604,
+        "drain_seconds": 0.0004970987793058157,
+        "late_completions": 8,
+        "warmup_boundary_excluded_completions": 8,
+        "bytes": 512824320,
+        "error_rate": 0.0,
+        "p50_ms": 0.432,
+        "p95_ms": 0.674,
+        "p99_ms": 0.868,
+        "errors": {},
+        "measured_reused_requests": 500805,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "reconnects": 0,
+        "idle_close_reconnects": 0,
+        "header_reset_retries": 0,
+        "physical_attempts": 500805,
+        "retry_policy": "disabled; preemptive idle connection replacement is not a request retry",
+        "event_loop_lag_max_seconds": 0.001803894992917776,
+        "valid": true,
+        "sample_limit": 2000000,
+        "percentile_method": "nearest rank on successful issue cohort"
+      },
+      "resources": {
+        "server": {
+          "cpu_percent": 151.81366436289034,
+          "rss_bytes": 19124224,
+          "hwm_sum_bytes": 19124224,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "backend": {
+          "cpu_percent": 95.88463715566837,
+          "rss_bytes": 27320320,
+          "hwm_sum_bytes": 27320320,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "client": {
+          "cpu_percent": 96.81958694658617,
+          "rss_bytes": 52408320,
+          "hwm_sum_bytes": 56598528,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        }
+      },
+      "client_warning": true,
+      "backend_summary": {
+        "errors": 0,
+        "rejected": 0
+      },
+      "ports_removed": true,
+      "repeat": 3
+    },
+    {
+      "round": 15,
+      "mode": "access",
+      "config": "/scratch/work/round-15-access.kdl",
+      "config_sha256": "eb4e6ea7e52eb2c207a30657578d08c0285181b27b1ce60f0dea61acabc7817d",
+      "valid": true,
+      "stop": {
+        "server": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        },
+        "backend": {
+          "exit_code": 0,
+          "forced": false,
+          "group_remaining": false
+        }
+      },
+      "counter_availability": "unavailable_no_metrics_endpoint",
+      "metrics_before": null,
+      "metrics_after": null,
+      "counter_delta": null,
+      "metrics_before_monotonic": null,
+      "metrics_after_monotonic": null,
+      "child_limits": {
+        "backend": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        },
+        "server": {
+          "RLIMIT_AS": [
+            2147483648,
+            2147483648
+          ],
+          "RLIMIT_FSIZE": [
+            536870912,
+            536870912
+          ]
+        }
+      },
+      "http": {
+        "samples": 495224,
+        "issue_window_samples": 495224,
+        "successes": 495224,
+        "measurement_seconds": 30.0,
+        "completed_within_window": 495216,
+        "bytes_within_window": 507101184,
+        "completed_rps_nominal": 16507.2,
+        "completed_bytes_per_second_nominal": 16903372.8,
+        "cohort_rps_including_drain": 16507.148459459502,
+        "drain_seconds": 0.0005783080123364925,
+        "late_completions": 8,
+        "warmup_boundary_excluded_completions": 8,
+        "bytes": 507109376,
+        "error_rate": 0.0,
+        "p50_ms": 0.434,
+        "p95_ms": 0.678,
+        "p99_ms": 0.876,
+        "errors": {},
+        "measured_reused_requests": 495224,
+        "measured_reuse_ratio": 1.0,
+        "connect_events": 0,
+        "reconnects": 0,
+        "idle_close_reconnects": 0,
+        "header_reset_retries": 0,
+        "physical_attempts": 495224,
+        "retry_policy": "disabled; preemptive idle connection replacement is not a request retry",
+        "event_loop_lag_max_seconds": 0.0013357459101825953,
+        "valid": true,
+        "sample_limit": 2000000,
+        "percentile_method": "nearest rank on successful issue cohort"
+      },
+      "resources": {
+        "server": {
+          "cpu_percent": 172.7819716288203,
+          "rss_bytes": 18870272,
+          "hwm_sum_bytes": 18944000,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "backend": {
+          "cpu_percent": 95.88729571487428,
+          "rss_bytes": 27340800,
+          "hwm_sum_bytes": 27340800,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        },
+        "client": {
+          "cpu_percent": 95.886878496963,
+          "rss_bytes": 52408320,
+          "hwm_sum_bytes": 56598528,
+          "pss_bytes": null,
+          "missing_root_samples": 0
+        }
+      },
+      "client_warning": true,
+      "backend_summary": {
+        "errors": 0,
+        "rejected": 0
+      },
+      "ports_removed": true,
+      "repeat": 3
+    }
+  ],
+  "provenance_sha256": "6a17a49a739098c54154a9e746aa9f6da78dd17f61eecbf8bf8f70773ab738d8",
+  "parameters": {
+    "rill": "/opt/rill",
+    "collector": "/opt/otelcol",
+    "workdir": "/scratch/work",
+    "output": "/scratch/output",
+    "provenance_json": "/provenance.json",
+    "seconds": 30.0,
+    "repeats": 3,
+    "warmup": 2.0,
+    "concurrency": 8,
+    "server_cpus": [
+      4,
+      5
+    ],
+    "client_cpus": [
+      6,
+      7
+    ],
+    "backend_cpus": [
+      8,
+      9
+    ],
+    "collector_cpus": [
+      10,
+      11
+    ],
+    "only": null
+  },
+  "selected_modes": [
+    "off",
+    "access",
+    "metrics",
+    "trace",
+    "all"
+  ],
+  "rill_sha256": "c27d76720c61ea99018a5483b6b409eed1b9b47c2e48eb45e6a449801c078b70",
+  "collector_sha256": "24b4f75796d6734f402d65f7a91cd102dead29a0156aa3d3428e277b8d9a056e",
+  "collector_config_sha256": "2da7a8187b50d48fccd159a9e5818d5d227cb458f607eb785f3022c4279dd186",
+  "collector_version": "0.133.0",
+  "sdk_versions": {
+    "opentelemetry": "0.31.0",
+    "opentelemetry_sdk": "0.31.0",
+    "opentelemetry-otlp": "0.31.1",
+    "opentelemetry-http": "0.31.0",
+    "reqwest": "0.12.28"
+  },
+  "source_manifest_sha256": "bb93a9e81b06307362673a5aa12a0e55456daae058c58ed1d9ad556bdbdcafd3",
+  "provenance_scope": "Versions and source manifest supplied by parent; binary hashes matched, package metadata not extracted from binary or independently verified.",
+  "kernel": "7.2.11-x64v3-xanmod1",
+  "python": "3.13.5 (main, Aug 10 2026, 12:06:59) [GCC 14.2.0]",
+  "environment_keys": [
+    "PATH",
+    "HOME",
+    "TMPDIR",
+    "LANG",
+    "LC_ALL"
+  ],
+  "inherited_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11
+  ],
+  "inherited_limits": {
+    "RLIMIT_AS": [
+      8589934592,
+      8589934592
+    ],
+    "RLIMIT_CPU": [
+      900,
+      900
+    ],
+    "RLIMIT_NPROC": [
+      128,
+      128
+    ],
+    "RLIMIT_NOFILE": [
+      512,
+      512
+    ],
+    "RLIMIT_FSIZE": [
+      536870912,
+      536870912
+    ]
+  },
+  "client_limits": {
+    "RLIMIT_AS": [
+      2147483648,
+      8589934592
+    ],
+    "RLIMIT_CPU": [
+      900,
+      900
+    ],
+    "RLIMIT_NPROC": [
+      128,
+      128
+    ],
+    "RLIMIT_NOFILE": [
+      512,
+      512
+    ],
+    "RLIMIT_FSIZE": [
+      536870912,
+      536870912
+    ]
+  },
+  "collector_as_cap": 8589934592,
+  "clock": "time.monotonic",
+  "offered_load": "closed-loop; RPS is not capacity",
+  "nominal_payload_bytes": 1024,
+  "sampling_scope": "immediately before warmup through request completion including drain; excludes shutdown; CPU peaks are one-second samples",
+  "memory_scope": "RSS sums may double count shared pages; HWM is historical; no PSS or cgroup accounting",
+  "counter_scope": "Snapshots are cumulative since process start and may include readiness, warmup, cohort and asynchronous callbacks before the after scrape. Delta excludes events already reflected in the before snapshot. Neither is an exact measurement-window count; after scrape precedes SDK shutdown, so final shutdown outcomes and tail failures may be missing. Generation is a gauge, not a counter.",
+  "readiness_scope": "correctness proxy request precedes metrics baseline and measurement, and may emit access records and spans",
+  "logs_scope": "raw whole-round logs include readiness, warmup, measurement and shutdown; no window counts inferred",
+  "off_scope": "off may still have provider threads or other resource use; not zero-resource",
+  "collector_readiness": "TCP connect and live process plus JSON service ready marker in collector stderr; receiver protocol correctness independently validated"
+}

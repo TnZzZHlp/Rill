@@ -5,6 +5,11 @@ edition = "2024"
 rust-version = "1.95"
 
 [dependencies]
+opentelemetry = { version = "=0.31.0", default-features = false, features = ["trace"] }
+opentelemetry_sdk = { version = "=0.31.0", default-features = false, features = ["trace"] }
+opentelemetry-http = { version = "=0.31.0", default-features = false }
+opentelemetry-otlp = { version = "=0.31.1", default-features = false, features = ["trace", "http-proto", "reqwest-blocking-client"] }
+reqwest = { version = "=0.12.28", default-features = false, features = ["blocking"] }
 arc-swap = "=1.9.3"
 async-trait = "0.1"
 bytes = "=1.12.1"

@@ -1,0 +1,11 @@
+{
+  "prior_source_snapshot": "source-final-v2",
+  "final_source_snapshot": "source-final-v3",
+  "changed_files": [
+    "src/observability/access.rs"
+  ],
+  "change": "Replace a four-byte emoji in cfg(test) UTF-8 truncation input with a four-byte non-emoji CJK scalar escape; production code prefix is byte-identical. No shipping code or benchmark input changed.",
+  "old_file_sha256": "7ea2abd33ed2a09c6c107cea0e5114c7d8ecbd65c306e5a61c01b95b26e4b4e8",
+  "new_file_sha256": "bf4fcd5e516f3bb2c67942946c6b307a4f995097f5afbe0333242b8c268f6682",
+  "production_prefix_sha256": "cc02156ac86de285c2ed8636e066e90a2865e4145ee682e6c5ba905b32bfd616"
+}

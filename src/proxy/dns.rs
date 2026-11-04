@@ -129,6 +129,7 @@ mod tests {
             https: Vec::new(),
             watch: false,
             static_cache_bytes: 0,
+            observability: Default::default(),
             redirect_https: false,
             redirect_port: None,
             control_socket: Default::default(),

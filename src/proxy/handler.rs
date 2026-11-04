@@ -13,9 +13,10 @@ use pingora::{Error, ErrorType, Result};
 use tokio::sync::watch;
 use tokio::time::Instant;
 
-use super::app::Phase;
+use super::app::{Phase, PhaseChannel};
 use super::request::{Forwarding, authority, connection_names, forwarding};
 use crate::observability::logging::Level;
+use crate::observability::{access::Outcome, metrics::UpstreamAttempt, request::RequestGuard};
 use crate::runtime::state::{PreparedRoute, RuntimeSnapshot, RuntimeState};
 
 pub struct Handler {
@@ -33,6 +34,7 @@ pub struct Context {
     budget: Option<watch::Sender<Phase>>,
     idle: Duration,
     response_started: bool,
+    observation: RequestGuard,
 }
 
 fn begin_response(budget: Option<&watch::Sender<Phase>>) -> Result<()> {
@@ -127,8 +129,14 @@ impl ProxyHttp for Handler {
     type CTX = Context;
 
     fn new_ctx(&self) -> Context {
+        let snapshot = self.state.snapshot();
+        let observation = RequestGuard::new(
+            self.state.observability.clone(),
+            snapshot.generation,
+            &snapshot.configuration.server.observability.policy,
+        );
         Context {
-            snapshot: self.state.snapshot(),
+            snapshot,
             selected: None,
             forwarding: None,
             connection_names: Vec::new(),
@@ -138,6 +146,7 @@ impl ProxyHttp for Handler {
             budget: None,
             idle: Duration::from_secs(60),
             response_started: false,
+            observation,
         }
     }
 
@@ -147,10 +156,10 @@ impl ProxyHttp for Handler {
         ctx: &mut Context,
         previous: Box<dyn Any + Send + Sync>,
     ) {
-        ctx.budget = previous
-            .downcast::<watch::Sender<Phase>>()
-            .ok()
-            .map(|sender| *sender);
+        if let Ok(channel) = previous.downcast::<PhaseChannel>() {
+            ctx.observation.timeout_flag(channel.timeout.clone());
+            ctx.budget = Some(channel.sender.clone());
+        }
     }
 
     fn persist_connection_context(
@@ -162,14 +171,14 @@ impl ProxyHttp for Handler {
     }
 
     async fn request_filter(&self, session: &mut Session, ctx: &mut Context) -> Result<bool> {
-        if ctx.budget.is_none() {
-            ctx.budget = session
-                .req_header()
-                .extensions
-                .get::<watch::Sender<Phase>>()
-                .cloned();
+        if ctx.budget.is_none()
+            && let Some(channel) = session.req_header().extensions.get::<PhaseChannel>()
+        {
+            ctx.observation.timeout_flag(channel.timeout.clone());
+            ctx.budget = Some(channel.sender.clone());
         }
         let request = session.req_header();
+        ctx.observation.method(request.method.as_str());
         let size = request.raw_path().len()
             + request
                 .headers
@@ -242,6 +251,14 @@ impl ProxyHttp for Handler {
         let Some((site, route)) = ctx.snapshot.router.find(&authority.host, &path) else {
             return reject(session, ctx, 404).await;
         };
+        if let Some(route) = ctx
+            .snapshot
+            .observation_routes
+            .get(site)
+            .and_then(|routes| routes.get(route))
+        {
+            ctx.observation.route(*route);
+        }
         let prepared = ctx
             .snapshot
             .routes
@@ -324,6 +341,12 @@ impl ProxyHttp for Handler {
     }
 
     async fn upstream_peer(&self, _: &mut Session, ctx: &mut Context) -> Result<Box<HttpPeer>> {
+        if self.state.observability.metrics_enabled {
+            self.state
+                .observability
+                .metrics
+                .upstream(UpstreamAttempt::Started);
+        }
         let (site, route) = ctx
             .selected
             .ok_or_else(|| Error::explain(ErrorType::InternalError, "route not selected"))?;
@@ -353,22 +376,41 @@ impl ProxyHttp for Handler {
         if let Some(handshake) = &ctx.websocket {
             super::websocket::request_headers(handshake, request)?;
         }
+        for name in ["traceparent", "tracestate", "baggage"] {
+            request.remove_header(name);
+        }
+        if let Some(traceparent) = ctx.observation.traceparent() {
+            request.insert_header("traceparent", traceparent)?;
+        }
         Ok(())
     }
 
     async fn connected_to_upstream(
         &self,
         _: &mut Session,
-        _: bool,
+        reused: bool,
         peer: &HttpPeer,
         _: RawFd,
         digest: Option<&Digest>,
         _: &mut Context,
     ) -> Result<()> {
-        super::upstream_tls::verify(peer, digest).map_err(|mut error| {
+        let result = super::upstream_tls::verify(peer, digest).map_err(|mut error| {
             error.set_retry(false);
             error
-        })
+        });
+        if self.state.observability.metrics_enabled {
+            self.state
+                .observability
+                .metrics
+                .upstream(if result.is_err() {
+                    UpstreamAttempt::TlsFail
+                } else if reused {
+                    UpstreamAttempt::Reused
+                } else {
+                    UpstreamAttempt::New
+                });
+        }
+        result
     }
 
     async fn response_filter(
@@ -406,6 +448,20 @@ impl ProxyHttp for Handler {
         ctx: &mut Context,
         mut error: Box<Error>,
     ) -> Box<Error> {
+        if self.state.observability.metrics_enabled {
+            let outcome = if matches!(
+                error.etype(),
+                ErrorType::TLSWantX509Lookup
+                    | ErrorType::TLSHandshakeFailure
+                    | ErrorType::TLSHandshakeTimedout
+                    | ErrorType::InvalidCert
+            ) {
+                UpstreamAttempt::TlsFail
+            } else {
+                UpstreamAttempt::Fail
+            };
+            self.state.observability.metrics.upstream(outcome);
+        }
         ctx.attempt += 1;
         let retry = ctx
             .addresses
@@ -441,7 +497,20 @@ impl ProxyHttp for Handler {
         true
     }
 
-    async fn logging(&self, _: &mut Session, error: Option<&Error>, ctx: &mut Context) {
+    async fn logging(&self, session: &mut Session, error: Option<&Error>, ctx: &mut Context) {
+        let status = session
+            .response_written()
+            .map(|response| response.status.as_u16());
+        let bytes = u64::try_from(session.as_ref().body_bytes_sent()).ok();
+        ctx.observation.finish(
+            status,
+            bytes,
+            if error.is_some() {
+                Outcome::Error
+            } else {
+                Outcome::Completed
+            },
+        );
         if let Some(error) = error {
             ctx.snapshot.logger.event(
                 Level::Warn,

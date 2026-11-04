@@ -1,3 +1,4 @@
 docs/validation/data/008/**/*.csv -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 docs/validation/data/010/*.csv -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 docs/validation/data/010/*.log -text whitespace=-blank-at-eof
+docs/validation/data/011/*.log -text whitespace=-blank-at-eof

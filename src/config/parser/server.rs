@@ -16,6 +16,7 @@ pub fn parse(node: &KdlNode, origin: &Origin) -> Result<Server> {
         https: Vec::new(),
         watch: false,
         static_cache_bytes: 0,
+        observability: Default::default(),
         redirect_https: false,
         redirect_port: None,
         control_socket: "/run/rill/control.sock".into(),
@@ -120,6 +121,9 @@ pub fn parse(node: &KdlNode, origin: &Origin) -> Result<Server> {
             name => {
                 once(&mut seen, child, &origin, "server")?;
                 match name {
+                    "observability" => {
+                        result.observability = super::observability::parse(child, &origin)?;
+                    }
                     "static-cache-bytes" => {
                         shape(child, &origin, "static-cache-bytes", 1..=1, false)?;
                         result.static_cache_bytes = child.entries()[0]

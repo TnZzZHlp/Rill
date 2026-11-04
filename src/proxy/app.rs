@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -21,6 +24,12 @@ pub enum Phase {
     Streaming,
 }
 
+#[derive(Clone, Debug)]
+pub struct PhaseChannel {
+    pub sender: watch::Sender<Phase>,
+    pub timeout: Arc<AtomicBool>,
+}
+
 pub struct App {
     pub proxy: Arc<HttpProxy<Handler>>,
     pub state: Arc<RuntimeState>,
@@ -33,6 +42,12 @@ impl HttpServerApp for App {
         mut session: ServerSession,
         shutdown: &ShutdownWatch,
     ) -> Option<ReusedHttpStream> {
+        let _stream = session.is_http2().then(|| {
+            crate::observability::owner::GaugeGuard::new(
+                &self.state.observability,
+                crate::observability::metrics::Gauge::ActiveH2Streams,
+            )
+        });
         let shared = session
             .as_http1()
             .and_then(|session| session.stream().as_any().downcast_ref::<SharedStream>())
@@ -42,10 +57,15 @@ impl HttpServerApp for App {
             .and_then(|context| context.downcast::<Duration>().ok())
             .map_or(Duration::from_secs(60), |value| *value);
         let (sender, mut receiver) = watch::channel(Phase::Ingress(Instant::now() + idle));
+        let timed_out_flag = Arc::new(AtomicBool::new(false));
+        let channel = PhaseChannel {
+            sender,
+            timeout: timed_out_flag.clone(),
+        };
         if session.is_http2() {
-            session.req_header_mut().extensions_mut().insert(sender);
+            session.req_header_mut().extensions_mut().insert(channel);
         } else {
-            session.set_connection_user_context(Some(Box::new(sender)));
+            session.set_connection_user_context(Some(Box::new(channel)));
         }
         let timed_out = {
             let request = self.proxy.process_new_http(session, shutdown);
@@ -63,7 +83,7 @@ impl HttpServerApp for App {
                         if changed.is_err() { return request.await; }
                     }
                     result = &mut request => return result,
-                    _ = sleep_until(deadline) => break status,
+                    _ = sleep_until(deadline) => { timed_out_flag.store(true, Ordering::Release); break status; },
                 }
             }
         };
@@ -111,7 +131,10 @@ impl ServerApp for Transport {
         shutdown: &ShutdownWatch,
     ) -> Option<Stream> {
         self.app
-            .process_new(Box::new(SharedStream::new(stream)), shutdown)
+            .process_new(
+                Box::new(SharedStream::new(stream, &self.app.state.observability)),
+                shutdown,
+            )
             .await
     }
     async fn cleanup(&self) {

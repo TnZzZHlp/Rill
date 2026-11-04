@@ -1,0 +1,785 @@
+{
+  "limitations": [
+    "Resource sampling is not a full-timing proof or proof of held-generation resource bounds.",
+    "Only captured stderr is checked; dropped or uncaptured output is not inspected.",
+    "No WS, SSE or trace collector validation."
+  ],
+  "passed": true,
+  "reload_cli": [
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14456-1793771378252903781-0 generation=2\n"
+    },
+    {
+      "status": 1,
+      "stderr": "reload failed: RESTART_REQUIRED id=14483-1793771380391191936-0\n/scratch/probe-output/blocked/config.kdl:1:1: reload: startup settings changed\n",
+      "stdout": ""
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14484-1793771380399911596-0 generation=2\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14485-1793771380408253681-0 generation=3\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14486-1793771380415796324-0 generation=4\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14487-1793771380424307093-0 generation=5\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14488-1793771380431925433-0 generation=6\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14489-1793771380439540873-0 generation=7\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14490-1793771380447087587-0 generation=8\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14491-1793771380454534664-0 generation=9\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14492-1793771380462354062-0 generation=10\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14493-1793771380469948885-0 generation=11\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14494-1793771380477590591-0 generation=12\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14495-1793771380485985028-0 generation=13\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14496-1793771380493228917-0 generation=14\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14497-1793771380500992585-0 generation=15\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14498-1793771380508973028-0 generation=16\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14499-1793771380516994552-0 generation=17\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14500-1793771380525319173-0 generation=18\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14501-1793771380533204229-0 generation=19\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14502-1793771380545110755-0 generation=20\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14503-1793771380553667312-0 generation=21\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14504-1793771380561797899-0 generation=22\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14505-1793771380571223155-0 generation=23\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14506-1793771380581197777-0 generation=24\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14507-1793771380589456343-0 generation=25\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14508-1793771380597614576-0 generation=26\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14509-1793771380608464670-0 generation=27\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14510-1793771380616203401-0 generation=28\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14511-1793771380624075709-0 generation=29\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14512-1793771380633010614-0 generation=30\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14513-1793771380643014827-0 generation=31\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14514-1793771380652817408-0 generation=32\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14515-1793771380662925246-0 generation=33\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14516-1793771380673621113-0 generation=34\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14517-1793771380681761362-0 generation=35\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14518-1793771380690062306-0 generation=36\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14519-1793771380698430199-0 generation=37\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14520-1793771380706764191-0 generation=38\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14521-1793771380715663058-0 generation=39\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14522-1793771380724249980-0 generation=40\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14523-1793771380734030912-0 generation=41\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14524-1793771380742974164-0 generation=42\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14525-1793771380752545318-0 generation=43\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14526-1793771380760948246-0 generation=44\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14527-1793771380769400133-0 generation=45\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14528-1793771380778951919-0 generation=46\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14529-1793771380788023125-0 generation=47\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14530-1793771380796990697-0 generation=48\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14531-1793771380809392128-0 generation=49\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14532-1793771380824326011-0 generation=50\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14533-1793771380843000311-0 generation=51\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14534-1793771380854277384-0 generation=52\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14535-1793771380864699935-0 generation=53\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14536-1793771380877179302-0 generation=54\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14537-1793771380889358273-0 generation=55\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14538-1793771380900325336-0 generation=56\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14539-1793771380913913349-0 generation=57\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14540-1793771380924713556-0 generation=58\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14541-1793771380934742239-0 generation=59\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14542-1793771380944781150-0 generation=60\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14543-1793771380954990813-0 generation=61\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14544-1793771380968491686-0 generation=62\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14545-1793771380981905774-0 generation=63\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14546-1793771380993194591-0 generation=64\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14547-1793771381003673106-0 generation=65\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14548-1793771381021001545-0 generation=66\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14549-1793771381038728745-0 generation=67\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14550-1793771381054375471-0 generation=68\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14551-1793771381065008790-0 generation=69\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14552-1793771381085726089-0 generation=70\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14553-1793771381098151673-0 generation=71\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14554-1793771381109392989-0 generation=72\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14555-1793771381122012183-0 generation=73\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14556-1793771381132508938-0 generation=74\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14557-1793771381144169332-0 generation=75\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14558-1793771381154459252-0 generation=76\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14559-1793771381164354351-0 generation=77\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14560-1793771381176389537-0 generation=78\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14561-1793771381192428749-0 generation=79\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14562-1793771381208014382-0 generation=80\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14563-1793771381220412537-0 generation=81\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14564-1793771381229905554-0 generation=82\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14565-1793771381240581309-0 generation=83\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14566-1793771381250001728-0 generation=84\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14567-1793771381259344187-0 generation=85\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14568-1793771381268817043-0 generation=86\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14569-1793771381278361882-0 generation=87\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14570-1793771381287982041-0 generation=88\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14571-1793771381298627304-0 generation=89\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14572-1793771381308612339-0 generation=90\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14573-1793771381318243139-0 generation=91\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14574-1793771381328173688-0 generation=92\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14575-1793771381338754656-0 generation=93\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14576-1793771381348511992-0 generation=94\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14577-1793771381358126602-0 generation=95\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14578-1793771381367603964-0 generation=96\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14579-1793771381377719077-0 generation=97\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14580-1793771381387177505-0 generation=98\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14581-1793771381396451364-0 generation=99\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14582-1793771381405653000-0 generation=100\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14583-1793771381417868281-0 generation=101\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14584-1793771381430650752-0 generation=102\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14585-1793771381441507491-0 generation=103\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14586-1793771381451510563-0 generation=104\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14587-1793771381461508247-0 generation=105\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14588-1793771381471290057-0 generation=106\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14589-1793771381480868999-0 generation=107\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14590-1793771381490711299-0 generation=108\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14591-1793771381500351411-0 generation=109\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14592-1793771381509967592-0 generation=110\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14593-1793771381519597783-0 generation=111\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14594-1793771381529190970-0 generation=112\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14595-1793771381539768241-0 generation=113\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14596-1793771381549238778-0 generation=114\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14597-1793771381558975451-0 generation=115\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14598-1793771381570212547-0 generation=116\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14599-1793771381580329521-0 generation=117\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14600-1793771381590148302-0 generation=118\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14601-1793771381600129129-0 generation=119\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14602-1793771381609737791-0 generation=120\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14603-1793771381619171549-0 generation=121\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14604-1793771381630044583-0 generation=122\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14605-1793771381640555843-0 generation=123\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14606-1793771381649974605-0 generation=124\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14607-1793771381659793464-0 generation=125\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14608-1793771381669481238-0 generation=126\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14609-1793771381678764432-0 generation=127\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14610-1793771381688585472-0 generation=128\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14611-1793771381699069841-0 generation=129\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14612-1793771381709168791-0 generation=130\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14613-1793771381719108754-0 generation=131\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14614-1793771381728569655-0 generation=132\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14615-1793771381739240734-0 generation=133\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14616-1793771381749046960-0 generation=134\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14617-1793771381759009053-0 generation=135\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14618-1793771381769032670-0 generation=136\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14619-1793771381779111253-0 generation=137\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14620-1793771381789119607-0 generation=138\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14621-1793771381798943111-0 generation=139\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14622-1793771381809547788-0 generation=140\n"
+    },
+    {
+      "status": 0,
+      "stderr": "",
+      "stdout": "id=14623-1793771381819495898-0 generation=141\n"
+    }
+  ],
+  "scenarios": {
+    "access_policy_reload": {
+      "observation_window_ms": 200
+    },
+    "blocked_shutdown": {
+      "exit": 0
+    },
+    "blocked_stderr_load": {
+      "counts": {
+        "200": 3000,
+        "502": 3000
+      },
+      "max_latency_seconds": 0.04481863882392645,
+      "post_fault_resources": {
+        "fd": 15,
+        "threads": 10
+      },
+      "queue_drops": 4671,
+      "wall_seconds": 1.8632131188642234,
+      "warm_resources": {
+        "fd": 15,
+        "threads": 6
+      }
+    },
+    "failed_reload": {
+      "generation": 1,
+      "labels": [
+        "06f8fdd7daf8df572d2b61969c0c8aef",
+        "a7b91cea55dd202ced3830e37b8439f0",
+        "overflow",
+        "unknown"
+      ]
+    },
+    "metrics_connection_cap": {
+      "business_seconds": 0.0008101637940853834,
+      "fd_baseline": 15,
+      "fd_held": 31,
+      "held": 16,
+      "seventeenth": "waiting"
+    },
+    "metrics_protocol": {
+      "bad_cases": 6,
+      "slow_header": 408
+    },
+    "metrics_slow_write": {
+      "advertised_length": 183777,
+      "body_received": 14297,
+      "business_seconds": 0.0009652040898799896,
+      "elapsed_seconds": 2.8082351780030876,
+      "eof": true,
+      "note": "Observed single slow write, not a full timing proof.",
+      "receive_buffer": 2304
+    },
+    "registry_reload": {
+      "resources": {
+        "fd": 15,
+        "threads": 10
+      },
+      "route_labels": 130,
+      "series_lines": 2162
+    },
+    "regular_smoke": {
+      "records": 6
+    }
+  }
+}

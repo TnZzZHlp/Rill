@@ -1,0 +1,14 @@
+
+running 1 test
+Error: "proxy exited before listening: {\"time_ms\":1793774812948,\"level\":\"error\",\"event\":\"configuration_failed\",\"diagnostic\":\"CONFIG_SYNTAX \\\"/scratch/tmp/rill-003-14478-1/config.kdl\\\":1:8 [\\\"document\\\"]: No closing '}' for child block\"}\n"
+https::service::http2_carries_real_requests_and_rejects_host_coalescing_on_the_same_connection --- FAILED
+
+failures:
+
+failures:
+    https::service::http2_carries_real_requests_and_rejects_host_coalescing_on_the_same_connection
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `--test https`
+{"promoted": [{"path": "h2-collector.log", "bytes": 2673, "sha256": "6001564c0e1289025caa40d2d959d166f1c140c90b7069e9438712b8437fb1b7"}]}

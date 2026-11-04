@@ -1,0 +1,13 @@
+
+running 1 test
+Error: "in-root index failed: 403; HTTP/1.1 403 Forbidden\r\ncontent-length: 0\r\nvary: Accept-Encoding\r\nDate: Wed, 04 Nov 2026 08:58:15 GMT\r\nConnection: close\r\n\r\n"
+security::unrelated_renames_preserve_in_root_index_symlinks --- FAILED
+
+failures:
+
+failures:
+    security::unrelated_renames_preserve_in_root_index_symlinks
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 26 filtered out; finished in 0.02s
+
+error: test failed, to rerun pass `--test static_files`

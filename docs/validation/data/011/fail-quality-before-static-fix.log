@@ -1,0 +1,78 @@
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 28 filtered out; finished in 0.19s
+
+{"timeout_collector_validation": "passed", "span_count": 2, "cancelled_context_status": null}
+
+running 43 tests
+...........................................
+test result: ok. 43 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 27 tests
+...........................
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.08s
+
+
+running 7 tests
+...TLS library: OpenSSL 3.6.3 9 Jun 2026
+....
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.19s
+
+
+running 22 tests
+......................
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.87s
+
+
+running 21 tests
+.....................
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.36s
+
+
+running 29 tests
+.............................
+test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 32.28s
+
+
+running 26 tests
+.....VmRSS/VmHWM KiB before=(23540, 23540) paused=(25708, 25708)
+.............
+thread 'security::directory_index_symlink_remains_confined_to_original_root' (16606) panicked at tests/static_files/security.rs:174:5:
+assertion `left == right` failed
+  left: []
+ right: [115, 97, 102, 101]
+stack backtrace:
+   0: __rustc::rust_begin_unwind
+   1: core::panicking::panic_fmt
+   2: core::panicking::assert_failed_inner
+   3: core::panicking::assert_failed::<alloc::vec::Vec<u8>, &[u8; 4]>
+   4: static_files::security::directory_index_symlink_remains_confined_to_original_root
+   5: static_files::security::directory_index_symlink_remains_confined_to_original_root::{closure#0}
+   6: <static_files::security::directory_index_symlink_remains_confined_to_original_root::{closure#0} as core::ops::function::FnOnce<()>>::call_once
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+ 18/26
+security::directory_index_symlink_remains_confined_to_original_root --- FAILED
+.......
+failures:
+
+failures:
+    security::directory_index_symlink_remains_confined_to_original_root
+
+test result: FAILED. 25 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.80s
+
+error: test failed, to rerun pass `--test static_files`
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: 1 target failed:
+    `--test static_files`
+{"promoted": [{"path": "timeout-collector.log", "bytes": 5678, "sha256": "b7856c167da9c84f329418ab89e28c5064a829effc8cf07ee01d68eea83fcdb1"}, {"path": "timeout-result.json", "bytes": 725, "sha256": "46477dd6f5b337acd210726cc95eecc0b9d22ce97f6c5a88859bfb47ddfe0f2c"}]}
