@@ -1,0 +1,81 @@
+$ podman image inspect docker.io/library/debian:trixie-slim --format {{.Id}}
+$ cargo build --locked --offline --manifest-path /root/github/Rill/tests/feasibility/grpc_container/Cargo.toml
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+artifacts=/var/tmp/rill-grpc-acceptance-0jath7z7
+$ openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=Rill acceptance ca -addext basicConstraints=critical,CA:TRUE -keyout /var/tmp/rill-grpc-acceptance-0jath7z7/ca.key -out /var/tmp/rill-grpc-acceptance-0jath7z7/certs/ca.pem
+$ openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=Rill acceptance other-ca -addext basicConstraints=critical,CA:TRUE -keyout /var/tmp/rill-grpc-acceptance-0jath7z7/other-ca.key -out /var/tmp/rill-grpc-acceptance-0jath7z7/certs/other-ca.pem
+$ openssl req -newkey rsa:2048 -nodes -subj /CN=grpc.test -keyout /var/tmp/rill-grpc-acceptance-0jath7z7/certs/server.key -out /var/tmp/rill-grpc-acceptance-0jath7z7/server.csr
+$ openssl x509 -req -in /var/tmp/rill-grpc-acceptance-0jath7z7/server.csr -days 1 -CA /var/tmp/rill-grpc-acceptance-0jath7z7/certs/ca.pem -CAkey /var/tmp/rill-grpc-acceptance-0jath7z7/ca.key -CAcreateserial -extfile /var/tmp/rill-grpc-acceptance-0jath7z7/server.ext -out /var/tmp/rill-grpc-acceptance-0jath7z7/certs/server.pem
+$ podman network create --opt isolate=true rill-grpc-acceptance-0jath7z7
+rill-grpc-acceptance-0jath7z7
+$ podman create --pull=never --name rill-grpc-acceptance-0jath7z7 --network rill-grpc-acceptance-0jath7z7 --read-only --cap-drop=all --security-opt=no-new-privileges --user 65534:65534 --memory 256m --cpus 1 --pids-limit 64 --stop-signal SIGINT -p 127.0.0.1::50051 -p 127.0.0.1::50052 -v /root/.cache/mbx/targets/v1/a95707062f630169d590b4bcd4db587ca3fa9e89569fe0c04d9b7555f428d24a/debug/rill-grpc-acceptance:/acceptance:ro -v /var/tmp/rill-grpc-acceptance-0jath7z7/certs:/certs:ro --entrypoint /acceptance 394ffa2d2ac8f5c9f45148f22bad3587429bceb19c93b88e8595f1e3f7892853 backend /certs/server.pem /certs/server.key
+$ podman start e175d78f9a68b3dd3ecea3938fed15f0daa4684cbd9b40795e7a9b0b6d39b8e2
+e175d78f9a68b3dd3ecea3938fed15f0daa4684cbd9b40795e7a9b0b6d39b8e2
+$ podman port e175d78f9a68b3dd3ecea3938fed15f0daa4684cbd9b40795e7a9b0b6d39b8e2 50051/tcp
+$ podman port e175d78f9a68b3dd3ecea3938fed15f0daa4684cbd9b40795e7a9b0b6d39b8e2 50052/tcp
+$ /root/github/Rill/target/debug/rill-grpc-acceptance client http://127.0.0.1:39633 /var/tmp/rill-grpc-acceptance-0jath7z7/certs/ca.pem ok
+PASS http://127.0.0.1:39633 unary
+PASS http://127.0.0.1:39633 512KiB flow-control
+PASS http://127.0.0.1:39633 client-stream
+PASS http://127.0.0.1:39633 server-stream and success trailers
+PASS http://127.0.0.1:39633 grpc-status=15 and grpc-message after DATA
+PASS http://127.0.0.1:39633 bidi responses before request EOF
+PASS http://127.0.0.1:39633 trailers-only grpc-status=3 and grpc-message
+PASS http://127.0.0.1:39633 cancel reaches backend and sibling RPC succeeds
+PASS http://127.0.0.1:39633 deadline cancels backend and sibling RPC succeeds
+$ /root/github/Rill/target/debug/rill-grpc-acceptance client https://127.0.0.1:45551 /var/tmp/rill-grpc-acceptance-0jath7z7/certs/ca.pem ok
+PASS https://127.0.0.1:45551 unary
+PASS https://127.0.0.1:45551 512KiB flow-control
+PASS https://127.0.0.1:45551 client-stream
+PASS https://127.0.0.1:45551 server-stream and success trailers
+PASS https://127.0.0.1:45551 grpc-status=15 and grpc-message after DATA
+PASS https://127.0.0.1:45551 bidi responses before request EOF
+PASS https://127.0.0.1:45551 trailers-only grpc-status=3 and grpc-message
+PASS https://127.0.0.1:45551 cancel reaches backend and sibling RPC succeeds
+PASS https://127.0.0.1:45551 deadline cancels backend and sibling RPC succeeds
+$ /root/github/Rill/target/debug/rill-grpc-acceptance client http://127.0.0.1:55311 /var/tmp/rill-grpc-acceptance-0jath7z7/certs/ca.pem ok
+PASS http://127.0.0.1:55311 unary
+PASS http://127.0.0.1:55311 512KiB flow-control
+PASS http://127.0.0.1:55311 client-stream
+PASS http://127.0.0.1:55311 server-stream and success trailers
+PASS http://127.0.0.1:55311 grpc-status=15 and grpc-message after DATA
+PASS http://127.0.0.1:55311 bidi responses before request EOF
+PASS http://127.0.0.1:55311 trailers-only grpc-status=3 and grpc-message
+PASS http://127.0.0.1:55311 cancel reaches backend and sibling RPC succeeds
+PASS http://127.0.0.1:55311 deadline cancels backend and sibling RPC succeeds
+$ /root/github/Rill/target/debug/rill-grpc-acceptance client http://127.0.0.1:36625 /var/tmp/rill-grpc-acceptance-0jath7z7/certs/ca.pem ok
+PASS http://127.0.0.1:36625 unary
+PASS http://127.0.0.1:36625 512KiB flow-control
+PASS http://127.0.0.1:36625 client-stream
+PASS http://127.0.0.1:36625 server-stream and success trailers
+PASS http://127.0.0.1:36625 grpc-status=15 and grpc-message after DATA
+PASS http://127.0.0.1:36625 bidi responses before request EOF
+PASS http://127.0.0.1:36625 trailers-only grpc-status=3 and grpc-message
+PASS http://127.0.0.1:36625 cancel reaches backend and sibling RPC succeeds
+PASS http://127.0.0.1:36625 deadline cancels backend and sibling RPC succeeds
+$ /root/github/Rill/target/debug/rill-grpc-acceptance client http://127.0.0.1:54703 /var/tmp/rill-grpc-acceptance-0jath7z7/certs/ca.pem reject
+PASS http://127.0.0.1:54703 upstream TLS rejection: code: 'The service is currently unavailable', message: "grpc-status header missing, mapped from HTTP status code 502"
+$ /root/github/Rill/target/debug/rill-grpc-acceptance client http://127.0.0.1:35225 /var/tmp/rill-grpc-acceptance-0jath7z7/certs/ca.pem reject
+PASS http://127.0.0.1:35225 upstream TLS rejection: code: 'The service is currently unavailable', message: "grpc-status header missing, mapped from HTTP status code 502"
+$ podman rm --force --ignore e175d78f9a68b3dd3ecea3938fed15f0daa4684cbd9b40795e7a9b0b6d39b8e2
+e175d78f9a68b3dd3ecea3938fed15f0daa4684cbd9b40795e7a9b0b6d39b8e2
+$ podman network rm rill-grpc-acceptance-0jath7z7
+rill-grpc-acceptance-0jath7z7
+{
+  "image": "394ffa2d2ac8f5c9f45148f22bad3587429bceb19c93b88e8595f1e3f7892853",
+  "scenarios": [
+    "direct-h2c",
+    "direct-tls-h2",
+    "proxy-h2c",
+    "proxy-tls-h2",
+    "reject-wrong-name",
+    "reject-wrong-ca"
+  ],
+  "cleanup": true,
+  "ports": {
+    "h2c": 39633,
+    "tls-h2": 45551
+  },
+  "passed": true,
+  "cleanup_errors": []
+}

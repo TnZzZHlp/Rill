@@ -1,0 +1,12 @@
+syntax = "proto3";
+package acceptance;
+message Packet {
+  string text = 1;
+  uint32 count = 2;
+}
+service Probe {
+  rpc Unary(Packet) returns (Packet);
+  rpc ClientStream(stream Packet) returns (Packet);
+  rpc ServerStream(Packet) returns (stream Packet);
+  rpc Bidi(stream Packet) returns (stream Packet);
+}
