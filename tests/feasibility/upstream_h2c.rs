@@ -17,19 +17,26 @@ fn serve(api: &'static str) -> TestResult<(std::net::SocketAddr, thread::JoinHan
             sender.send(listener.local_addr()?)?;
             let (stream, _) = listener.accept().await?;
             let mut connection = h2::server::handshake(stream).await?;
+            let mut handlers = tokio::task::JoinSet::new();
             while let Some(request) = connection.accept().await {
                 let (request, mut respond) = request?;
-                let mut body = request.into_body();
-                let mut received = Vec::new();
-                while let Some(chunk) = body.data().await.transpose()? {
-                    received.extend_from_slice(&chunk);
-                    body.flow_control().release_capacity(chunk.len())?;
-                }
-                let reply = http::Response::builder().status(200).body(())?;
-                let mut send = respond.send_response(reply, false)?;
-                let mut payload = api.as_bytes().to_vec();
-                payload.extend_from_slice(&received);
-                send.send_data(bytes::Bytes::from(payload), true)?;
+                handlers.spawn(async move {
+                    let mut body = request.into_body();
+                    let mut received = Vec::new();
+                    while let Some(chunk) = body.data().await.transpose()? {
+                        received.extend_from_slice(&chunk);
+                        body.flow_control().release_capacity(chunk.len())?;
+                    }
+                    let reply = http::Response::builder().status(200).body(())?;
+                    let mut send = respond.send_response(reply, false)?;
+                    let mut payload = api.as_bytes().to_vec();
+                    payload.extend_from_slice(&received);
+                    send.send_data(bytes::Bytes::from(payload), true)?;
+                    TestResult::Ok(())
+                });
+            }
+            while let Some(result) = handlers.join_next().await {
+                result??;
             }
             Ok(())
         })
@@ -72,12 +79,6 @@ async fn call(address: std::net::SocketAddr) -> TestResult<Vec<u8>> {
     Ok(body)
 }
 
-// Ignored on purpose: see docs/validation/013-caddy-001-contracts-feasibility.md 4.4.
-// The raw h2 client/server pair in streaming.rs completes every run, while the
-// Pingora 0.9.0 connector completes the same exchange only intermittently on this
-// host. The probe repeats the exchange and prints each outcome so the failure
-// rate stays reproducible instead of being asserted away.
-#[ignore = "Pingora 0.9.0 h2 connector is intermittently unable to complete a call"]
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn pingora_h2c_connector_completion_rate_is_recorded() -> TestResult {
     let mut completed = 0usize;
@@ -101,13 +102,13 @@ async fn pingora_h2c_connector_completion_rate_is_recorded() -> TestResult {
         drop(backend);
     }
     println!("pingora connector: ok={completed} fail={failed}");
-    assert_eq!(completed + failed, 10);
+    assert_eq!(
+        completed, 10,
+        "the Pingora connector must complete every attempt"
+    );
     Ok(())
 }
 
-// Control probe for the same record: identical topology and payload, direct h2
-// client, repeated ten times. Run together with the connector probe above.
-#[ignore = "comparison control for the connector completion-rate probe"]
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn raw_h2_client_completion_rate_is_recorded() -> TestResult {
     let mut completed = 0usize;

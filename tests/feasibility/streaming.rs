@@ -111,43 +111,52 @@ fn serve_h2(
             address_sender.send(listener.local_addr()?)?;
             let (stream, _) = listener.accept().await?;
             let mut connection = h2::server::handshake(stream).await?;
+            let mut handlers = tokio::task::JoinSet::new();
             while let Some(request) = connection.accept().await {
                 let Ok((request, mut respond)) = request else {
                     continue;
                 };
-                let mut body = request.into_body();
-                let mut received = Vec::new();
-                let mut frames = 0usize;
-                loop {
-                    match body.data().await {
-                        Some(Ok(chunk)) => {
-                            frames += 1;
-                            received.extend_from_slice(&chunk);
-                            body.flow_control().release_capacity(chunk.len())?;
+                handlers.spawn(async move {
+                    let mut body = request.into_body();
+                    let mut received = Vec::new();
+                    let mut frames = 0usize;
+                    loop {
+                        match body.data().await {
+                            Some(Ok(chunk)) => {
+                                frames += 1;
+                                received.extend_from_slice(&chunk);
+                                body.flow_control().release_capacity(chunk.len())?;
+                            }
+                            Some(Err(_)) => break,
+                            None => break,
                         }
-                        Some(Err(_)) => break,
-                        None => break,
                     }
-                }
-                let reply = http::Response::builder()
-                    .status(200)
-                    .header("content-type", "application/grpc")
-                    .header("x-request-frames", frames.to_string())
-                    .header("trailer", "grpc-status")
-                    .body(());
-                let Ok(reply) = reply else { continue };
-                let Ok(mut send) = respond.send_response(reply, false) else {
-                    continue;
-                };
-                let mut payload = api.as_bytes().to_vec();
-                payload.extend_from_slice(&received);
-                if send.send_data(bytes::Bytes::from(payload), false).is_err() {
-                    continue;
-                }
-                let mut trailers = http::HeaderMap::new();
-                trailers.insert("grpc-status", http::HeaderValue::from_static("0"));
-                trailers.insert("grpc-message", http::HeaderValue::from_static("ok"));
-                let _ = send.send_trailers(trailers);
+                    let reply = http::Response::builder()
+                        .status(200)
+                        .header("content-type", "application/grpc")
+                        .header("x-request-frames", frames.to_string())
+                        .header("trailer", "grpc-status")
+                        .body(());
+                    let Ok(reply) = reply else {
+                        return TestResult::Ok(());
+                    };
+                    let Ok(mut send) = respond.send_response(reply, false) else {
+                        return TestResult::Ok(());
+                    };
+                    let mut payload = api.as_bytes().to_vec();
+                    payload.extend_from_slice(&received);
+                    if send.send_data(bytes::Bytes::from(payload), false).is_err() {
+                        return TestResult::Ok(());
+                    }
+                    let mut trailers = http::HeaderMap::new();
+                    trailers.insert("grpc-status", http::HeaderValue::from_static("0"));
+                    trailers.insert("grpc-message", http::HeaderValue::from_static("ok"));
+                    let _ = send.send_trailers(trailers);
+                    TestResult::Ok(())
+                });
+            }
+            while let Some(result) = handlers.join_next().await {
+                result??;
             }
             Ok(())
         })

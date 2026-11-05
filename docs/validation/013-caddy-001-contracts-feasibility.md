@@ -52,7 +52,7 @@
 cargo test --locked --offline --test feasibility -- --test-threads=1
 ```
 
-原始结果（25 项，含 2 项显式忽略）：
+修复前原始结果（25 项，含 2 项显式忽略；当前结果见 4.4 和第 5 节）：
 
 ```text
 test feasibility::configuration::configuration_contract_examples_parse_as_kdl_v2 ... ok
@@ -83,7 +83,7 @@ test feasibility::write::storage_identity_is_the_device_and_inode_of_the_prepare
 test result: ok. 23 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 1.69s
 ```
 
-两个被忽略项是显式的可行性探针，命令与原始输出见 4.4。
+上列为历史结果；4.4 的修复已移除两个探针的 ignore，当前默认运行全部 25 项。
 
 ### 4.1 分块无关性（001-T03 字面量；正则未验证）
 
@@ -93,7 +93,7 @@ test result: ok. 23 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; fin
 
 ### 4.2 HTTP/2 与 gRPC 协议面
 
-`h2c_unary_call_carries_grpc_trailers`、`h2c_request_streaming_preserves_chunk_order_and_trailers`、`h2c_cancel_of_one_stream_leaves_the_connection_usable` 通过真实 loopback `h2` 连接（`h2 0.4.20` 客户端与服务端握手）验证：
+`h2c_unary_call_carries_grpc_trailers`、`h2c_request_streaming_preserves_chunk_order_and_trailers`、`h2c_cancel_of_one_stream_keeps_the_connection_usable` 通过真实 loopback `h2` 连接（`h2 0.4.20` 客户端与服务端握手）验证：
 
 - 请求与响应都携带 `content-type: application/grpc`，响应以 DATA + trailers 结束，`grpc-status: 0` 与 `grpc-message: ok` 逐项断言。
 - 请求侧三块增量写入被后端按三个独立的 DATA 帧接收（响应头 `x-request-frames: 3` 断言），并按序拼接为 `stream:onetwothree`。这证明客户端侧不聚合分块、帧边界保持；它**不**证明 Rill 未来的转发路径不聚合。
@@ -111,7 +111,34 @@ test result: ok. 23 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; fin
 - 独占锁模型在同一 registry 内拒绝第二个持有者（`DAV_LOCKED`）、达到上限时返回 `DAV_LIMIT`、TTL 到期释放槽位；新进程 registry 中同一 storage-id 没有旧锁，符合“跨 reload 保锁、重启失锁”。
 - 同一路径在同一文件系统重新打开得到相同 `(st_dev, st_ino)`，替换目录后不同，可作为稳定存储身份。
 
-### 4.4 阻塞项：Pingora 0.9.0 的 h2 连接器
+### 4.4 已修复：测试后端未持续驱动 h2 连接
+
+原报告把探针超时记为 Pingora h2 连接器阻断，该结论撤回。修复前再次复现：同一十次探针 `ok=4 fail=6`，且测试仍返回成功，因为断言只检查完成数与失败数之和为 10。
+
+根因在测试后端：`connection.accept().await` 返回请求后，代码在同一个循环中等待 `RecvStream::data()`。h2 服务端 Connection 必须继续被轮询才能接收 DATA、处理流控与发送响应；后端停止轮询连接时，是否恰好已读到完整请求体取决于报文到达时序。直接 h2 客户端在先前探针上恰好通过，不能排除测试夹具错误。
+
+修复 `upstream_h2c.rs` 和 `streaming.rs`：每个请求的读体及响应在 JoinSet 子任务中执行，接受循环持续轮询 Connection，连接结束后收集子任务结果。两个连接器/对照探针移除 ignore；Pingora 探针改为要求十次全部成功，而非只要求尝试总数为十。没有修改 Pingora、Tokio、生产代码或依赖。
+
+修复后复现命令：
+
+```sh
+cargo test --locked --offline --test feasibility upstream_h2c -- --nocapture --test-threads=2
+for i in $(seq 1 10); do
+    cargo test --locked --offline --test feasibility upstream_h2c -q -- --test-threads=2 || exit 1
+done
+```
+
+实测输出摘要：
+
+```text
+pingora connector: ok=10 fail=0
+raw h2 client: ok=10 fail=0
+round 1..10: 每轮 2 passed; 0 failed; 0 ignored
+```
+
+重复十轮共 100 次 Pingora 调用、100 次直接 h2 调用，全部成功；默认 feasibility 套件 25 passed、0 ignored。证明范围仅为此 h2c 一元连接器探针，不能替代 TLS h2、完整 gRPC 四类调用、取消传播或连接池信任隔离验证。
+
+以下保留修复前的观察作为历史记录，不再作为协议阻断依据：
 
 `tests/feasibility/upstream_h2c.rs` 包含两个成对的 `#[ignore]` 探针，拓扑、负载和后端实现完全相同，唯一差别是客户端：
 
@@ -153,7 +180,7 @@ raw h2 client: ok=10 fail=0
 - 运行环境是单机回环、当前工具链、`--offline`；未在其他主机或内核上复现。
 - 一个临时最小工程（不在仓库内，未纳入版本控制）曾复现同一比例，但该工件已删除，不作为证据；可复现证据是本节的仓库内探针。
 
-因此默认门禁不把这两个探针计为通过项。这是**阻塞项**：005 在解释并消除该不稳定性之前，不得把“完整 gRPC 上游”标为可行，也不得更换框架或静默降级为非流式。下一步（不属本阶段）：定位 `Connector` 与本机 tokio 计时器/驱动任务的交互，或取得 Pingora 已知缺陷说明与绕过方案。
+上述归因已被本节开头的复现与修复推翻。当前两个探针均纳入默认测试并断言全部成功；不存在据此认定的 Pingora h2 连接器阻断。
 
 ### 4.5 日志资源无副作用准备
 
@@ -175,7 +202,31 @@ cargo clippy --locked --offline --all-targets -q -- -D warnings
 cargo test --locked --offline --no-fail-fast -q -- --test-threads=2
 ```
 
-前三项通过（clippy 无警告）。全量测试存在既有环境性失败，与本阶段改动无关：在 UID 0 且 `/root` 为 0700 的环境下，`reload::watch::watch_permission_denied_retries_are_bounded_and_chmod_recovers`、`static_files::lifecycle::check_rejects_unreadable_root`、`static_files::security::cache_does_not_bypass_new_permission_denial`、`static_files::security::spa_does_not_fallback_for_denied_file` 因无法制造“非特权 UID 被拒绝”的场景而失败（AGENTS.md 已说明该情形属设计内）。同一次运行中其余目标全部通过，包括 `tests/feasibility` 的 23 项通过、2 项按设计忽略。
+修复前在 UID 0、`/root` 为 0700 的工作区，全量测试有四项权限用例失败（不是五项）：watch 需要非特权 UID，三个 static_files 用例的降权子进程不能遍历 `/root`。这不是产品行为修复点，未放宽工作区权限或修改用例以跳过权限断言。
+
+修复后将 Cargo.toml、Cargo.lock、src、tests、docs、examples、README.md、writing-block.md 复制到独立 0755 临时目录 `/tmp/rill-001-fix-KHirnO`，以 root 离线构建，编译期可执行路径均指向该可访问目录。随后逐个用 `runuser -u nobody -- <测试可执行文件> --test-threads=2` 执行所有测试二进制。未使用原工作区 target 符号链接作为临时输出，未修改原工作区权限。
+
+```sh
+CARGO_TARGET_DIR="$validation/target" cargo test --manifest-path "$validation/Cargo.toml" \
+    --locked --offline --no-run --message-format=json
+cd "$validation"
+runuser -u nobody -- "$test_executable" --test-threads=2
+```
+
+从 Cargo JSON 输出中选择 profile.test=true 且有 executable 的全部八个工件，逐一执行。实测结果：
+
+```text
+rill (main): 0 passed
+rill (lib): 36 passed
+configuration: 27 passed
+feasibility: 25 passed; 0 ignored
+http_proxy: 21 passed
+https: 20 passed
+reload: 28 passed; 1 ignored
+static_files: 27 passed
+```
+
+合计 184 passed、0 failed、1 ignored；唯一忽略项为需要独立 DNS fixture 的 reload 测试，未启用。原先四项权限失败全部通过。本轮在原工作区实际执行 `cargo fmt --all --check`、`cargo check --locked --offline -q`、`cargo clippy --locked --offline --all-targets -q -- -D warnings`、`cargo test --locked --offline --test feasibility -q -- --test-threads=2`、`cargo test --locked --offline --doc -q` 和 `cargo build --release --locked --offline -q`，全部通过（feasibility 25 项，doc 0 项）。独立 reviewer 复审修复 diff、原始复现日志与非特权全量日志，无新增发现；不代表 001 的缺失可行性证据已补齐。
 
 ## 6. 依赖
 
@@ -187,6 +238,6 @@ cargo test --locked --offline --no-fail-fast -q -- --test-threads=2
 
 未获得的证据：正则捕获替换的分块无关性（只测了字面量）、四类 gRPC 调用全矩阵、服务器流与双向流的端到端行为、跨协议 trailers、以及崩溃点中断的 DAV/日志文件系统事务。
 
-阻塞项一项：Pingora 0.9.0 h2 连接器在本机 10 次中 1–2 次才能完成一元调用（4.4），而直接 `h2` 客户端 10/10。按子计划要求，这使 005 的“完整 gRPC 上游”尚不能判为可行；001 不因此降级需求，也不更换框架。
+原 Pingora h2 连接器阻断已撤回：根因是测试后端未持续轮询 Connection；修复后 Pingora 与直接 h2 客户端各 100/100 次成功（4.4）。尚缺的验证证据仍阻止 001-T03、001-AC03 通过，不能由单个 h2c 一元探针推断完整 gRPC 可行。
 
-未决：001-T04 用户对契约与限额的验收尚未进行；全量测试的 4 项权限用例在本环境无法执行。
+未决：001-T04 用户对契约与限额的验收尚未进行。权限用例已在可访问的临时工作区以 UID 65534 执行通过，详见第 5 节。
