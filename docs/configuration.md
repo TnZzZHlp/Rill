@@ -29,7 +29,7 @@ site "example.test" {
 }
 ```
 
-规则以 `respond`、固定 `proxy`、`serve-files` 或 `branch` 终止，显式 `continue` 才继续后续规则。branch 只执行首个匹配的 `when`，否则执行可选末尾 `otherwise`；没有匹配分支时终止并返回 404。`respond` 状态为 200–599，默认空文本和 `text/plain; charset=utf-8`；204/304 不允许正文，HEAD 不发送正文。固定代理当前仅支持 http1；静态动作使用现有 root 保护并支持 `index`、`spa`、`cache-control`、`precompressed`、`browse`。`header` 支持请求和响应头动作；`rewrite`、`strip-prefix` 和 `try-files` 按链顺序更新当前路径并保留原查询，`reenter` 从链首重新匹配且最多四次。`try-files` 仅对受约束 root 下的普通文件命中，只有缺失才继续下一候选。链尾可声明一次 `handle-errors`：仅本地缺失、方法不支持及本地临时不可用可进入；安全拒绝、容量耗尽、上游响应/传输错误和已提交响应不进入。错误链共享步骤及重入预算，只进入一次；`respond` 不允许 2xx/3xx，错误文件保留原状态且不按 Range/条件请求返回 206/304。鉴权和其他后续动作暂不支持，不会静默忽略。`{upstream-authority}` 使用经验证的连接目标规范 authority，始终包含端口，IPv6 使用方括号；不使用 DNS 候选地址或 `proxy` 的 `host` 覆盖值。动作执行时尚未确定上游则使用该变量明确失败并返回 503，不填空、不猜目标、不重放规则；延后响应头动作可在代理目标确定后使用，respond/static 无上游时同样失败。正则运行工作区独立限额为全进程 64 MiB；额度不足返回 503。
+规则以 `respond`、固定 `proxy`、`serve-files` 或 `branch` 终止，显式 `continue` 才继续后续规则。branch 只执行首个匹配的 `when`，否则执行可选末尾 `otherwise`；没有匹配分支时终止并返回 404。`respond` 状态为 200–599，默认空文本和 `text/plain; charset=utf-8`；204/304 不允许正文，HEAD 不发送正文。固定代理当前仅支持 http1；静态动作使用现有 root 保护并支持 `index`、`spa`、`cache-control`、`precompressed`、`browse`。`header` 支持请求和响应头动作；`rewrite`、`strip-prefix` 和 `try-files` 按链顺序更新当前路径并保留原查询，`reenter` 从链首重新匹配且最多四次。`try-files` 仅对受约束 root 下的普通文件命中，只有缺失才继续下一候选。链尾可声明一次 `handle-errors`：仅本地缺失、方法不支持及本地临时不可用可进入；安全拒绝、容量耗尽、上游响应/传输错误和已提交响应不进入。错误链共享步骤及重入预算，只进入一次；`respond` 不允许 2xx/3xx，错误文件保留原状态且不按 Range/条件请求返回 206/304。Basic 和静态令牌鉴权见下文；其余后续动作暂不支持，不会静默忽略。`{upstream-authority}` 使用经验证的连接目标规范 authority，始终包含端口，IPv6 使用方括号；不使用 DNS 候选地址或 `proxy` 的 `host` 覆盖值。动作执行时尚未确定上游则使用该变量明确失败并返回 503，不填空、不猜目标、不重放规则；延后响应头动作可在代理目标确定后使用，respond/static 无上游时同样失败。正则运行工作区独立限额为全进程 64 MiB；额度不足返回 503。
 
 ## 2. CLI
 
@@ -267,3 +267,9 @@ site "api.example.com" {
 ```
 
 分别拒绝不允许继承的字段、未知 Profile 和非 HTTP/HTTPS 上游，不忽略其中任何一个错误。
+
+### 鉴权
+
+链中的 `basic-auth realm="private" { user "alice" hash="..."; }` 与 `static-token header="X-Api-Token" file="/secure/token"` 是非终止动作，后面仍须有终止动作、`continue` 或 `reenter`。Basic 支持 bcrypt `$2b$`（cost 10–14）及 Argon2id v19（内存 8192–65536 KiB、迭代 1–3、并行度 1–2）。缺失、重复、畸形或错误凭据返回 401，Basic 附带 challenge；成功后移除认证入口头。令牌文件在准备阶段读取，必须为普通 UTF-8 单行文件、最多 4096 字节且不能被组或其他用户读取；允许一个末尾 LF，不删除其他空白。路径相对声明文件；站点全部链共享令牌头保护，普通头动作不能修改它。
+
+Basic 输入最多 4096 字节；bcrypt 密码超过 72 字节不截断，执行同成本受限 dummy 验证后返回 401，Argon2 不受 72 字节限制。同一请求中同一动作成功后，重入可复用该结果；不同动作不复用。验证全进程最多四个任务，不排队，每次等待最多两秒；超时后底层任务结束前仍占槽。不同用户配置的算法和成本可能有可测耗时差异，不保证隐藏用户名。

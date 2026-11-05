@@ -139,6 +139,8 @@ chain {
 
 `basic-auth realm="private" { user "alice" hash="..."; }` 和 `static-token header="X-Api-Token" file="/secure/token"` 是非终止动作，必须在受保护终止动作之前，同一路径不能绕过。Basic 只允许 bcrypt `$2b$` 和 Argon2id PHC；令牌为独立普通文件的单行 UTF-8 值，准备时读取且拒绝组/其他用户可读文件；凭据不输出日志。缺失、重复、畸形或错误凭据均终止 401；Basic 返回 challenge。成功后移除入口 Authorization、Proxy-Authorization 和令牌头，禁止通过普通 header 恢复认证身份。文件路径保留来源。
 
+2026-11-05 用户确认：bcrypt 解码后的密码超过 72 字节时不截断，执行受相同四槽、两秒限制的同成本 dummy bcrypt 后返回 401；Basic 输入上限仍为 4096 字节，Argon2 不增加 72 字节限制。成功结果仅可在同一请求、同一快照及同一鉴权动作重入时复用；不同动作、请求或代次不复用，失败不缓存。
+
 接受：
 ```kdl
 basic-auth realm="private" { user "alice" hash="$2b$12$abcdefghijklmnopqrstuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu"; }

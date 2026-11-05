@@ -579,3 +579,44 @@ fn watch_permission_denied_retries_are_bounded_and_chmod_recovers() -> Result {
     drop(restore);
     result
 }
+
+#[test]
+fn authentication_token_watch_publishes_new_value() -> Result {
+    use std::os::unix::fs::PermissionsExt;
+    let mut f = Fixture::new()?;
+    let token = f.dir.join("token");
+    fs::write(&token, "dummy-old")?;
+    fs::set_permissions(&token, fs::Permissions::from_mode(0o600))?;
+    fs::write(
+        &f.entry,
+        format!(
+            "{}\nsite \"example.test\" {{ chain {{ rule {{ static-token header=\"X-Token\" file=\"{}\"; respond 200; }}; }}; }}",
+            server(&f),
+            token.display()
+        ),
+    )?;
+    f.start()?;
+    let request = |credential: &str| -> Result<u16> {
+        let mut stream = f.connect()?;
+        write!(
+            stream,
+            "GET / HTTP/1.1\r\nHost: example.test\r\nX-Token: {credential}\r\nConnection: close\r\n\r\n"
+        )?;
+        let mut bytes = Vec::new();
+        while !bytes.ends_with(b"\r\n\r\n") {
+            let mut byte = [0];
+            stream.read_exact(&mut byte)?;
+            bytes.push(byte[0]);
+        }
+        Ok(std::str::from_utf8(&bytes)?
+            .split_whitespace()
+            .nth(1)
+            .ok_or("missing status")?
+            .parse()?)
+    };
+    assert_eq!(request("dummy-old")?, 200);
+    fs::write(&token, "dummy-new")?;
+    until(|| Ok(request("dummy-new")? == 200))?;
+    assert_eq!(request("dummy-old")?, 401);
+    Ok(())
+}

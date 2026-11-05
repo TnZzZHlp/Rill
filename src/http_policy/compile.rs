@@ -15,6 +15,8 @@ pub struct PreparedPolicy {
     pub indices: BTreeMap<(PathBuf, usize), usize>,
     pub roots: BTreeMap<(PathBuf, usize), crate::static_files::root::Root>,
     pub filesystem_sites: Vec<bool>,
+    pub auth_headers: Vec<std::sync::Arc<[http::HeaderName]>>,
+    pub tokens: BTreeMap<(PathBuf, usize), crate::auth::model::TokenDigest>,
     bytes: usize,
 }
 #[derive(Debug)]
@@ -28,6 +30,8 @@ impl Drop for PreparedPolicy {
         drop(std::mem::take(&mut self.indices));
         drop(std::mem::take(&mut self.roots));
         drop(std::mem::take(&mut self.filesystem_sites));
+        drop(std::mem::take(&mut self.auth_headers));
+        drop(std::mem::take(&mut self.tokens));
         POLICY_BYTES.fetch_sub(self.bytes, Ordering::AcqRel);
     }
 }
@@ -217,6 +221,45 @@ fn visit_matcher(p: &mut PreparedPolicy, m: &Matcher) -> Result<()> {
 }
 fn visit_action(p: &mut PreparedPolicy, a: &Action, origin: &Origin) -> Result<()> {
     match a {
+        Action::BasicAuth(basic) => {
+            let bytes = basic
+                .realm
+                .capacity()
+                .saturating_add(basic.challenge.capacity())
+                .saturating_add(
+                    basic
+                        .users
+                        .capacity()
+                        .saturating_mul(std::mem::size_of::<crate::auth::model::User>()),
+                )
+                .saturating_add(
+                    basic
+                        .users
+                        .iter()
+                        .map(|u| {
+                            u.name
+                                .capacity()
+                                .saturating_add(u.hash.0.capacity())
+                                .saturating_add(origin_bytes(&u.origin))
+                        })
+                        .sum::<usize>(),
+                )
+                .saturating_add(origin_bytes(&basic.origin));
+            p.reserve(bytes, &basic.origin)?;
+        }
+        Action::StaticToken(token) => {
+            p.reserve(
+                token
+                    .file
+                    .value
+                    .as_os_str()
+                    .len()
+                    .saturating_add(token.header.as_str().len())
+                    .saturating_add(origin_bytes(&token.origin))
+                    .saturating_add(origin_bytes(&token.file.origin)),
+                &token.origin,
+            )?;
+        }
         Action::Header(header) => p.reserve(
             header
                 .allocated_bytes()
@@ -329,20 +372,109 @@ fn has_filesystem(actions: &[Action]) -> bool {
         _ => false,
     })
 }
-pub fn compile(config: &ValidatedConfig) -> Result<PreparedPolicy> {
+fn actions<'a>(items: &'a [Action], output: &mut Vec<&'a Action>) {
+    for action in items {
+        output.push(action);
+        if let Action::Branch(branches) = action {
+            for branch in branches {
+                actions(&branch.actions, output);
+            }
+        }
+    }
+}
+fn prepare_auth(
+    p: &mut PreparedPolicy,
+    site: usize,
+    chain: &super::model::Chain,
+    mut dependencies: Option<&mut crate::config::dependencies::DependencyPlan>,
+) -> Result<()> {
+    let mut all = Vec::new();
+    for rule in chain.rules.iter().chain(chain.errors.iter().flatten()) {
+        actions(&rule.actions, &mut all);
+    }
+    let mut names = Vec::new();
+    for action in &all {
+        if let Action::StaticToken(token) = action
+            && !names.contains(&token.header)
+        {
+            names.push(token.header.clone());
+        }
+    }
+    for action in &all {
+        if let Action::Header(policy) = action {
+            for op in &policy.operations {
+                let name = match op {
+                    super::headers::Operation::Set(n, _)
+                    | super::headers::Operation::Add(n, _)
+                    | super::headers::Operation::Delete(n)
+                    | super::headers::Operation::Replace(n, _, _) => Some(n),
+                    super::headers::Operation::Vary(_) => None,
+                };
+                if name.is_some_and(|n| names.contains(n))
+                    || (matches!(op, super::headers::Operation::Vary(_))
+                        && names.contains(&http::header::VARY))
+                {
+                    return Err(ConfigError::new(
+                        "POLICY_PROTECTED_HEADER",
+                        "header",
+                        "authentication header is protected",
+                        &chain.origin,
+                    ));
+                }
+            }
+        }
+    }
+    p.reserve(
+        names
+            .capacity()
+            .saturating_mul(std::mem::size_of::<http::HeaderName>())
+            .saturating_add(names.iter().map(|n| n.as_str().len()).sum::<usize>())
+            .saturating_add(2 * std::mem::size_of::<usize>()),
+        &chain.origin,
+    )?;
+    p.auth_headers[site] = names.into();
+    for action in all {
+        if let Action::StaticToken(token) = action {
+            p.reserve(
+                4097 + token.origin.source.path.as_os_str().len() + 128,
+                &token.origin,
+            )?;
+            let secret = crate::auth::token::read(&token.file, dependencies.as_deref_mut())?;
+            p.tokens.insert(
+                (token.origin.source.path.clone(), token.origin.offset),
+                secret,
+            );
+        }
+    }
+    Ok(())
+}
+pub fn compile(
+    config: &ValidatedConfig,
+    mut dependencies: Option<&mut crate::config::dependencies::DependencyPlan>,
+) -> Result<PreparedPolicy> {
     let mut p = PreparedPolicy {
         regexes: Vec::new(),
         indices: BTreeMap::new(),
         roots: BTreeMap::new(),
         filesystem_sites: vec![false; config.sites.len()],
+        auth_headers: vec![std::sync::Arc::from([]); config.sites.len()],
+        tokens: BTreeMap::new(),
         bytes: 0,
     };
     if let Some(site) = config.sites.first() {
-        p.reserve(p.filesystem_sites.capacity(), &site.origin)?;
+        p.reserve(
+            p.filesystem_sites.capacity().saturating_add(
+                p.auth_headers
+                    .capacity()
+                    .saturating_mul(std::mem::size_of::<std::sync::Arc<[http::HeaderName]>>()),
+            ),
+            &site.origin,
+        )?;
     }
     let mut sites = 0;
     for (site_index, site) in config.sites.iter().enumerate() {
         if let Some(chain) = &site.chain {
+            prepare_auth(&mut p, site_index, chain, dependencies.as_deref_mut())?;
             p.filesystem_sites[site_index] = chain
                 .rules
                 .iter()
@@ -454,6 +586,8 @@ mod tests {
             indices: BTreeMap::new(),
             roots: BTreeMap::new(),
             filesystem_sites: Vec::new(),
+            auth_headers: Vec::new(),
+            tokens: BTreeMap::new(),
             bytes: 0,
         };
         policy.reserve(8 * MIB - 256 * 1024, &origin)?;

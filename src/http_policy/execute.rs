@@ -34,6 +34,10 @@ pub enum Outcome {
     NotFound,
     NoMatch,
     BudgetExceeded,
+    Authorize(Box<Cursor>),
+    AuthenticationFailed {
+        challenge: Option<String>,
+    },
     PathFailure {
         class: PathErrorClass,
         code: &'static str,
@@ -133,7 +137,20 @@ fn matches(
     })
 }
 
+#[derive(Clone, Debug)]
+pub struct Cursor {
+    pub rule: usize,
+    pub branches: Vec<(usize, usize)>,
+    pub next: usize,
+    pub captures: [Option<(usize, usize)>; 9],
+    pub error_status: Option<u16>,
+}
+
 pub(super) enum ActionFlow {
+    Authorize {
+        branches: Vec<(usize, usize)>,
+        next: usize,
+    },
     Continue,
     Reenter,
     Terminal(Outcome),
@@ -146,6 +163,7 @@ fn action(
 ) -> Result<Option<ActionFlow>, ()> {
     step(ctx)?;
     match a {
+        Action::BasicAuth(_) | Action::StaticToken(_) => unreachable!(),
         Action::Header(header) => {
             ctx.state
                 .as_deref_mut()
@@ -181,81 +199,154 @@ fn action(
             text: text.clone(),
             content_type: content_type.clone(),
         }))),
-        Action::Branch(branches) => {
-            for branch in branches {
-                step(ctx)?;
-                let result = branch.matcher.as_ref().map_or(
-                    Ok(MatchResult {
-                        matched: true,
-                        captures: None,
-                    }),
-                    |m| matches(m, ctx, policy),
-                )?;
-                if result.matched {
-                    if let Some(captures) = result.captures {
-                        ctx.captures = captures;
-                        if let Some(state) = ctx.state.as_deref_mut() {
-                            state
-                                .set_captures(std::array::from_fn(|i| {
-                                    ctx.captures[i].and_then(|(a, b)| ctx.path.get(a..b))
-                                }))
-                                .map_err(|_| ())?;
-                        }
-                    }
-                    return sequence(&branch.actions, ctx, policy).map(Some);
-                }
-            }
-            Ok(Some(ActionFlow::Terminal(Outcome::NotFound)))
-        }
+        Action::Branch(_) => unreachable!(),
     }
 }
 fn sequence(
     actions: &[Action],
     ctx: &mut MatchContext<'_>,
     policy: &PreparedPolicy,
+    path: &[(usize, usize)],
+    next: usize,
 ) -> Result<ActionFlow, ()> {
-    for a in actions {
-        if let Some(flow) = action(a, ctx, policy)? {
-            return Ok(flow);
+    if let Some((&(action_index, branch_index), rest)) = path.split_first() {
+        let Action::Branch(branches) = actions.get(action_index).ok_or(())? else {
+            return Err(());
+        };
+        let mut flow = sequence(
+            &branches.get(branch_index).ok_or(())?.actions,
+            ctx,
+            policy,
+            rest,
+            next,
+        )?;
+        if let ActionFlow::Authorize { branches, .. } = &mut flow {
+            branches.insert(0, (action_index, branch_index));
+        }
+        return Ok(flow);
+    }
+    for (index, a) in actions.iter().enumerate().skip(next) {
+        match a {
+            Action::BasicAuth(_) | Action::StaticToken(_) => {
+                step(ctx)?;
+                return Ok(ActionFlow::Authorize {
+                    branches: Vec::new(),
+                    next: index + 1,
+                });
+            }
+            Action::Branch(branches) => {
+                step(ctx)?;
+                for (branch_index, branch) in branches.iter().enumerate() {
+                    step(ctx)?;
+                    let result = branch.matcher.as_ref().map_or(
+                        Ok(MatchResult {
+                            matched: true,
+                            captures: None,
+                        }),
+                        |m| matches(m, ctx, policy),
+                    )?;
+                    if result.matched {
+                        if let Some(captures) = result.captures {
+                            ctx.captures = captures;
+                            if let Some(state) = ctx.state.as_deref_mut() {
+                                state
+                                    .set_captures(std::array::from_fn(|i| {
+                                        ctx.captures[i].and_then(|(a, b)| ctx.path.get(a..b))
+                                    }))
+                                    .map_err(|_| ())?;
+                            }
+                        }
+                        let mut flow = sequence(&branch.actions, ctx, policy, &[], 0)?;
+                        if let ActionFlow::Authorize { branches, .. } = &mut flow {
+                            branches.insert(0, (index, branch_index));
+                        }
+                        return Ok(flow);
+                    }
+                }
+                return Ok(ActionFlow::Terminal(Outcome::NotFound));
+            }
+            _ => {
+                if let Some(flow) = action(a, ctx, policy)? {
+                    return Ok(flow);
+                }
+            }
         }
     }
     Err(())
 }
+
+pub fn suspended_action<'a>(chain: &'a Chain, cursor: &Cursor) -> Option<&'a Action> {
+    let rules = if cursor.error_status.is_some() {
+        chain.errors.as_ref()?
+    } else {
+        &chain.rules
+    };
+    let mut actions = rules.get(cursor.rule)?.actions.as_slice();
+    for &(action, branch) in &cursor.branches {
+        let Action::Branch(branches) = actions.get(action)? else {
+            return None;
+        };
+        actions = &branches.get(branch)?.actions;
+    }
+    actions.get(cursor.next.checked_sub(1)?)
+}
+
 fn execute_rules(
     rules: &[super::model::Rule],
     policy: &PreparedPolicy,
     ctx: &mut MatchContext<'_>,
+    mut cursor: Option<Cursor>,
 ) -> Outcome {
+    let mut rule_index = cursor.as_ref().map_or(0, |c| c.rule);
     'chain: loop {
-        for rule in rules {
-            if step(ctx).is_err() {
-                return Outcome::BudgetExceeded;
-            }
-            match rule.matcher.as_ref().map_or(
-                Ok(MatchResult {
-                    matched: true,
-                    captures: None,
-                }),
-                |m| matches(m, ctx, policy),
-            ) {
-                Ok(MatchResult { matched: false, .. }) => continue,
-                Err(()) => return Outcome::BudgetExceeded,
-                Ok(result) => {
-                    ctx.captures = result.captures.unwrap_or([None; 9]);
-                    if let Some(state) = ctx.state.as_deref_mut()
-                        && state
-                            .set_captures(std::array::from_fn(|i| {
-                                ctx.captures[i].and_then(|(a, b)| ctx.path.get(a..b))
-                            }))
-                            .is_err()
-                    {
-                        return Outcome::BudgetExceeded;
+        while let Some(rule) = rules.get(rule_index) {
+            let resumed = cursor.take();
+            if let Some(c) = &resumed {
+                ctx.captures = c.captures;
+            } else {
+                if step(ctx).is_err() {
+                    return Outcome::BudgetExceeded;
+                }
+                match rule.matcher.as_ref().map_or(
+                    Ok(MatchResult {
+                        matched: true,
+                        captures: None,
+                    }),
+                    |m| matches(m, ctx, policy),
+                ) {
+                    Ok(MatchResult { matched: false, .. }) => {
+                        rule_index += 1;
+                        continue;
+                    }
+                    Err(()) => return Outcome::BudgetExceeded,
+                    Ok(result) => {
+                        ctx.captures = result.captures.unwrap_or([None; 9]);
+                        if let Some(state) = ctx.state.as_deref_mut()
+                            && state
+                                .set_captures(std::array::from_fn(|i| {
+                                    ctx.captures[i].and_then(|(a, b)| ctx.path.get(a..b))
+                                }))
+                                .is_err()
+                        {
+                            return Outcome::BudgetExceeded;
+                        }
                     }
                 }
             }
-            match sequence(&rule.actions, ctx, policy) {
+            let path = resumed.as_ref().map_or(&[][..], |c| c.branches.as_slice());
+            let next = resumed.as_ref().map_or(0, |c| c.next);
+            match sequence(&rule.actions, ctx, policy, path, next) {
+                Ok(ActionFlow::Authorize { branches, next }) => {
+                    return Outcome::Authorize(Box::new(Cursor {
+                        rule: rule_index,
+                        branches,
+                        next,
+                        captures: ctx.captures,
+                        error_status: ctx.error_status,
+                    }));
+                }
                 Ok(ActionFlow::Terminal(outcome)) => return outcome,
-                Ok(ActionFlow::Continue) => (),
+                Ok(ActionFlow::Continue) => rule_index += 1,
                 Ok(ActionFlow::Reenter) => {
                     if step(ctx).is_err() || ctx.reentries >= 4 {
                         return Outcome::BudgetExceeded;
@@ -263,14 +354,11 @@ fn execute_rules(
                     ctx.reentries += 1;
                     ctx.captures = [None; 9];
                     if let Some(state) = ctx.state.as_deref_mut()
-                        && state
-                            .set_captures(std::array::from_fn(|i| {
-                                ctx.captures[i].and_then(|(a, b)| ctx.path.get(a..b))
-                            }))
-                            .is_err()
+                        && state.set_captures([None; 9]).is_err()
                     {
                         return Outcome::BudgetExceeded;
                     }
+                    rule_index = 0;
                     continue 'chain;
                 }
                 Err(()) => return Outcome::BudgetExceeded,
@@ -280,25 +368,36 @@ fn execute_rules(
     }
 }
 
-pub fn execute(chain: &Chain, policy: &PreparedPolicy, ctx: &mut MatchContext<'_>) -> Outcome {
-    match execute_rules(&chain.rules, policy, ctx) {
+pub fn execute_resume(
+    chain: &Chain,
+    policy: &PreparedPolicy,
+    ctx: &mut MatchContext<'_>,
+    cursor: Option<Cursor>,
+) -> Outcome {
+    match execute_rules(&chain.rules, policy, ctx, cursor) {
         Outcome::NoMatch => Outcome::NotFound,
         outcome => outcome,
     }
+}
+pub fn execute(chain: &Chain, policy: &PreparedPolicy, ctx: &mut MatchContext<'_>) -> Outcome {
+    execute_resume(chain, policy, ctx, None)
 }
 pub fn execute_errors(
     chain: &Chain,
     policy: &PreparedPolicy,
     ctx: &mut MatchContext<'_>,
     status: u16,
+    cursor: Option<Cursor>,
 ) -> Option<Outcome> {
     let rules = chain.errors.as_ref()?;
     ctx.error_status = Some(status);
-    ctx.captures = [None; 9];
-    if let Some(state) = ctx.state.as_deref_mut()
-        && state.set_captures([None; 9]).is_err()
-    {
-        return Some(Outcome::BudgetExceeded);
+    if cursor.is_none() {
+        ctx.captures = [None; 9];
+        if let Some(state) = ctx.state.as_deref_mut()
+            && state.set_captures([None; 9]).is_err()
+        {
+            return Some(Outcome::BudgetExceeded);
+        }
     }
-    Some(execute_rules(rules, policy, ctx))
+    Some(execute_rules(rules, policy, ctx, cursor))
 }

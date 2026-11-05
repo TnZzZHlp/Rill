@@ -40,6 +40,7 @@ pub fn protected(name: &HeaderName, extra: &[HeaderName]) -> bool {
             | "trailer"
             | "proxy-connection"
             | "proxy-authenticate"
+            | "www-authenticate"
             | "host"
             | "forwarded"
             | "authorization"

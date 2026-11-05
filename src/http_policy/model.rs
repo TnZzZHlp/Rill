@@ -34,6 +34,8 @@ pub enum MatcherKind {
 #[derive(Clone, Debug)]
 pub enum Action {
     Header(std::sync::Arc<super::headers::HeaderPolicy>),
+    BasicAuth(crate::auth::model::Basic),
+    StaticToken(crate::auth::model::Token),
     Rewrite(super::path::PathTemplate),
     StripPrefix(String),
     TryFiles {

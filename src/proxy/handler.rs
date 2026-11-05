@@ -90,6 +90,23 @@ async fn reject(session: &mut Session, ctx: &mut Context, status: u16) -> Result
     Ok(true)
 }
 
+async fn authentication_failed(
+    session: &mut Session,
+    ctx: &mut Context,
+    challenge: Option<String>,
+) -> Result<bool> {
+    let mut response = ResponseHeader::build(401, None)?;
+    response.insert_header("content-length", "0")?;
+    if let Some(challenge) = challenge {
+        response.insert_header("www-authenticate", challenge)?;
+    }
+    ctx.begin_response()?;
+    session
+        .write_response_header(Box::new(response), true)
+        .await?;
+    Ok(true)
+}
+
 fn preserve_error_headers(ctx: &Context, response: &mut ResponseHeader) -> Result<()> {
     if ctx.error_status == Some(response.status.as_u16())
         && let Some(headers) = &ctx.error_headers
@@ -335,12 +352,13 @@ impl ProxyHttp for Handler {
             let method = request.method.clone();
             let policy_path = request.uri.path().to_owned();
             let headers = request.headers.clone();
-            let state = crate::http_policy::state::RequestPolicyState::new(
+            let mut state = crate::http_policy::state::RequestPolicyState::new(
                 forwarded.client_ip,
                 snapshot.configuration.sites[site].domains[0].value.clone(),
                 policy_path.clone(),
                 names.clone(),
             );
+            state.set_auth_headers(snapshot.policy.auth_headers[site].clone());
             let initial_policy_path = policy_path;
             let (deadline, timeout_status) = ctx.budget.as_ref().map_or(
                 (Instant::now() + Duration::from_secs(60), 408),
@@ -383,6 +401,12 @@ impl ProxyHttp for Handler {
             ctx.forwarding = Some(forwarded);
             ctx.policy = Some(state);
             match outcome {
+                crate::http_policy::execute::Outcome::AuthenticationFailed { challenge } => {
+                    return authentication_failed(session, ctx, challenge).await;
+                }
+                crate::http_policy::execute::Outcome::Authorize(_) => {
+                    return reject(session, ctx, 503).await;
+                }
                 crate::http_policy::execute::Outcome::Route(route) => Some((site, route)),
                 crate::http_policy::execute::Outcome::PathFailure { code, status, .. } => {
                     ctx.snapshot
@@ -542,6 +566,12 @@ impl ProxyHttp for Handler {
                     ctx.error_status = Some(status);
                     ctx.error_headers = Some(response.header.headers.clone());
                     match outcome {
+                        crate::http_policy::execute::Outcome::AuthenticationFailed {
+                            challenge,
+                        } => return authentication_failed(session, ctx, challenge).await,
+                        crate::http_policy::execute::Outcome::Authorize(_) => {
+                            return reject(session, ctx, 503).await;
+                        }
                         crate::http_policy::execute::Outcome::Route(next) => {
                             route = next;
                             continue;

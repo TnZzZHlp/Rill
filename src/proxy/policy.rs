@@ -29,7 +29,7 @@ pub enum Failure {
     Timeout,
     Unavailable,
 }
-fn run(mut input: Input) -> Execution {
+fn run(mut input: Input, cursor: Option<execute::Cursor>) -> Execution {
     let Some(chain) = input.snapshot.configuration.sites[input.site]
         .chain
         .as_ref()
@@ -55,15 +55,15 @@ fn run(mut input: Input) -> Execution {
         captures: [None; 9],
     };
     let mut outcome = if let Some(status) = error_status {
-        if entered {
+        if entered && cursor.is_none() {
             Outcome::BudgetExceeded
         } else {
             entered = true;
-            execute::execute_errors(chain, &input.snapshot.policy, &mut ctx, status)
+            execute::execute_errors(chain, &input.snapshot.policy, &mut ctx, status, cursor)
                 .unwrap_or(Outcome::NoMatch)
         }
     } else {
-        execute::execute(chain, &input.snapshot.policy, &mut ctx)
+        execute::execute_resume(chain, &input.snapshot.policy, &mut ctx, cursor)
     };
     if error_status.is_none() && !entered {
         let eligible = match &outcome {
@@ -79,8 +79,9 @@ fn run(mut input: Input) -> Execution {
             && chain.errors.is_some()
         {
             entered = true;
-            let handled = execute::execute_errors(chain, &input.snapshot.policy, &mut ctx, status)
-                .unwrap_or(Outcome::NoMatch);
+            let handled =
+                execute::execute_errors(chain, &input.snapshot.policy, &mut ctx, status, None)
+                    .unwrap_or(Outcome::NoMatch);
             if !matches!(handled, Outcome::NoMatch) {
                 outcome = handled;
             }
@@ -100,36 +101,148 @@ fn run(mut input: Input) -> Execution {
         error_status,
     }
 }
-pub async fn execute(input: Input, deadline: Instant) -> Result<Execution, Failure> {
-    if !input
-        .snapshot
-        .policy
-        .filesystem_sites
-        .get(input.site)
-        .copied()
-        .unwrap_or(false)
-    {
-        return Ok(run(input));
-    }
-    let permit = tokio::time::timeout_at(
-        deadline,
-        crate::config::prepare::static_capacity().acquire_owned(),
-    )
-    .await
-    .map_err(|_| Failure::Timeout)?
-    .map_err(|_| Failure::Unavailable)?;
-    let task = tokio::task::spawn_blocking(move || {
-        let _permit = permit;
-        run(input)
-    });
-    let result = tokio::time::timeout_at(deadline, task)
+pub async fn execute(mut input: Input, deadline: Instant) -> Result<Execution, Failure> {
+    let mut cursor = None;
+    loop {
+        let snapshot = input.snapshot.clone();
+        let site = input.site;
+        let method = input.method.clone();
+        let client_ip = input.client_ip;
+        let filesystem = snapshot
+            .policy
+            .filesystem_sites
+            .get(site)
+            .copied()
+            .unwrap_or(false);
+        let result = if filesystem {
+            let permit = tokio::time::timeout_at(
+                deadline,
+                crate::config::prepare::static_capacity().acquire_owned(),
+            )
+            .await
+            .map_err(|_| Failure::Timeout)?
+            .map_err(|_| Failure::Unavailable)?;
+            let task = tokio::task::spawn_blocking(move || {
+                let _permit = permit;
+                run(input, cursor)
+            });
+            tokio::time::timeout_at(deadline, task)
+                .await
+                .map_err(|_| Failure::Timeout)?
+                .map_err(|_| Failure::Unavailable)?
+        } else {
+            run(input, cursor)
+        };
+        if Instant::now() >= deadline {
+            return Err(Failure::Timeout);
+        }
+        let Execution {
+            outcome,
+            mut headers,
+            mut state,
+            error_status,
+        } = result;
+        let Outcome::Authorize(next) = outcome else {
+            if state.authenticated() {
+                headers.remove(http::header::AUTHORIZATION);
+                headers.remove(http::header::PROXY_AUTHORIZATION);
+                for name in snapshot.policy.auth_headers[site].iter() {
+                    headers.remove(name);
+                }
+            }
+            return Ok(Execution {
+                outcome,
+                headers,
+                state,
+                error_status,
+            });
+        };
+        let Some(auth_action) = snapshot.configuration.sites[site]
+            .chain
+            .as_ref()
+            .and_then(|chain| execute::suspended_action(chain, &next))
+        else {
+            return Err(Failure::Unavailable);
+        };
+        // The immutable snapshot owns the action for the entire request.
+        let action_id = std::ptr::from_ref(auth_action) as usize;
+        if state.authenticated_action(action_id) {
+            cursor = Some(*next);
+            input = Input {
+                snapshot,
+                site,
+                method,
+                headers,
+                state,
+                client_ip,
+                error_status,
+            };
+            continue;
+        }
+        let verified = tokio::time::timeout_at(
+            deadline,
+            crate::auth::verify::authorize(snapshot.clone(), site, &next, &headers),
+        )
         .await
-        .map_err(|_| Failure::Timeout)?
-        .map_err(|_| Failure::Unavailable)?;
-    if Instant::now() >= deadline {
-        return Err(Failure::Timeout);
+        .map_err(|_| Failure::Timeout)?;
+        match verified {
+            crate::auth::verify::Result::Success => {
+                headers.remove(http::header::AUTHORIZATION);
+                headers.remove(http::header::PROXY_AUTHORIZATION);
+                if let Some(crate::http_policy::model::Action::StaticToken(token)) =
+                    snapshot.configuration.sites[site]
+                        .chain
+                        .as_ref()
+                        .and_then(|chain| execute::suspended_action(chain, &next))
+                {
+                    headers.remove(&token.header);
+                }
+                state.mark_authenticated(action_id);
+            }
+            crate::auth::verify::Result::Invalid(challenge) => {
+                return Ok(Execution {
+                    outcome: Outcome::AuthenticationFailed { challenge },
+                    headers,
+                    state,
+                    error_status,
+                });
+            }
+            crate::auth::verify::Result::Capacity => {
+                return Ok(Execution {
+                    outcome: Outcome::PathFailure {
+                        class: PathErrorClass::Capacity,
+                        code: "AUTH_CAPACITY",
+                        status: 503,
+                    },
+                    headers,
+                    state,
+                    error_status,
+                });
+            }
+            crate::auth::verify::Result::Timeout => {
+                return Ok(Execution {
+                    outcome: Outcome::PathFailure {
+                        class: PathErrorClass::Capacity,
+                        code: "AUTH_TIMEOUT",
+                        status: 503,
+                    },
+                    headers,
+                    state,
+                    error_status,
+                });
+            }
+        }
+        cursor = Some(*next);
+        input = Input {
+            snapshot,
+            site,
+            method,
+            headers,
+            state,
+            client_ip,
+            error_status,
+        };
     }
-    Ok(result)
 }
 
 pub fn update_request(

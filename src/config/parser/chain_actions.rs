@@ -68,7 +68,9 @@ pub(super) fn sequence<'a>(
         }
         let act = action(node, &at(node, origin), depth, count, error_chain)?;
         terminated = match &act {
-            Action::Header(_)
+            Action::BasicAuth(_)
+            | Action::StaticToken(_)
+            | Action::Header(_)
             | Action::Rewrite(_)
             | Action::StripPrefix(_)
             | Action::TryFiles { .. } => false,
@@ -290,7 +292,8 @@ fn action(
             super::chain_headers::parse(node, origin)?,
         ))),
         "rewrite" | "strip-prefix" | "try-files" => super::chain_paths::parse(node, origin),
-        "basic-auth" | "static-token" | "webdav" | "dynamic-proxy" | "body-replace" | "encode" => {
+        "basic-auth" | "static-token" => super::chain_auth::parse(node, origin),
+        "webdav" | "dynamic-proxy" | "body-replace" | "encode" => {
             Err(invalid("CONFIG_UNSUPPORTED", "action", origin))
         }
         _ => Err(unknown(node, origin)),

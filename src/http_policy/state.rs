@@ -28,6 +28,9 @@ pub struct RequestPolicyState {
     path: String,
     upstream_authority: Option<String>,
     connection_names: Vec<String>,
+    auth_headers: Arc<[http::HeaderName]>,
+    authenticated: bool,
+    authenticated_actions: Vec<usize>,
     captures: Option<Arc<CaptureGroup>>,
     filters: Vec<ResponseFilter>,
     pub steps_left: u16,
@@ -47,12 +50,30 @@ impl RequestPolicyState {
             path,
             upstream_authority: None,
             connection_names,
+            auth_headers: Arc::from([]),
+            authenticated: false,
+            authenticated_actions: Vec::new(),
             captures: None,
             filters: Vec::new(),
             steps_left: 1024,
             reentries: 0,
             error_entered: false,
         }
+    }
+    pub fn mark_authenticated(&mut self, action: usize) {
+        self.authenticated = true;
+        if !self.authenticated_actions.contains(&action) {
+            self.authenticated_actions.push(action);
+        }
+    }
+    pub fn authenticated_action(&self, action: usize) -> bool {
+        self.authenticated_actions.contains(&action)
+    }
+    pub fn authenticated(&self) -> bool {
+        self.authenticated
+    }
+    pub fn set_auth_headers(&mut self, headers: Arc<[http::HeaderName]>) {
+        self.auth_headers = headers;
     }
     pub fn path(&self) -> &str {
         &self.path
@@ -128,7 +149,7 @@ impl RequestPolicyState {
                     headers,
                     &self.context(self.captures.as_ref()),
                     &self.connection_names,
-                    &[],
+                    &self.auth_headers,
                 )
                 .map_err(|_| PolicyError),
             Side::Response => {
@@ -180,7 +201,7 @@ impl RequestPolicyState {
                         &mut headers,
                         &self.context(filter.captures.as_ref()),
                         connection_names,
-                        &[],
+                        &self.auth_headers,
                     )
                     .map_err(|_| PolicyError)?;
             }

@@ -1597,3 +1597,177 @@ fn error_chain_schema_rejects_success_and_invalid_matchers() -> TestResult {
     fs::remove_file(entry)?;
     Ok(())
 }
+
+#[test]
+fn authentication_preparation_rejects_bad_inputs_and_tracks_token() -> TestResult {
+    use rill::config::prepare::build_tracked;
+    use std::os::unix::fs::PermissionsExt;
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let dir = std::env::temp_dir().join(format!("rill-auth-{}-{unique}", std::process::id()));
+    fs::create_dir(&dir)?;
+    let entry = dir.join("config.kdl");
+    let token = dir.join("token");
+    fs::write(&token, "dummy-value\n")?;
+    fs::set_permissions(&token, fs::Permissions::from_mode(0o600))?;
+    let config = |action: &str| {
+        format!(
+            "server {{ http \"127.0.0.1:8080\"; }}\nsite \"example.test\" {{ chain {{ rule {{ {action}; continue; }}; }}; }}\n"
+        )
+    };
+    fs::write(
+        &entry,
+        config("static-token header=\"X-Api-Token\" file=\"token\""),
+    )?;
+    let result = build_tracked(&entry, &ConfigurationOnly).map_err(|e| e.error)?;
+    assert!(result.dependencies.consumed.contains_key(&token));
+    assert_eq!(result.prepared.resources.policy.tokens.len(), 1);
+    assert!(!format!("{:?}", result.prepared.resources).contains("dummy-value"));
+    fs::set_permissions(&token, fs::Permissions::from_mode(0o644))?;
+    assert_eq!(
+        build(&entry, &ConfigurationOnly).unwrap_err().code,
+        "AUTH_INVALID_CREDENTIAL"
+    );
+    fs::set_permissions(&token, fs::Permissions::from_mode(0o600))?;
+    fs::write(&token, "a\nb")?;
+    assert_eq!(
+        build(&entry, &ConfigurationOnly).unwrap_err().code,
+        "AUTH_INVALID_CREDENTIAL"
+    );
+    fs::write(&token, vec![b'x'; 4097])?;
+    assert_eq!(
+        build(&entry, &ConfigurationOnly).unwrap_err().code,
+        "AUTH_INVALID_CREDENTIAL"
+    );
+    let valid_hash = bcrypt::hash("dummy", 10)?;
+    fs::write(
+        &entry,
+        config(&format!(
+            "basic-auth realm=\"private\" {{ user \"alice\" hash=\"{valid_hash}\"; }}"
+        )),
+    )?;
+    build(&entry, &ConfigurationOnly)?;
+    fs::write(
+        &entry,
+        config(&format!(
+            "basic-auth realm=\"private\" {{ user \"alice\" hash=\"{valid_hash}\"; user \"alice\" hash=\"{valid_hash}\"; }}"
+        )),
+    )?;
+    assert_eq!(
+        build(&entry, &ConfigurationOnly).unwrap_err().code,
+        "AUTH_INVALID_CREDENTIAL"
+    );
+    fs::write(
+        &entry,
+        config("static-token header=\"Authorization\" file=\"token\""),
+    )?;
+    assert_eq!(
+        build(&entry, &ConfigurationOnly).unwrap_err().code,
+        "AUTH_PROTECTED_HEADER"
+    );
+    fs::write(
+        &entry,
+        config("static-token header=\"X-Token\" file=\"token\" unexpected=\"secret\""),
+    )?;
+    assert_eq!(
+        build(&entry, &ConfigurationOnly).unwrap_err().code,
+        "CONFIG_UNKNOWN"
+    );
+    let secret = "dummy-plaintext-secret";
+    fs::write(
+        &entry,
+        config(&format!(
+            "basic-auth realm=\"private\" {{ user \"alice\" hash=\"{secret}\"; }}"
+        )),
+    )?;
+    let error = build(&entry, &ConfigurationOnly).unwrap_err();
+    assert_eq!(error.code, "AUTH_INVALID_HASH");
+    assert!(!format!("{error:?} {error}").contains(secret));
+    fs::write(
+        &entry,
+        config(
+            "branch { when { match { method \"GET\"; }; static-token header=\"X-Api-Token\" file=\"token\"; continue; }; otherwise { header \"request\" { set \"X-Api-Token\" \"fake\"; }; continue; }; }",
+        ),
+    )?;
+    // branch itself terminates its containing sequence
+    let text = fs::read_to_string(&entry)?.replace("; }; continue; }; }; }", "; }; }; }; }");
+    fs::write(&entry, text)?;
+    assert_eq!(
+        build(&entry, &ConfigurationOnly).unwrap_err().code,
+        "POLICY_PROTECTED_HEADER"
+    );
+    fs::remove_dir_all(dir)?;
+    Ok(())
+}
+
+#[test]
+fn authentication_hash_formats_and_fifo_fail_closed() -> TestResult {
+    use std::os::unix::fs::PermissionsExt;
+    let bcrypt = bcrypt::hash("dummy", 10)?;
+    assert!(rill::auth::hash::valid(&bcrypt));
+    assert!(!rill::auth::hash::valid(
+        &bcrypt.replace("$2b$10$", "$2b$09$")
+    ));
+    assert!(!rill::auth::hash::valid(&bcrypt.replace("$2b$", "$2a$")));
+    let argon =
+        "$argon2id$v=19$m=8192,t=1,p=1$c29tZXNhbHQ$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+    assert!(rill::auth::hash::valid(argon));
+    assert!(!rill::auth::hash::valid(
+        &argon.replace("m=8192", "m=65537")
+    ));
+    assert!(!rill::auth::hash::valid(&argon.replace("p=1", "p=1,p=1")));
+    assert!(!rill::auth::hash::valid(
+        &argon.replace("argon2id", "argon2i")
+    ));
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let dir = std::env::temp_dir().join(format!("rill-auth-fifo-{}-{unique}", std::process::id()));
+    fs::create_dir(&dir)?;
+    let fifo = dir.join("token");
+    nix::unistd::mkfifo(&fifo, nix::sys::stat::Mode::from_bits_truncate(0o600))?;
+    fs::set_permissions(&fifo, fs::Permissions::from_mode(0o600))?;
+    let entry = dir.join("config.kdl");
+    fs::write(
+        &entry,
+        "server { http \"127.0.0.1:8080\"; }\nsite \"example.test\" { chain { rule { static-token header=\"X-Token\" file=\"token\"; continue; }; }; }\n",
+    )?;
+    assert_eq!(
+        build(&entry, &ConfigurationOnly).unwrap_err().code,
+        "AUTH_INVALID_CREDENTIAL"
+    );
+    fs::remove_dir_all(dir)?;
+    Ok(())
+}
+
+#[test]
+fn authentication_token_resolves_relative_to_import_and_tracks_symlink() -> TestResult {
+    use rill::config::prepare::build_tracked;
+    use std::os::unix::fs::{PermissionsExt, symlink};
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let dir =
+        std::env::temp_dir().join(format!("rill-auth-import-{}-{unique}", std::process::id()));
+    let sub = dir.join("sub");
+    fs::create_dir_all(&sub)?;
+    let entry = dir.join("config.kdl");
+    let imported = sub.join("site.kdl");
+    let target = sub.join("secret");
+    let link = sub.join("token");
+    fs::write(&target, "dummy\n")?;
+    fs::set_permissions(&target, fs::Permissions::from_mode(0o600))?;
+    symlink("secret", &link)?;
+    fs::write(
+        &entry,
+        "server { http \"127.0.0.1:8080\"; }\nimport \"sub/site.kdl\"\n",
+    )?;
+    fs::write(
+        &imported,
+        "site \"example.test\" { chain { rule { static-token header=\"X-Token\" file=\"token\"; continue; }; }; }\n",
+    )?;
+    let tracked = build_tracked(&entry, &ConfigurationOnly).map_err(|e| e.error)?;
+    assert!(tracked.dependencies.paths.contains_key(&link));
+    assert!(tracked.dependencies.paths.contains_key(&target));
+    assert!(tracked.dependencies.consumed.contains_key(&link));
+    fs::remove_file(&link)?;
+    symlink("missing", &link)?;
+    assert!(!tracked.dependencies.unchanged());
+    fs::remove_dir_all(dir)?;
+    Ok(())
+}

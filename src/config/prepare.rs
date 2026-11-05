@@ -79,9 +79,10 @@ impl ConfigurationOnly {
     fn prepare_inner(
         &self,
         configuration: &ValidatedConfig,
-        dependencies: Option<&mut DependencyPlan>,
+        mut dependencies: Option<&mut DependencyPlan>,
     ) -> Result<CheckResources> {
-        let policy = crate::http_policy::compile::compile(configuration)?;
+        let policy =
+            crate::http_policy::compile::compile(configuration, dependencies.as_deref_mut())?;
         let tls = match dependencies {
             Some(plan) => crate::tls::cert::PreparedTls::prepare_tracked(configuration, plan)?,
             None => crate::tls::cert::PreparedTls::prepare(configuration)?,

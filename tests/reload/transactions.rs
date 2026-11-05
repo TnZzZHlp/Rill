@@ -546,3 +546,52 @@ fn failed_try_files_root_reload_preserves_old_snapshot() -> Result {
     assert_eq!(Fixture::request(&mut stream, "/")?.2, b"stable");
     Ok(())
 }
+
+#[test]
+fn authentication_token_reload_and_bad_candidate_preserve_old() -> Result {
+    use std::os::unix::fs::PermissionsExt;
+    let mut f = Fixture::new()?;
+    let token = f.dir.join("token");
+    fs::write(&token, "dummy-old")?;
+    fs::set_permissions(&token, fs::Permissions::from_mode(0o600))?;
+    fs::write(
+        &f.entry,
+        format!(
+            "server {{ http \"{}\"; control-socket \"{}\"; }}\nsite \"example.test\" {{ chain {{ rule {{ static-token header=\"X-Token\" file=\"{}\"; respond 200; }}; }}; }}",
+            f.address,
+            f.socket.display(),
+            token.display()
+        ),
+    )?;
+    f.start()?;
+    let request = |credential: &str| -> Result<u16> {
+        let mut stream = f.connect()?;
+        write!(
+            stream,
+            "GET / HTTP/1.1\r\nHost: example.test\r\nX-Token: {credential}\r\nConnection: close\r\n\r\n"
+        )?;
+        let mut bytes = Vec::new();
+        while !bytes.ends_with(b"\r\n\r\n") {
+            let mut byte = [0];
+            stream.read_exact(&mut byte)?;
+            bytes.push(byte[0]);
+        }
+        Ok(std::str::from_utf8(&bytes)?
+            .split_whitespace()
+            .nth(1)
+            .ok_or("missing status")?
+            .parse()?)
+    };
+    assert_eq!(request("dummy-old")?, 200);
+    fs::write(&token, "dummy-new")?;
+    assert_eq!(request("dummy-old")?, 200);
+    assert_eq!(f.reload()?.generation, Some(2));
+    assert_eq!(request("dummy-new")?, 200);
+    assert_eq!(request("dummy-old")?, 401);
+    fs::set_permissions(&token, fs::Permissions::from_mode(0o644))?;
+    let failure = f.reload()?;
+    assert_eq!(failure.code.as_deref(), Some("AUTH_INVALID_CREDENTIAL"));
+    assert!(!format!("{failure:?}").contains("dummy-new"));
+    assert_eq!(request("dummy-new")?, 200);
+    Ok(())
+}

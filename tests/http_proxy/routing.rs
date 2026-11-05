@@ -771,3 +771,258 @@ site "app.test" {{ chain {{
     assert_eq!(proxy.finish()?.0, 0);
     Ok(())
 }
+
+#[test]
+fn authentication_missing_fails_closed() -> TestResult {
+    let address = vacant()?;
+    let hash = bcrypt::hash("dummy", 10)?;
+    let config = format!(
+        r#"server {{ http "{address}"; }}
+site "app.test" {{ chain {{ rule {{ basic-auth realm="private" {{ user "alice" hash="{hash}"; }}; respond 200; }}; handle-errors {{ rule {{ respond 404; }}; }}; }}; }}"#
+    );
+    let mut proxy = Proxy::start(address, &config)?;
+    assert_eq!(send(address, "app.test", "/")?.0, 401);
+    proxy.signal()?;
+    assert_eq!(proxy.finish()?.0, 0);
+    Ok(())
+}
+
+#[test]
+fn authentication_basic_and_token_enforce_and_clear_credentials() -> TestResult {
+    use base64::Engine;
+    use std::os::unix::fs::PermissionsExt;
+    let directory = Directory::new()?;
+    let token = directory.0.join("token");
+    std::fs::write(&token, "dummy-token\n")?;
+    std::fs::set_permissions(&token, std::fs::Permissions::from_mode(0o600))?;
+    let backend = TcpListener::bind("127.0.0.1:0")?;
+    let upstream = backend.local_addr()?;
+    let worker = thread::spawn(move || -> TestResult {
+        let mut stream = accept(&backend)?;
+        let request = head(&mut stream)?.to_ascii_lowercase();
+        assert!(!request.contains("authorization:"));
+        assert!(!request.contains("x-api-token:"));
+        assert_eq!(request.matches("x-before: once").count(), 1);
+        reply(&mut stream, b"ok", true)?;
+        Ok(())
+    });
+    let hash = bcrypt::hash("dummy-password", 10)?;
+    let address = vacant()?;
+    let config = format!(
+        r#"server {{ http "{address}"; }}
+site "app.test" {{ chain {{ rule {{ header "request" {{ add "X-Before" "once"; }}; branch {{ otherwise {{ basic-auth realm="private" {{ user "alice" hash="{hash}"; }}; static-token header="X-Api-Token" file="{}"; proxy "http://{upstream}"; }}; }}; }}; handle-errors {{ rule {{ respond 404; }}; }}; }}; }}"#,
+        token.display()
+    );
+    let mut proxy = Proxy::start(address, &config)?;
+    for extra in [
+        "",
+        "Authorization: Basic !!!\r\n",
+        "Authorization: Basic YWxpY2U6YmFk\r\n",
+        "Authorization: Basic YWxpY2U6YmFk\r\nAuthorization: Basic YWxpY2U6YmFk\r\n",
+    ] {
+        let mut stream = connect(address)?;
+        write!(
+            stream,
+            "GET / HTTP/1.1\r\nHost: app.test\r\n{extra}Connection: close\r\n\r\n"
+        )?;
+        let (status, headers, _) = response(&mut stream)?;
+        assert_eq!(status, 401);
+        assert!(
+            headers
+                .to_ascii_lowercase()
+                .contains("www-authenticate: basic realm=\"private\"")
+        );
+    }
+    let credentials = base64::engine::general_purpose::STANDARD.encode("alice:dummy-password");
+    let oversized_token = format!("X-Api-Token: {}\r\n", "a".repeat(4097));
+    for token_header in [
+        "",
+        "X-Api-Token: bad\r\n",
+        "X-Api-Token: dummy-tokem\r\n",
+        "X-Api-Token: \r\n",
+        oversized_token.as_str(),
+        "X-Api-Token: dummy-token\r\nX-Api-Token: dummy-token\r\n",
+        "X-Api-Token: dummy-token\r\n",
+    ] {
+        let mut stream = connect(address)?;
+        write!(
+            stream,
+            "GET / HTTP/1.1\r\nHost: app.test\r\nAuthorization: Basic {credentials}\r\nProxy-Authorization: dummy\r\n{token_header}Connection: close\r\n\r\n"
+        )?;
+        let (status, _, _) = response(&mut stream)?;
+        assert_eq!(
+            status,
+            if token_header == "X-Api-Token: dummy-token\r\n" {
+                200
+            } else {
+                401
+            }
+        );
+    }
+    proxy.signal()?;
+    assert_eq!(proxy.finish()?.0, 0);
+    worker.join().map_err(|_| "backend panic")??;
+    Ok(())
+}
+
+#[test]
+fn authentication_argon2_and_unknown_user() -> TestResult {
+    use argon2::{
+        Algorithm, Argon2, Params, Version,
+        password_hash::{PasswordHasher, SaltString},
+    };
+    use base64::Engine;
+    let salt = SaltString::encode_b64(b"dummy-salt")?;
+    let hash = Argon2::new(
+        Algorithm::Argon2id,
+        Version::V0x13,
+        Params::new(8192, 1, 1, Some(32))?,
+    )
+    .hash_password(b"dummy-password", &salt)?
+    .to_string();
+    let long_password = "a".repeat(80);
+    let long_hash = Argon2::new(
+        Algorithm::Argon2id,
+        Version::V0x13,
+        Params::new(8192, 1, 1, Some(32))?,
+    )
+    .hash_password(long_password.as_bytes(), &salt)?
+    .to_string();
+    let address = vacant()?;
+    let config = format!(
+        r#"server {{ http "{address}"; }}
+site "app.test" {{ chain {{ rule {{ basic-auth realm="private" {{ user "alice" hash="{hash}"; user "bob" hash="{long_hash}"; }}; respond 200 text="ok"; }}; }}; }}"#
+    );
+    let mut proxy = Proxy::start(address, &config)?;
+    for (user, password, expected) in [
+        ("alice", "dummy-password", 200),
+        ("alice", "bad", 401),
+        ("unknown", "dummy-password", 401),
+        ("bob", long_password.as_str(), 200),
+    ] {
+        let credential =
+            base64::engine::general_purpose::STANDARD.encode(format!("{user}:{password}"));
+        let mut stream = connect(address)?;
+        write!(
+            stream,
+            "GET / HTTP/1.1\r\nHost: app.test\r\nAuthorization: Basic {credential}\r\nConnection: close\r\n\r\n"
+        )?;
+        assert_eq!(response(&mut stream)?.0, expected);
+    }
+    proxy.signal()?;
+    assert_eq!(proxy.finish()?.0, 0);
+    Ok(())
+}
+
+#[test]
+fn authentication_password_capacity_is_bounded() -> TestResult {
+    let address = vacant()?;
+    let hash = "$2b$14$EGdrhbKUv8Oc9vGiXX0HQOxSg445d458Muh7DAHskb6QbtCvdxcie";
+    let config = format!(
+        r#"server {{ http "{address}"; }}
+site "app.test" {{ chain {{ rule {{ basic-auth realm="private" {{ user "alice" hash="{hash}"; }}; respond 200; }}; }}; }}"#
+    );
+    let mut proxy = Proxy::start(address, &config)?;
+    let mut workers = Vec::new();
+    for _ in 0..4 {
+        workers.push(thread::spawn(move || -> TestResult<u16> {
+            let mut stream = connect(address)?;
+            stream.write_all(b"GET / HTTP/1.1\r\nHost: app.test\r\nAuthorization: Basic YWxpY2U6YmFk\r\nConnection: close\r\n\r\n")?;
+            Ok(response(&mut stream)?.0)
+        }));
+    }
+    thread::sleep(std::time::Duration::from_millis(400));
+    let mut stream = connect(address)?;
+    stream.write_all(b"GET / HTTP/1.1\r\nHost: app.test\r\nAuthorization: Basic YWxpY2U6YmFk\r\nConnection: close\r\n\r\n")?;
+    assert_eq!(response(&mut stream)?.0, 503);
+    for worker in workers {
+        assert_eq!(worker.join().map_err(|_| "worker panic")??, 503);
+    }
+    let mut stream = connect(address)?;
+    stream.write_all(b"GET / HTTP/1.1\r\nHost: app.test\r\nAuthorization: Basic YWxpY2U6YmFk\r\nConnection: close\r\n\r\n")?;
+    assert_eq!(response(&mut stream)?.0, 503);
+    proxy.signal()?;
+    assert_eq!(proxy.finish()?.0, 0);
+    Ok(())
+}
+
+#[test]
+fn authentication_reentry_reuses_only_same_action_and_bcrypt_never_truncates() -> TestResult {
+    use base64::Engine;
+    let password = "a".repeat(72);
+    let hash = bcrypt::hash(&password, 10)?;
+    for same_action in [true, false] {
+        let address = vacant()?;
+        let rules = if same_action {
+            format!(
+                r#"rule {{ basic-auth realm="private" {{ user "alice" hash="{hash}"; }}; branch {{ when {{ match {{ path-glob "/start"; }}; rewrite "/end"; reenter; }}; otherwise {{ respond 200; }}; }}; }};"#
+            )
+        } else {
+            format!(
+                r#"rule {{ match {{ path-glob "/start"; }}; basic-auth realm="private" {{ user "alice" hash="{hash}"; }}; rewrite "/end"; reenter; }}; rule {{ basic-auth realm="private" {{ user "alice" hash="{hash}"; }}; respond 200; }};"#
+            )
+        };
+        let config = format!(
+            "server {{ http \"{address}\"; }}\nsite \"app.test\" {{ chain {{ {rules} }}; }}"
+        );
+        let mut proxy = Proxy::start(address, &config)?;
+        for (password, expected) in [
+            (&password, if same_action { 200 } else { 401 }),
+            (&format!("{password}x"), 401),
+        ] {
+            let encoded =
+                base64::engine::general_purpose::STANDARD.encode(format!("alice:{password}"));
+            let mut stream = connect(address)?;
+            write!(
+                stream,
+                "GET /start HTTP/1.1\r\nHost: app.test\r\nAuthorization: Basic {encoded}\r\nConnection: close\r\n\r\n"
+            )?;
+            assert_eq!(response(&mut stream)?.0, expected);
+        }
+        proxy.signal()?;
+        assert_eq!(proxy.finish()?.0, 0);
+    }
+    Ok(())
+}
+
+#[test]
+fn authentication_disconnected_clients_do_not_release_running_capacity() -> TestResult {
+    use std::time::{Duration, Instant};
+    let address = vacant()?;
+    let hash = "$2b$14$EGdrhbKUv8Oc9vGiXX0HQOxSg445d458Muh7DAHskb6QbtCvdxcie";
+    let config = format!(
+        r#"server {{ http "{address}"; }}
+site "app.test" {{ chain {{ rule {{ basic-auth realm="private" {{ user "alice" hash="{hash}"; }}; respond 200; }}; }}; }}"#
+    );
+    let mut proxy = Proxy::start(address, &config)?;
+    let request = b"GET / HTTP/1.1\r\nHost: app.test\r\nAuthorization: Basic YWxpY2U6YmFk\r\nConnection: close\r\n\r\n";
+    let mut clients = Vec::new();
+    for _ in 0..4 {
+        let mut client = connect(address)?;
+        client.write_all(request)?;
+        clients.push(client);
+    }
+    thread::sleep(Duration::from_millis(100));
+    let mut probe = connect(address)?;
+    let started = Instant::now();
+    probe.write_all(request)?;
+    assert_eq!(response(&mut probe)?.0, 503);
+    assert!(
+        started.elapsed() < Duration::from_secs(1),
+        "capacity probe did not establish saturation before timeout"
+    );
+    drop(clients);
+    let mut probe = connect(address)?;
+    let started = Instant::now();
+    probe.write_all(request)?;
+    assert_eq!(response(&mut probe)?.0, 503);
+    assert!(
+        started.elapsed() < Duration::from_secs(1),
+        "post-disconnect probe did not observe capacity"
+    );
+    proxy.signal()?;
+    let (status, logs) = proxy.finish()?;
+    assert_eq!(status, 0);
+    assert!(logs.matches("AUTH_CAPACITY").count() >= 2);
+    Ok(())
+}

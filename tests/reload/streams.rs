@@ -276,3 +276,48 @@ fn chain_proxy_stream_keeps_old_snapshot_across_reload() -> Result {
     worker.join().map_err(|_| "backend panicked")??;
     Ok(())
 }
+
+#[test]
+fn authentication_old_stream_survives_token_reload() -> Result {
+    use std::os::unix::fs::PermissionsExt;
+    let mut f = Fixture::new()?;
+    let token = f.dir.join("token");
+    fs::write(&token, "dummy-old")?;
+    fs::set_permissions(&token, fs::Permissions::from_mode(0o600))?;
+    let listener = TcpListener::bind("127.0.0.1:0")?;
+    let backend = listener.local_addr()?;
+    fs::write(
+        &f.entry,
+        format!(
+            "server {{ http \"{}\"; control-socket \"{}\"; }}\nsite \"example.test\" {{ chain {{ rule {{ static-token header=\"X-Token\" file=\"{}\"; proxy \"http://{backend}\"; }}; }}; }}",
+            f.address,
+            f.socket.display(),
+            token.display()
+        ),
+    )?;
+    let (tx, rx) = mpsc::channel();
+    let worker = thread::spawn(move || -> Result {
+        let mut stream = accept(&listener)?;
+        assert!(!head(&mut stream)?.to_ascii_lowercase().contains("x-token:"));
+        stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nold\r\n")?;
+        rx.recv_timeout(Duration::from_secs(5))?;
+        stream.write_all(b"4\r\ndone\r\n0\r\n\r\n")?;
+        Ok(())
+    });
+    f.start()?;
+    let mut client = f.connect()?;
+    client.write_all(b"GET / HTTP/1.1\r\nHost: example.test\r\nX-Token: dummy-old\r\n\r\n")?;
+    assert!(head(&mut client)?.starts_with("HTTP/1.1 200 "));
+    assert_eq!(chunk(&mut client)?, b"old");
+    fs::write(&token, "dummy-new")?;
+    assert_eq!(f.reload()?.generation, Some(2));
+    let mut new_client = f.connect()?;
+    new_client.write_all(
+        b"GET / HTTP/1.1\r\nHost: example.test\r\nX-Token: dummy-old\r\nConnection: close\r\n\r\n",
+    )?;
+    assert!(head(&mut new_client)?.starts_with("HTTP/1.1 401 "));
+    tx.send(())?;
+    assert_eq!(chunk(&mut client)?, b"done");
+    worker.join().map_err(|_| "backend panic")??;
+    Ok(())
+}
