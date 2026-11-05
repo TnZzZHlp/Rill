@@ -1,4 +1,7 @@
 mod chain;
+mod chain_actions;
+mod chain_headers;
+mod chain_paths;
 mod observability;
 mod server;
 mod site;

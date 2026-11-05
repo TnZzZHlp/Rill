@@ -292,3 +292,482 @@ rule {{ respond 401 text="denied"; }}
     }
     Ok(())
 }
+
+#[test]
+fn chain_reenter_loop_exhausts_budget() -> TestResult {
+    let address = vacant()?;
+    let config = format!(
+        r#"server {{ http "{address}"; }}
+site "app.test" {{ chain {{
+ rule {{ branch {{ when {{ match {{ path-glob "/loop"; }}; reenter; }}; otherwise {{ respond 200 text="ok"; }}; }}; }}
+}} }}"#
+    );
+    let mut proxy = Proxy::start(address, &config)?;
+    assert_eq!(send(address, "app.test", "/")?.0, 200);
+    assert_eq!(send(address, "app.test", "/loop")?.0, 503);
+    proxy.signal()?;
+    assert_eq!(proxy.finish()?.0, 0);
+    Ok(())
+}
+
+#[test]
+fn chain_header_policy_across_terminal_responses() -> TestResult {
+    let directory = Directory::new()?;
+    std::fs::create_dir(directory.0.join("static"))?;
+    std::fs::write(directory.0.join("static/value.html"), b"file")?;
+    let backend = TcpListener::bind("127.0.0.1:0")?;
+    let upstream = backend.local_addr()?;
+    let worker = thread::spawn(move || -> TestResult {
+        for index in 0..3 {
+            let mut stream = accept(&backend)?;
+            let request = head(&mut stream)?.to_ascii_lowercase();
+            assert!(request.contains("x-test: first\r\n"));
+            assert!(request.contains("x-test: second\r\n"));
+            assert!(request.contains("host: override.test\r\n"));
+            assert!(request.contains(if index == 0 {
+                "x-real-ip: 127.0.0.1"
+            } else {
+                "x-real-ip: 192.0.2.7"
+            }));
+            let connection = if index == 2 {
+                "x-block, close"
+            } else {
+                "close"
+            };
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nContent-Type: text/html; charset=utf-8\r\nLocation: /old\r\nVary: Accept\r\nVary: accept-encoding\r\nConnection: {connection}\r\n\r\nok"
+            )?;
+        }
+        Ok(())
+    });
+    for trusted in [false, true] {
+        let address = vacant()?;
+        let network = if trusted {
+            "trusted-proxy \"127.0.0.0/8\";"
+        } else {
+            ""
+        };
+        let config = format!(
+            r#"server {{ http "{address}"; {network} }}
+site "app.test" {{ chain {{
+ rule {{ match {{ path-glob "/missing-request-upstream"; }}; header "request" {{ set "X-Upstream" "{{upstream-authority}}"; }}; respond 200; }}
+ rule {{ match {{ path-glob "/missing-response-upstream"; }}; header "response" {{ set "X-Upstream" "{{upstream-authority}}"; }}; respond 200; }}
+ rule {{ match {{ path-regex "^/(proxy|static|local)/"; }};
+   header "request" real-client-ip="X-Real-IP" {{ set "X-Test" "first"; add "X-Test" "second"; }};
+   header "response" {{ set "X-Frozen" "{{capture.1}}"; set "Strict-Transport-Security" "max-age=60"; }};
+   header "response" {{ set "Content-Type" "application/json"; }};
+   header "response" when-content-type="application/json" {{ set "X-Wrong-Mime" "bad"; }};
+   header "response" when-content-type="text/html" when-status="202..299" {{ set "X-Wrong-Status" "bad"; }};
+   header "response" when-content-type="text/html" when-status="200..201" {{ set "Access-Control-Allow-Origin" "*"; replace "Location" "old" "new"; vary "Accept-Encoding"; }};
+   continue;
+ }}
+ rule {{ match {{ path-regex "^/[^/]+/(.*)"; }}; continue; }}
+ rule {{ match {{ path-glob "/proxy/deny"; }}; header "response" {{ set "X-Block" "bad"; }}; continue; }}
+ rule {{ match {{ path-glob "/proxy/*"; }}; header "response" {{ set "X-Upstream" "{{upstream-authority}}"; }}; continue; }}
+ rule {{ match {{ all {{ path-glob "/proxy/*"; header-equal "x-test" "second"; }}; }}; proxy "http://{upstream}" host="override.test"; }}
+ rule {{ match {{ path-glob "/static/*"; }}; serve-files root="{}"; }}
+ rule {{ respond 201 text="local" content-type="text/html; charset=utf-8"; }}
+}} }}"#,
+            directory.0.display()
+        );
+        let mut proxy = Proxy::start(address, &config)?;
+        let mut stream = connect(address)?;
+        stream.write_all(b"GET /proxy/value HTTP/1.1\r\nHost: app.test\r\nX-Forwarded-For: 192.0.2.7\r\nX-Real-IP: 203.0.113.3\r\nConnection: close\r\n\r\n")?;
+        let (status, headers, _) = response(&mut stream)?;
+        let headers = headers.to_ascii_lowercase();
+        assert_eq!(status, 200);
+        assert!(headers.contains(&format!("x-upstream: {upstream}")));
+        assert!(!headers.contains("x-wrong-mime"));
+        assert!(!headers.contains("x-wrong-status"));
+        for expected in [
+            "x-frozen: proxy",
+            "strict-transport-security: max-age=60",
+            "access-control-allow-origin: *",
+            "location: /new",
+            "vary: accept, accept-encoding",
+        ] {
+            assert!(headers.contains(expected), "{headers}");
+        }
+        let (status, headers, body) = send(address, "app.test", "/static/value.html")?;
+        assert_eq!((status, body.as_slice()), (200, b"file".as_slice()));
+        assert!(headers.to_ascii_lowercase().contains("x-frozen: static"));
+        assert!(
+            headers
+                .to_ascii_lowercase()
+                .contains("access-control-allow-origin: *")
+        );
+        let (status, headers, _) = send(address, "app.test", "/local/value")?;
+        assert_eq!(status, 201);
+        assert!(headers.to_ascii_lowercase().contains("x-frozen: local"));
+        assert!(
+            headers
+                .to_ascii_lowercase()
+                .contains("access-control-allow-origin: *")
+        );
+        if trusted {
+            let mut stream = connect(address)?;
+            stream.write_all(b"GET /proxy/deny HTTP/1.1\r\nHost: app.test\r\nX-Forwarded-For: 192.0.2.7\r\nConnection: close\r\n\r\n")?;
+            assert_eq!(response(&mut stream)?.0, 503);
+        }
+        let mut stream = connect(address)?;
+        stream.write_all(
+            b"GET /local/value HTTP/1.1\r\nHost: app.test\r\nConnection: X-Test, close\r\n\r\n",
+        )?;
+        assert_eq!(response(&mut stream)?.0, 503);
+        for path in ["/missing-request-upstream", "/missing-response-upstream"] {
+            let (status, headers, _) = send(address, "app.test", path)?;
+            assert_eq!(status, 503);
+            assert!(!headers.to_ascii_lowercase().contains("x-upstream:"));
+        }
+        proxy.signal()?;
+        assert_eq!(proxy.finish()?.0, 0);
+    }
+    worker.join().map_err(|_| "backend panicked")??;
+    Ok(())
+}
+
+#[test]
+fn chain_header_captures_survive_reenter_and_filter_limit() -> TestResult {
+    let address = vacant()?;
+    let config = format!(
+        r#"server {{ http "{address}"; }}
+site "app.test" {{ chain {{
+ rule {{ match {{ all {{ path-regex "^/(first)/"; header-equal "x-stage" "start"; }}; }};
+   header "response" {{ set "X-Frozen" "{{capture.1}}"; }};
+   header "request" {{ set "X-Stage" "next"; }};
+   reenter;
+ }}
+ rule {{ match {{ all {{ path-regex "^/first/(.*)"; header-equal "x-stage" "next"; }}; }}; respond 200 text="ok"; }}
+}} }}"#
+    );
+    let mut proxy = Proxy::start(address, &config)?;
+    let mut stream = connect(address)?;
+    stream.write_all(b"GET /first/second HTTP/1.1\r\nHost: app.test\r\nX-Stage: start\r\nConnection: close\r\n\r\n")?;
+    let (status, headers, _) = response(&mut stream)?;
+    assert_eq!(status, 200);
+    assert!(headers.to_ascii_lowercase().contains("x-frozen: first"));
+    proxy.signal()?;
+    assert_eq!(proxy.finish()?.0, 0);
+    let address = vacant()?;
+    let rules = "rule { header \"response\" { add \"X-Test\" \"v\"; }; continue; };".repeat(257);
+    let config = format!(
+        "server {{ http \"{address}\"; }}\nsite \"app.test\" {{ chain {{ {rules} rule {{ respond 200; }}; }}; }}"
+    );
+    let mut proxy = Proxy::start(address, &config)?;
+    assert_eq!(send(address, "app.test", "/")?.0, 503);
+    proxy.signal()?;
+    assert_eq!(proxy.finish()?.0, 0);
+    let address = vacant()?;
+    let config = format!(
+        r#"server {{ http "{address}"; }}
+site "app.test" {{ chain {{
+ rule {{ match {{ path-regex "^/(.+)$"; }}; header "response" {{ set "X-Frozen" "{{capture.1}}"; }}; continue; }}
+ rule {{ match {{ path-regex "^/(.+)$"; }}; respond 200; }}
+}} }}"#
+    );
+    let mut proxy = Proxy::start(address, &config)?;
+    assert_eq!(
+        send(address, "app.test", &format!("/{}", "a".repeat(20_000)))?.0,
+        503
+    );
+    proxy.signal()?;
+    assert_eq!(proxy.finish()?.0, 0);
+    Ok(())
+}
+
+#[test]
+fn chain_paths_rewrite_strip_and_constrained_candidates() -> TestResult {
+    let directory = Directory::new()?;
+    std::fs::write(directory.0.join("file.txt"), b"file")?;
+    std::fs::write(directory.0.join("index.html"), b"index")?;
+    std::fs::create_dir(directory.0.join("directory"))?;
+    std::fs::create_dir(directory.0.join("%2e%2e"))?;
+    std::fs::write(directory.0.join("%2e%2e/file.txt"), b"once")?;
+    nix::unistd::mkfifo(
+        &directory.0.join("pipe"),
+        nix::sys::stat::Mode::S_IRUSR | nix::sys::stat::Mode::S_IWUSR,
+    )?;
+    std::os::unix::fs::symlink("/etc/passwd", directory.0.join("escape"))?;
+    let backend = TcpListener::bind("127.0.0.1:0")?;
+    let upstream = backend.local_addr()?;
+    let worker = thread::spawn(move || -> TestResult {
+        for expected in [
+            "GET /dest/value?x=%2f&x=2 HTTP/1.1",
+            "GET /file.txt?q=raw%2f HTTP/1.1",
+        ] {
+            let mut stream = accept(&backend)?;
+            let request = head(&mut stream)?;
+            assert_eq!(request.lines().next(), Some(expected));
+            reply(&mut stream, b"ok", true)?;
+        }
+        Ok(())
+    });
+    let address = vacant()?;
+    let config = format!(
+        r#"server {{ http "{address}"; }}
+site "app.test" {{ chain {{
+ rule {{ match {{ path-glob "/assets*"; }}; strip-prefix "/assets"; serve-files root="{}"; }}
+ rule {{ match {{ path-regex "^/change/(.*)$"; }}; rewrite "/dest/{{capture.1}}"; reenter; }}
+ rule {{ match {{ path-glob "/dest/*"; }}; proxy "http://{upstream}"; }}
+ rule {{ match {{ path-glob "/choose"; }}; try-files root="{}" "/missing" "/file.txt"; continue; }}
+ rule {{ match {{ path-glob "/absent"; }}; try-files root="{}" "/missing" "/missing2"; continue; }}
+ rule {{ match {{ path-glob "/dir"; }}; try-files root="{}" "/directory" "/file.txt"; continue; }}
+ rule {{ match {{ path-glob "/escape"; }}; try-files root="{}" "/escape" "/file.txt"; continue; }}
+ rule {{ match {{ path-glob "/notdir"; }}; try-files root="{}" "/file.txt/child" "/file.txt"; continue; }}
+ rule {{ match {{ path-glob "/pipe"; }}; try-files root="{}" "/pipe" "/file.txt"; continue; }}
+ rule {{ match {{ path-glob "/file.txt"; }}; proxy "http://{upstream}"; }}
+ rule {{ respond 200 text="unexpected"; }}
+}} }}"#,
+        directory.0.display(),
+        directory.0.display(),
+        directory.0.display(),
+        directory.0.display(),
+        directory.0.display(),
+        directory.0.display(),
+        directory.0.display()
+    );
+    let mut proxy = Proxy::start(address, &config)?;
+    assert_eq!(send(address, "app.test", "/assets/file.txt")?.2, b"file");
+    assert_eq!(send(address, "app.test", "/assets")?.2, b"index");
+    assert_eq!(send(address, "app.test", "/assetsx/file.txt")?.0, 404);
+    assert_eq!(send(address, "app.test", "/change/value?x=%2f&x=2")?.0, 200);
+    assert_eq!(send(address, "app.test", "/choose?q=raw%2f")?.0, 200);
+    assert_eq!(send(address, "app.test", "/absent")?.0, 404);
+    assert_eq!(send(address, "app.test", "/dir")?.0, 403);
+    assert_eq!(send(address, "app.test", "/escape")?.0, 403);
+    assert_eq!(send(address, "app.test", "/notdir")?.0, 403);
+    assert_eq!(send(address, "app.test", "/pipe")?.0, 403);
+    assert_eq!(send(address, "app.test", "/change/%2fetc")?.0, 400);
+    assert_eq!(send(address, "app.test", "/assets/%2e%2e/file.txt")?.0, 400);
+    assert_eq!(
+        send(address, "app.test", "/assets/%252e%252e/file.txt")?.2,
+        b"once"
+    );
+    proxy.signal()?;
+    assert_eq!(proxy.finish()?.0, 0);
+    worker.join().map_err(|_| "backend panicked")??;
+    Ok(())
+}
+
+#[test]
+fn chain_error_handlers_only_catch_local_failures() -> TestResult {
+    let directory = Directory::new()?;
+    std::fs::write(directory.0.join("404.html"), b"missing page")?;
+    std::fs::write(directory.0.join("405.html"), b"method page")?;
+    std::fs::write(directory.0.join("file"), b"file")?;
+    std::os::unix::fs::symlink("/etc/passwd", directory.0.join("outside"))?;
+    let backend = TcpListener::bind("127.0.0.1:0")?;
+    let upstream = backend.local_addr()?;
+    let worker = thread::spawn(move || -> TestResult {
+        for status in ["404 Not Found", "200 OK", "404 Not Found"] {
+            let mut stream = accept(&backend)?;
+            let _ = head(&mut stream)?;
+            write!(
+                stream,
+                "HTTP/1.1 {status}\r\nContent-Length: 4\r\nConnection: close\r\n\r\nbody"
+            )?;
+        }
+        Ok(())
+    });
+    let address = vacant()?;
+    let root = directory.0.display();
+    let config = format!(
+        r#"server {{ http "{address}"; }}
+site "app.test" {{ chain {{
+ rule {{ match {{ path-regex "^/(absent)"; }}; header "response" {{ set "X-Frozen" "{{capture.1}}"; }}; continue; }}
+ rule {{ match {{ path-glob "/strip*"; }}; strip-prefix "/strip/segment"; continue; }}
+ rule {{ match {{ path-glob "/miss"; }}; try-files root="{root}" "/missing"; continue; }}
+ rule {{ match {{ path-glob "/errorproxy"; }}; strip-prefix "/different"; continue; }}
+ rule {{ match {{ path-glob "/errortop404"; }}; strip-prefix "/different"; continue; }}
+ rule {{ match {{ path-glob "/unsafe/*"; }}; rewrite "/file"; continue; }}
+ rule {{ match {{ path-glob "/upstream"; }}; proxy "http://{upstream}"; }}
+ rule {{ serve-files root="{root}"; }}
+ handle-errors {{
+  rule {{ match {{ all {{ error-status 404; any {{ path-glob "/errorproxy"; path-glob "/errortop404"; }}; }}; }}; proxy "http://{upstream}"; }}
+  rule {{ match {{ all {{ error-status 404; path-glob "/fail"; }}; }}; rewrite "/no-error-page"; serve-files root="{root}"; }}
+  rule {{ match {{ all {{ error-status 404; path-glob "/via/*"; }}; }}; rewrite "/404.html"; reenter; }}
+  rule {{ match {{ error-status 404; }}; rewrite "/404.html"; serve-files root="{root}"; }}
+  rule {{ match {{ error-status 405; }}; rewrite "/405.html"; serve-files root="{root}"; }}
+ }}
+}} }}"#
+    );
+    let mut proxy = Proxy::start(address, &config)?;
+    let (status, headers, body) = send(address, "app.test", "/absent")?;
+    assert_eq!((status, body.as_slice()), (404, b"missing page".as_slice()));
+    assert!(headers.to_ascii_lowercase().contains("x-frozen: absent"));
+    assert_eq!(send(address, "app.test", "/stripx")?.2, b"missing page");
+    assert_eq!(send(address, "app.test", "/miss")?.2, b"missing page");
+    assert_eq!(send(address, "app.test", "/via/test")?.2, b"missing page");
+    assert_eq!(send(address, "app.test", "/outside")?.0, 403);
+    assert_eq!(send(address, "app.test", "/file/child")?.0, 403);
+    assert_eq!(send(address, "app.test", "/unsafe/%2fetc")?.0, 400);
+    assert_eq!(send(address, "app.test", "/fail")?.0, 404);
+    let mut stream = connect(address)?;
+    stream.write_all(b"GET /absent HTTP/1.1\r\nHost: app.test\r\nIf-None-Match: *\r\nRange: bytes=0-1\r\nConnection: close\r\n\r\n")?;
+    let (status, _, body) = response(&mut stream)?;
+    assert_eq!((status, body.as_slice()), (404, b"missing page".as_slice()));
+    let mut stream = connect(address)?;
+    stream.write_all(
+        b"POST /file HTTP/1.1\r\nHost: app.test\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+    )?;
+    let (status, headers, body) = response(&mut stream)?;
+    assert_eq!((status, body.as_slice()), (405, b"method page".as_slice()));
+    assert!(headers.to_ascii_lowercase().contains("allow: get, head"));
+    let mut stream = connect(address)?;
+    stream.write_all(b"HEAD /absent HTTP/1.1\r\nHost: app.test\r\nConnection: close\r\n\r\n")?;
+    assert!(head(&mut stream)?.contains("404"));
+    let (status, _, body) = send(address, "app.test", "/upstream")?;
+    assert_eq!((status, body.as_slice()), (404, b"body".as_slice()));
+    assert_eq!(send(address, "app.test", "/errorproxy")?.0, 503);
+    let (status, _, body) = send(address, "app.test", "/errortop404")?;
+    assert_eq!((status, body.as_slice()), (404, b"body".as_slice()));
+    proxy.signal()?;
+    assert_eq!(proxy.finish()?.0, 0);
+    worker.join().map_err(|_| "backend panicked")??;
+    Ok(())
+}
+
+#[test]
+fn error_chain_shares_steps_and_filter_capacity() -> TestResult {
+    let address = vacant()?;
+    let rules = "rule { continue; };".repeat(510);
+    let config = format!(
+        r#"server {{ http "{address}"; }}
+site "app.test" {{ chain {{ {rules}
+ rule {{ strip-prefix "/no"; continue; }}
+ handle-errors {{ rule {{ match {{ error-status 404; }}; respond 404 text="handled"; }}; }}
+}} }}"#
+    );
+    let mut proxy = Proxy::start(address, &config)?;
+    assert_eq!(send(address, "app.test", "/")?.0, 503);
+    proxy.signal()?;
+    assert_eq!(proxy.finish()?.0, 0);
+
+    let address = vacant()?;
+    let rules = "rule { header \"response\" { add \"X-Test\" \"v\"; }; continue; };".repeat(256);
+    let config = format!(
+        r#"server {{ http "{address}"; }}
+site "app.test" {{ chain {{ {rules}
+ rule {{ strip-prefix "/no"; continue; }}
+ handle-errors {{ rule {{ header "response" {{ set "X-Test" "other"; }}; respond 404; }}; }}
+}} }}"#
+    );
+    let mut proxy = Proxy::start(address, &config)?;
+    assert_eq!(send(address, "app.test", "/")?.0, 503);
+    proxy.signal()?;
+    assert_eq!(proxy.finish()?.0, 0);
+
+    let address = vacant()?;
+    let config = format!(
+        r#"server {{ http "{address}"; }}
+site "app.test" {{ chain {{ rule {{ match {{ path-glob "/present"; }}; respond 200; }}
+ handle-errors {{ rule {{ match {{ error-status 404; }}; respond 404 text="local"; }}; }}
+}} }}"#
+    );
+    let mut proxy = Proxy::start(address, &config)?;
+    let (status, _, body) = send(address, "app.test", "/absent")?;
+    assert_eq!((status, body.as_slice()), (404, b"local".as_slice()));
+    proxy.signal()?;
+    assert_eq!(proxy.finish()?.0, 0);
+    Ok(())
+}
+
+#[test]
+fn chain_error_method_rejects_invalid_paths_and_preserves_unmatched_405() -> TestResult {
+    let directory = Directory::new()?;
+    let address = vacant()?;
+    let config = format!(
+        r#"server {{ http "{address}"; }}
+site "app.test" {{ chain {{
+ rule {{ header "response" {{ set "X-Filter" "applied"; }}; serve-files root="{}"; }}
+ handle-errors {{ rule {{ match {{ error-status 404; }}; respond 404 text="error handler"; }}; }}
+}} }}"#,
+        directory.0.display()
+    );
+    let mut proxy = Proxy::start(address, &config)?;
+    for (path, expected) in [("/%2e%2e/file", 400), ("/%2ffile", 400), ("/file", 405)] {
+        let mut stream = connect(address)?;
+        write!(
+            stream,
+            "POST {path} HTTP/1.1\r\nHost: app.test\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        )?;
+        let (status, headers, body) = response(&mut stream)?;
+        assert_eq!(status, expected, "{path}");
+        assert!(!String::from_utf8_lossy(&body).contains("error handler"));
+        if expected == 405 {
+            let headers = headers.to_ascii_lowercase();
+            assert!(headers.contains("allow: get, head"), "{headers}");
+            assert!(headers.contains("x-filter: applied"), "{headers}");
+            assert!(body.is_empty());
+        }
+    }
+    proxy.signal()?;
+    assert_eq!(proxy.finish()?.0, 0);
+    let address = vacant()?;
+    let config = format!(
+        r#"server {{ http "{address}"; }}
+site "app.test" {{ chain {{ rule {{ serve-files root="{}"; }}
+ handle-errors {{ rule {{ match {{ error-status 405; }}; respond 405 text="caught"; }}; }}
+}} }}"#,
+        directory.0.display()
+    );
+    let mut proxy = Proxy::start(address, &config)?;
+    for path in ["/%2e%2e/file", "/%2ffile"] {
+        let mut stream = connect(address)?;
+        write!(
+            stream,
+            "POST {path} HTTP/1.1\r\nHost: app.test\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        )?;
+        let (status, _, body) = response(&mut stream)?;
+        assert_eq!(status, 400);
+        assert_ne!(body, b"caught");
+    }
+    proxy.signal()?;
+    assert_eq!(proxy.finish()?.0, 0);
+    Ok(())
+}
+
+#[test]
+fn chain_branch_captures_inherit_and_override() -> TestResult {
+    let address = vacant()?;
+    let config = format!(
+        r#"server {{ http "{address}"; }}
+site "app.test" {{ chain {{
+ rule {{ match {{ path-regex "^/(outer)/"; }};
+   header "response" {{ set "X-Frozen" "{{capture.1}}"; }};
+   branch {{
+     when {{ match {{ path-regex "^/outer/(start)$"; }}; header "response" {{ set "X-Override" "{{capture.1}}"; }}; rewrite "/outer/changed"; continue; }}
+     when {{ match {{ method "GET"; }}; rewrite "/{{capture.1}}/changed"; header "response" {{ set "X-Branch" "{{capture.1}}"; }}; continue; }}
+     otherwise {{ rewrite "/{{capture.1}}/other"; header "response" {{ set "X-Branch" "{{capture.1}}"; }}; continue; }}
+   }};
+ }}
+ rule {{ match {{ path-regex "^/outer/(changed|other)$"; }}; header "response" {{ set "X-Next" "{{capture.1}}"; }}; respond 200 text="ok"; }}
+}} }}"#
+    );
+    let mut proxy = Proxy::start(address, &config)?;
+    for (method, path, next) in [
+        ("GET", "/outer/value", "changed"),
+        ("POST", "/outer/value", "other"),
+        ("GET", "/outer/start", "changed"),
+    ] {
+        let mut stream = connect(address)?;
+        write!(
+            stream,
+            "{method} {path} HTTP/1.1\r\nHost: app.test\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        )?;
+        let (status, headers, _) = response(&mut stream)?;
+        let headers = headers.to_ascii_lowercase();
+        assert_eq!(status, 200, "{headers}");
+        assert!(headers.contains("x-frozen: outer"), "{headers}");
+        if path.ends_with("start") {
+            assert!(headers.contains("x-override: start"), "{headers}");
+        } else {
+            assert!(headers.contains("x-branch: outer"), "{headers}");
+        }
+        assert!(headers.contains(&format!("x-next: {next}")), "{headers}");
+    }
+    proxy.signal()?;
+    assert_eq!(proxy.finish()?.0, 0);
+    Ok(())
+}

@@ -3,13 +3,14 @@ use crate::config::source::Origin;
 #[derive(Clone, Debug)]
 pub struct Chain {
     pub rules: Vec<Rule>,
+    pub errors: Option<Vec<Rule>>,
     pub origin: Origin,
 }
 #[derive(Clone, Debug)]
 pub struct Rule {
     pub id: Option<String>,
     pub matcher: Option<Matcher>,
-    pub action: Action,
+    pub actions: Vec<Action>,
     pub origin: Origin,
 }
 #[derive(Clone, Debug)]
@@ -32,7 +33,15 @@ pub enum MatcherKind {
 }
 #[derive(Clone, Debug)]
 pub enum Action {
+    Header(std::sync::Arc<super::headers::HeaderPolicy>),
+    Rewrite(super::path::PathTemplate),
+    StripPrefix(String),
+    TryFiles {
+        root: crate::config::source::Located<std::path::PathBuf>,
+        candidates: Vec<super::path::PathTemplate>,
+    },
     Continue,
+    Reenter,
     Route {
         raw: Box<crate::config::model::RawRoute>,
         index: Option<usize>,
@@ -47,6 +56,6 @@ pub enum Action {
 #[derive(Clone, Debug)]
 pub struct Branch {
     pub matcher: Option<Matcher>,
-    pub action: Action,
+    pub actions: Vec<Action>,
     pub origin: Origin,
 }

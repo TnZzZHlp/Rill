@@ -518,3 +518,31 @@ fn chain_failed_reload_and_keepalive_generation() -> Result {
     assert_eq!(Fixture::request(&mut stream, "/")?.2, b"new");
     Ok(())
 }
+
+#[test]
+fn failed_try_files_root_reload_preserves_old_snapshot() -> Result {
+    let mut f = Fixture::new()?;
+    let root = f.dir.join("root");
+    fs::create_dir(&root)?;
+    fs::write(root.join("file"), "stable")?;
+    let address = f.address;
+    let socket = f.socket.clone();
+    let config = |candidate: &std::path::Path| {
+        format!(
+            "server {{ http \"{}\"; control-socket \"{}\"; }}\nsite \"example.test\" {{ chain {{ rule {{ try-files root=\"{}\" \"/file\"; serve-files root=\"{}\"; }}; }}; }}",
+            address,
+            socket.display(),
+            candidate.display(),
+            root.display()
+        )
+    };
+    fs::write(&f.entry, config(&root))?;
+    f.start()?;
+    let mut stream = f.connect()?;
+    assert_eq!(Fixture::request(&mut stream, "/")?.2, b"stable");
+    fs::write(&f.entry, config(&f.dir.join("missing")))?;
+    assert_eq!(f.reload()?.code.as_deref(), Some("RESOURCE_IO"));
+    let mut stream = f.connect()?;
+    assert_eq!(Fixture::request(&mut stream, "/")?.2, b"stable");
+    Ok(())
+}

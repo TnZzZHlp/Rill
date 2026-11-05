@@ -50,28 +50,7 @@ pub fn response(response: &mut ResponseHeader) -> Result<()> {
             Error::explain(ErrorType::InvalidHTTPHeader, "unexpected upstream upgrade").into_up(),
         );
     }
-    let mut names = Vec::new();
-    for value in response.headers.get_all("connection").iter() {
-        let value = value.to_str().map_err(|_| {
-            Error::explain(ErrorType::InvalidHTTPHeader, "invalid upstream Connection").into_up()
-        })?;
-        for name in value.split(',') {
-            let name = name.trim().to_ascii_lowercase();
-            if name.is_empty()
-                || !name
-                    .bytes()
-                    .all(|byte| byte.is_ascii_alphanumeric() || b"!#$%&'*+-.^_`|~".contains(&byte))
-                || matches!(name.as_str(), "content-length" | "transfer-encoding")
-            {
-                return Err(Error::explain(
-                    ErrorType::InvalidHTTPHeader,
-                    "ambiguous upstream Connection",
-                )
-                .into_up());
-            }
-            names.push(name);
-        }
-    }
+    let names = response_connection_names(response)?;
     let chunked = response
         .headers
         .get("transfer-encoding")
@@ -94,4 +73,30 @@ pub fn response(response: &mut ResponseHeader) -> Result<()> {
         response.insert_header("transfer-encoding", "chunked")?;
     }
     Ok(())
+}
+
+pub fn response_connection_names(response: &ResponseHeader) -> Result<Vec<String>> {
+    let mut names = Vec::new();
+    for value in response.headers.get_all("connection").iter() {
+        let value = value.to_str().map_err(|_| {
+            Error::explain(ErrorType::InvalidHTTPHeader, "invalid upstream Connection").into_up()
+        })?;
+        for name in value.split(',') {
+            let name = name.trim().to_ascii_lowercase();
+            if name.is_empty()
+                || !name
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || b"!#$%&'*+-.^_`|~".contains(&byte))
+                || matches!(name.as_str(), "content-length" | "transfer-encoding")
+            {
+                return Err(Error::explain(
+                    ErrorType::InvalidHTTPHeader,
+                    "ambiguous upstream Connection",
+                )
+                .into_up());
+            }
+            names.push(name);
+        }
+    }
+    Ok(names)
 }

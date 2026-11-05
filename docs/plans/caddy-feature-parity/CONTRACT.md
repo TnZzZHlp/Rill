@@ -78,6 +78,8 @@ continue
 ```
 拒绝 `header "response" { set "Content-Length" "3"; }; continue`：`POLICY_PROTECTED_HEADER`。
 
+003 实施补充确认：`{upstream-authority}` 是配置中已验证连接目标的规范 `host:port`，始终显式包含端口，IPv6 加方括号；不是 DNS 候选地址，也不受固定 `proxy` 的 `host` 覆盖影响。用户明确同意：动作执行时尚未确定上游则使用该变量明确失败，不填空、不猜目标、不重放规则。延后响应头动作在代理目标确定后可使用此值；respond/static 没有上游时使用同样失败。
+
 ### 3.4 响应
 
 `respond STATUS text="UTF-8" content-type="MIME"` 为终止动作；text 默认空，content-type 默认 `text/plain; charset=utf-8`。状态仅允许 200–599，204/304 仅允许空文本。HEAD 计算与 GET 同样的表示头但不发送正文。

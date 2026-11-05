@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use nix::errno::Errno;
-use pingora::http::ResponseHeader;
+use pingora::http::{RequestHeader, ResponseHeader};
 use pingora::proxy::Session;
 use pingora::{Error, ErrorType, Result};
 use tokio::sync::OwnedSemaphorePermit;
@@ -61,14 +61,23 @@ fn open(
     navigation: bool,
     permit: OwnedSemaphorePermit,
     candidates: &[Encoding],
+    error_page: bool,
+    strict: bool,
 ) -> io::Result<Option<Resource>> {
     let (file, served_path) = match route.root.open(requested) {
         Ok(file) => {
             if file.metadata()?.is_dir() {
+                if error_page {
+                    return Err(io::Error::from_raw_os_error(Errno::EACCES as i32));
+                }
                 let index = requested.join(&route.index);
                 match route.root.open(&index) {
                     Ok(index_file) => (index_file, index),
-                    Err(error) if missing(&error) && route.browse => {
+                    Err(error)
+                        if missing(&error)
+                            && (!strict || error.raw_os_error() == Some(Errno::ENOENT as i32))
+                            && route.browse =>
+                    {
                         if !candidates.contains(&Encoding::Identity) {
                             return Ok(None);
                         }
@@ -89,15 +98,26 @@ fn open(
                 (file, requested.to_path_buf())
             }
         }
-        Err(error) if missing(&error) && navigation && route.spa => (
-            route.root.open(Path::new(&route.index))?,
-            PathBuf::from(&route.index),
-        ),
+        Err(error)
+            if missing(&error)
+                && (!strict || error.raw_os_error() == Some(Errno::ENOENT as i32))
+                && navigation
+                && route.spa =>
+        {
+            (
+                route.root.open(Path::new(&route.index))?,
+                PathBuf::from(&route.index),
+            )
+        }
         Err(error) => return Err(error),
     };
     let metadata = file.metadata()?;
     if !metadata.is_file() {
-        return Err(io::Error::from_raw_os_error(Errno::ENOENT as i32));
+        return Err(io::Error::from_raw_os_error(if strict {
+            Errno::EACCES as i32
+        } else {
+            Errno::ENOENT as i32
+        }));
     }
     for &encoding in candidates {
         if encoding == Encoding::Identity {
@@ -118,7 +138,12 @@ fn open(
         });
         let sidecar = match route.root.open(Path::new(&sidecar)) {
             Ok(file) => file,
-            Err(error) if missing(&error) => continue,
+            Err(error)
+                if missing(&error)
+                    && (!strict || error.raw_os_error() == Some(Errno::ENOENT as i32)) =>
+            {
+                continue;
+            }
             Err(error) => return Err(error),
         };
         let sidecar_metadata = sidecar.metadata()?;
@@ -266,106 +291,140 @@ async fn custom_error(
     Ok((result, body))
 }
 
-pub async fn serve<F>(
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LocalError {
+    Missing,
+    Method,
+    Unavailable,
+}
+
+pub struct PreparedResponse {
+    pub header: ResponseHeader,
+    body: Option<Body>,
+    pub local_error: Option<LocalError>,
+}
+
+pub async fn prepare(
     route: Arc<PreparedStatic>,
-    session: &mut Session,
+    request: &RequestHeader,
     requested: &str,
-    on_headers: F,
-) -> Result<()>
-where
-    F: FnOnce() -> Result<()> + Send,
-{
-    let request = session.req_header();
+    defer_errors: bool,
+    error_page: bool,
+) -> Result<PreparedResponse> {
+    let mut local_error = None;
     let is_head = request.method.as_str() == "HEAD";
     let identity_allowed = !representation::ranked_request(request, false).is_empty();
-    let (header, body) = if !matches!(request.method.as_str(), "GET" | "HEAD") {
-        (error_header(405)?, None)
-    } else {
-        match path::decode(requested) {
-            Err(status) => (error_header(status)?, None),
-            Ok(requested) => {
-                let navigation = path::navigation(request, &requested);
-                let candidates = representation::ranked_request(request, route.precompressed);
-                let permit = route
-                    .capacity
-                    .clone()
-                    .acquire_owned()
-                    .await
-                    .map_err(|_| failure("static capacity closed"))?;
-                let opener = route.clone();
-                let opened = tokio::task::spawn_blocking(move || {
-                    open(&opener, &requested, navigation, permit, &candidates)
-                })
+    let (header, body) = match path::decode(requested) {
+        Err(status) => (error_header(status)?, None),
+        Ok(_) if !matches!(request.method.as_str(), "GET" | "HEAD") => {
+            local_error = Some(LocalError::Method);
+            (error_header(405)?, None)
+        }
+        Ok(requested) => {
+            let navigation = !error_page && path::navigation(request, &requested);
+            let candidates = representation::ranked_request(request, route.precompressed);
+            let permit = route
+                .capacity
+                .clone()
+                .acquire_owned()
                 .await
-                .map_err(|_| failure("static open task failed"))?;
-                match opened {
-                    Err(error) => (error_header(status(&error))?, None),
-                    Ok(None) => {
-                        let mut header = error_header(406)?;
-                        header.insert_header("Vary", "Accept-Encoding")?;
-                        (header, None)
+                .map_err(|_| failure("static capacity closed"))?;
+            let opener = route.clone();
+            let opened = tokio::task::spawn_blocking(move || {
+                open(
+                    &opener,
+                    &requested,
+                    navigation,
+                    permit,
+                    &candidates,
+                    error_page,
+                    defer_errors || error_page,
+                )
+            })
+            .await
+            .map_err(|_| failure("static open task failed"))?;
+            match opened {
+                Err(error) => {
+                    if error.raw_os_error() == Some(Errno::ENOENT as i32) {
+                        local_error = Some(LocalError::Missing);
+                    } else if error.raw_os_error() == Some(Errno::ESTALE as i32) {
+                        local_error = Some(LocalError::Unavailable);
                     }
-                    Ok(Some(Resource::Listing(bytes))) => {
-                        let values = session.req_header().headers.get_all("if-none-match");
-                        let mut conditions = values.iter();
-                        let not_modified = conditions
-                            .next()
-                            .is_some_and(|value| value.as_bytes().trim_ascii() == b"*")
-                            && conditions.next().is_none();
-                        let mut header =
-                            ResponseHeader::build(if not_modified { 304 } else { 200 }, None)?;
-                        header.insert_header("content-type", "text/html; charset=utf-8")?;
-                        if !not_modified {
-                            header.insert_header("content-length", bytes.len().to_string())?;
-                        }
-                        header.insert_header("cache-control", "no-store")?;
-                        header.insert_header("vary", "Accept-Encoding")?;
-                        header.insert_header(
-                            "content-security-policy",
-                            "default-src 'none'; style-src 'none'",
-                        )?;
-                        let body = (!is_head && !not_modified && !bytes.is_empty())
-                            .then_some(Body::Listing(bytes));
-                        (header, body)
+                    let status = if (defer_errors || error_page)
+                        && error.raw_os_error() == Some(Errno::ENOTDIR as i32)
+                    {
+                        403
+                    } else {
+                        status(&error)
+                    };
+                    (error_header(status)?, None)
+                }
+                Ok(None) => {
+                    let mut header = error_header(406)?;
+                    header.insert_header("Vary", "Accept-Encoding")?;
+                    (header, None)
+                }
+                Ok(Some(Resource::Listing(bytes))) => {
+                    let values = request.headers.get_all("if-none-match");
+                    let mut conditions = values.iter();
+                    let not_modified = conditions
+                        .next()
+                        .is_some_and(|value| value.as_bytes().trim_ascii() == b"*")
+                        && conditions.next().is_none();
+                    let mut header =
+                        ResponseHeader::build(if not_modified { 304 } else { 200 }, None)?;
+                    header.insert_header("content-type", "text/html; charset=utf-8")?;
+                    if !not_modified {
+                        header.insert_header("content-length", bytes.len().to_string())?;
                     }
-                    Ok(Some(Resource::File(opened))) => {
-                        let plan = response::plan(
-                            session.req_header(),
-                            &opened.metadata,
-                            &opened.path,
-                            route.cache_control.as_deref(),
-                            opened.encoding,
-                            route.precompressed,
-                        )?;
-                        if plan.send_body
-                            && route.cache.is_some()
-                            && opened.cacheable
-                            && opened.metadata.len() <= 64 * 1024
-                        {
-                            let cache_route = route.clone();
-                            let result = tokio::task::spawn_blocking(move || {
-                                cache_body(&cache_route, Box::new(opened), plan.offset, plan.length)
-                            })
-                            .await
-                            .map_err(|_| failure("static cache task failed"))?;
-                            match result {
-                                Ok(body) => (plan.header, Some(body)),
-                                Err(_) => (error_header(503)?, None),
-                            }
-                        } else {
-                            let body = plan.send_body.then_some(Body::File(
-                                Box::new(opened),
-                                plan.offset,
-                                plan.length,
-                            ));
-                            (plan.header, body)
+                    header.insert_header("cache-control", "no-store")?;
+                    header.insert_header("vary", "Accept-Encoding")?;
+                    header.insert_header(
+                        "content-security-policy",
+                        "default-src 'none'; style-src 'none'",
+                    )?;
+                    let body = (!is_head && !not_modified && !bytes.is_empty())
+                        .then_some(Body::Listing(bytes));
+                    (header, body)
+                }
+                Ok(Some(Resource::File(opened))) => {
+                    let plan = response::plan(
+                        request,
+                        &opened.metadata,
+                        &opened.path,
+                        route.cache_control.as_deref(),
+                        opened.encoding,
+                        route.precompressed,
+                    )?;
+                    if plan.send_body
+                        && route.cache.is_some()
+                        && opened.cacheable
+                        && opened.metadata.len() <= 64 * 1024
+                    {
+                        let cache_route = route.clone();
+                        let result = tokio::task::spawn_blocking(move || {
+                            cache_body(&cache_route, Box::new(opened), plan.offset, plan.length)
+                        })
+                        .await
+                        .map_err(|_| failure("static cache task failed"))?;
+                        match result {
+                            Ok(body) => (plan.header, Some(body)),
+                            Err(_) => (error_header(503)?, None),
                         }
+                    } else {
+                        let body = plan.send_body.then_some(Body::File(
+                            Box::new(opened),
+                            plan.offset,
+                            plan.length,
+                        ));
+                        (plan.header, body)
                     }
                 }
             }
         }
     };
     let (header, body) = if body.is_none()
+        && !(defer_errors && local_error.is_some())
         && matches!(
             header.status.as_u16(),
             403 | 404 | 405 | 406 | 416 | 500 | 503
@@ -376,7 +435,34 @@ where
     } else {
         (header, body)
     };
-    on_headers()?;
+    Ok(PreparedResponse {
+        header,
+        body,
+        local_error,
+    })
+}
+
+pub async fn serve<F>(
+    route: Arc<PreparedStatic>,
+    session: &mut Session,
+    requested: &str,
+    on_headers: F,
+) -> Result<()>
+where
+    F: FnOnce(&mut ResponseHeader) -> Result<()> + Send,
+{
+    let prepared = prepare(route, session.req_header(), requested, false, false).await?;
+    send(session, prepared, on_headers).await
+}
+
+pub async fn send<F>(session: &mut Session, prepared: PreparedResponse, on_headers: F) -> Result<()>
+where
+    F: FnOnce(&mut ResponseHeader) -> Result<()> + Send,
+{
+    let PreparedResponse {
+        mut header, body, ..
+    } = prepared;
+    on_headers(&mut header)?;
     session
         .write_response_header(Box::new(header), body.is_none())
         .await?;
@@ -470,6 +556,8 @@ mod tests {
                 false,
                 capacity.clone().try_acquire_owned()?,
                 &[Encoding::Identity],
+                false,
+                false,
             )?
             else {
                 return Err("first open did not return a file".into());
@@ -486,6 +574,8 @@ mod tests {
                 false,
                 capacity.try_acquire_owned()?,
                 &[Encoding::Identity],
+                false,
+                false,
             )?
             else {
                 return Err("second open did not return a file".into());

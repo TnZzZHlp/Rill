@@ -38,6 +38,12 @@ pub trait ResourcePreparer {
 
 static STATIC_CAPACITY: OnceLock<Arc<Semaphore>> = OnceLock::new();
 
+pub(crate) fn static_capacity() -> Arc<Semaphore> {
+    STATIC_CAPACITY
+        .get_or_init(|| Arc::new(Semaphore::new(128)))
+        .clone()
+}
+
 pub struct ConfigurationOnly;
 
 #[derive(Debug)]
@@ -80,9 +86,7 @@ impl ConfigurationOnly {
             Some(plan) => crate::tls::cert::PreparedTls::prepare_tracked(configuration, plan)?,
             None => crate::tls::cert::PreparedTls::prepare(configuration)?,
         };
-        let capacity = STATIC_CAPACITY
-            .get_or_init(|| Arc::new(Semaphore::new(128)))
-            .clone();
+        let capacity = static_capacity();
         let routes = configuration
             .sites
             .iter()

@@ -13,6 +13,8 @@ static POLICY_BYTES: AtomicUsize = AtomicUsize::new(0);
 pub struct PreparedPolicy {
     pub regexes: Vec<CompiledRegex>,
     pub indices: BTreeMap<(PathBuf, usize), usize>,
+    pub roots: BTreeMap<(PathBuf, usize), crate::static_files::root::Root>,
+    pub filesystem_sites: Vec<bool>,
     bytes: usize,
 }
 #[derive(Debug)]
@@ -24,6 +26,8 @@ impl Drop for PreparedPolicy {
     fn drop(&mut self) {
         drop(std::mem::take(&mut self.regexes));
         drop(std::mem::take(&mut self.indices));
+        drop(std::mem::take(&mut self.roots));
+        drop(std::mem::take(&mut self.filesystem_sites));
         POLICY_BYTES.fetch_sub(self.bytes, Ordering::AcqRel);
     }
 }
@@ -212,9 +216,47 @@ fn visit_matcher(p: &mut PreparedPolicy, m: &Matcher) -> Result<()> {
     Ok(())
 }
 fn visit_action(p: &mut PreparedPolicy, a: &Action, origin: &Origin) -> Result<()> {
-    p.reserve(std::mem::size_of::<Action>(), origin)?;
     match a {
-        Action::Continue => (),
+        Action::Header(header) => p.reserve(
+            header
+                .allocated_bytes()
+                .saturating_add(std::mem::size_of::<super::headers::HeaderPolicy>())
+                .saturating_add(2 * std::mem::size_of::<usize>()),
+            origin,
+        )?,
+        Action::Rewrite(template) => p.reserve(template.allocated_bytes(), origin)?,
+        Action::StripPrefix(prefix) => p.reserve(prefix.capacity(), origin)?,
+        Action::TryFiles { root, candidates } => {
+            let bytes = root
+                .value
+                .as_os_str()
+                .len()
+                .saturating_add(origin_bytes(&root.origin))
+                .saturating_add(
+                    candidates
+                        .capacity()
+                        .saturating_mul(std::mem::size_of::<super::path::PathTemplate>()),
+                )
+                .saturating_add(
+                    candidates
+                        .iter()
+                        .map(super::path::PathTemplate::allocated_bytes)
+                        .sum::<usize>(),
+                );
+            p.reserve(bytes, &root.origin)?;
+            let key = (root.origin.source.path.clone(), root.origin.offset);
+            if !p.roots.contains_key(&key) {
+                p.reserve(
+                    root.origin.source.path.as_os_str().len().saturating_add(
+                        std::mem::size_of::<crate::static_files::root::Root>() + 128,
+                    ),
+                    &root.origin,
+                )?;
+                let prepared = crate::static_files::root::Root::prepare(root)?;
+                p.roots.insert(key, prepared);
+            }
+        }
+        Action::Continue | Action::Reenter => (),
         Action::Route { raw, .. } => {
             let payload = match &raw.action {
                 crate::config::model::RawAction::Proxy(value) => value.value.capacity(),
@@ -260,21 +302,52 @@ fn visit_action(p: &mut PreparedPolicy, a: &Action, origin: &Origin) -> Result<(
                 if let Some(m) = &b.matcher {
                     visit_matcher(p, m)?;
                 }
-                visit_action(p, &b.action, &b.origin)?;
+                visit_sequence(p, &b.actions, &b.origin)?;
             }
         }
     }
     Ok(())
 }
+fn visit_sequence(p: &mut PreparedPolicy, actions: &Vec<Action>, origin: &Origin) -> Result<()> {
+    p.reserve(
+        actions
+            .capacity()
+            .saturating_mul(std::mem::size_of::<Action>()),
+        origin,
+    )?;
+    for action in actions {
+        visit_action(p, action, origin)?;
+    }
+    Ok(())
+}
+fn has_filesystem(actions: &[Action]) -> bool {
+    actions.iter().any(|action| match action {
+        Action::TryFiles { .. } => true,
+        Action::Branch(branches) => branches
+            .iter()
+            .any(|branch| has_filesystem(&branch.actions)),
+        _ => false,
+    })
+}
 pub fn compile(config: &ValidatedConfig) -> Result<PreparedPolicy> {
     let mut p = PreparedPolicy {
         regexes: Vec::new(),
         indices: BTreeMap::new(),
+        roots: BTreeMap::new(),
+        filesystem_sites: vec![false; config.sites.len()],
         bytes: 0,
     };
+    if let Some(site) = config.sites.first() {
+        p.reserve(p.filesystem_sites.capacity(), &site.origin)?;
+    }
     let mut sites = 0;
-    for site in &config.sites {
+    for (site_index, site) in config.sites.iter().enumerate() {
         if let Some(chain) = &site.chain {
+            p.filesystem_sites[site_index] = chain
+                .rules
+                .iter()
+                .chain(chain.errors.iter().flatten())
+                .any(|rule| has_filesystem(&rule.actions));
             sites += 1;
             if sites > 128 {
                 return Err(error("POLICY_LIMIT", &chain.origin));
@@ -343,7 +416,16 @@ pub fn compile(config: &ValidatedConfig) -> Result<PreparedPolicy> {
                     &chain.origin,
                 )?;
             }
-            for rule in &chain.rules {
+            if let Some(errors) = &chain.errors {
+                p.reserve(
+                    errors
+                        .capacity()
+                        .saturating_sub(errors.len())
+                        .saturating_mul(std::mem::size_of::<super::model::Rule>()),
+                    &chain.origin,
+                )?;
+            }
+            for rule in chain.rules.iter().chain(chain.errors.iter().flatten()) {
                 p.reserve(
                     std::mem::size_of::<super::model::Rule>()
                         + rule.id.as_ref().map_or(0, String::capacity)
@@ -353,7 +435,7 @@ pub fn compile(config: &ValidatedConfig) -> Result<PreparedPolicy> {
                 if let Some(m) = &rule.matcher {
                     visit_matcher(&mut p, m)?;
                 }
-                visit_action(&mut p, &rule.action, &rule.origin)?;
+                visit_sequence(&mut p, &rule.actions, &rule.origin)?;
             }
         }
     }
@@ -370,6 +452,8 @@ mod tests {
         let mut policy = PreparedPolicy {
             regexes: Vec::new(),
             indices: BTreeMap::new(),
+            roots: BTreeMap::new(),
+            filesystem_sites: Vec::new(),
             bytes: 0,
         };
         policy.reserve(8 * MIB - 256 * 1024, &origin)?;

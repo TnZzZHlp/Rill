@@ -93,10 +93,17 @@ fn validate_chain_action(
         }
         crate::http_policy::model::Action::Branch(branches) => {
             for branch in branches {
-                validate_chain_action(&mut branch.action, server, parameters, routes)?;
+                for action in &mut branch.actions {
+                    validate_chain_action(action, server, parameters, routes)?;
+                }
             }
         }
-        crate::http_policy::model::Action::Continue
+        crate::http_policy::model::Action::Header(_)
+        | crate::http_policy::model::Action::Rewrite(_)
+        | crate::http_policy::model::Action::StripPrefix(_)
+        | crate::http_policy::model::Action::TryFiles { .. }
+        | crate::http_policy::model::Action::Continue
+        | crate::http_policy::model::Action::Reenter
         | crate::http_policy::model::Action::Respond { .. } => (),
     }
     Ok(())
@@ -264,8 +271,14 @@ pub fn validate(normalized: NormalizedConfig) -> Result<ValidatedConfig> {
         routes.sort_by(|left, right| left.pattern.value.cmp(&right.pattern.value));
         let mut chain = site.chain;
         if let Some(chain) = &mut chain {
-            for rule in &mut chain.rules {
-                validate_chain_action(&mut rule.action, &server, &site.parameters, &mut routes)?;
+            for rule in chain
+                .rules
+                .iter_mut()
+                .chain(chain.errors.iter_mut().flatten())
+            {
+                for action in &mut rule.actions {
+                    validate_chain_action(action, &server, &site.parameters, &mut routes)?;
+                }
             }
         }
         sites.push(Site {

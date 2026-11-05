@@ -1,16 +1,17 @@
+use super::chain_actions::sequence;
 use super::values::{argument, at, shape as value_shape, string as value_string, unknown};
 use crate::config::{
     error::{ConfigError, Result},
     source::Origin,
 };
-use crate::http_policy::model::{Action, Branch, Chain, Matcher, MatcherKind, Rule};
+use crate::http_policy::model::{Chain, Matcher, MatcherKind, Rule};
 use kdl::KdlNode;
 use std::collections::BTreeSet;
 
-fn invalid(code: &'static str, item: &'static str, origin: &Origin) -> ConfigError {
+pub(super) fn invalid(code: &'static str, item: &'static str, origin: &Origin) -> ConfigError {
     ConfigError::new(code, item, "invalid policy configuration", origin)
 }
-fn shape(
+pub(super) fn shape(
     node: &KdlNode,
     origin: &Origin,
     item: &'static str,
@@ -27,7 +28,7 @@ fn shape(
     }
     value_shape(node, origin, item, count, children)
 }
-fn string(
+pub(super) fn string(
     node: &KdlNode,
     origin: &Origin,
     item: &'static str,
@@ -35,10 +36,16 @@ fn string(
     shape(node, origin, item, 1..=1, false)?;
     value_string(node, origin, item)
 }
-fn children(node: &KdlNode) -> impl Iterator<Item = &KdlNode> {
+pub(super) fn children(node: &KdlNode) -> impl Iterator<Item = &KdlNode> {
     node.children().into_iter().flat_map(|d| d.nodes())
 }
-fn matcher(node: &KdlNode, origin: &Origin, depth: usize, count: &mut usize) -> Result<Matcher> {
+fn matcher(
+    node: &KdlNode,
+    origin: &Origin,
+    depth: usize,
+    count: &mut usize,
+    error_chain: bool,
+) -> Result<Matcher> {
     if depth > 16 {
         return Err(invalid("POLICY_LIMIT", "match", origin));
     }
@@ -50,7 +57,7 @@ fn matcher(node: &KdlNode, origin: &Origin, depth: usize, count: &mut usize) -> 
         "all" | "any" | "not" => {
             shape(node, origin, "match", 0..=0, true)?;
             let list = children(node)
-                .map(|n| matcher(n, &at(n, origin), depth + 1, count))
+                .map(|n| matcher(n, &at(n, origin), depth + 1, count, error_chain))
                 .collect::<Result<Vec<_>>>()?;
             match node.name().value() {
                 "all" if !list.is_empty() => MatcherKind::All(list),
@@ -121,7 +128,24 @@ fn matcher(node: &KdlNode, origin: &Origin, depth: usize, count: &mut usize) -> 
             };
             MatcherKind::ClientCidr(crate::config::model::Network { address, prefix })
         }
-        "error-status" => return Err(invalid("POLICY_INVALID_MATCHER", "error-status", origin)),
+        "error-status" => {
+            if !error_chain
+                || node.ty().is_some()
+                || node.children().is_some()
+                || node.entries().len() != 1
+                || node.entries()[0].name().is_some()
+                || node.entries()[0].ty().is_some()
+            {
+                return Err(invalid("POLICY_INVALID_MATCHER", "error-status", origin));
+            }
+            let status = node.entries()[0]
+                .value()
+                .as_integer()
+                .and_then(|n| u16::try_from(n).ok())
+                .filter(|n| (400..=599).contains(n))
+                .ok_or_else(|| invalid("POLICY_INVALID_MATCHER", "error-status", origin))?;
+            MatcherKind::ErrorStatus(status)
+        }
         _ => return Err(unknown(node, origin)),
     };
     Ok(Matcher {
@@ -129,11 +153,12 @@ fn matcher(node: &KdlNode, origin: &Origin, depth: usize, count: &mut usize) -> 
         origin: origin.clone(),
     })
 }
-fn match_block(
+pub(super) fn match_block(
     node: &KdlNode,
     origin: &Origin,
     depth: usize,
     count: &mut usize,
+    error_chain: bool,
 ) -> Result<Matcher> {
     shape(node, origin, "match", 0..=0, true)?;
     let mut nodes = children(node);
@@ -143,259 +168,29 @@ fn match_block(
     if nodes.next().is_some() {
         return Err(invalid("POLICY_INVALID_MATCHER", "match", origin));
     }
-    matcher(first, &at(first, origin), depth, count)
+    matcher(first, &at(first, origin), depth, count, error_chain)
 }
-fn respond(node: &KdlNode, origin: &Origin) -> Result<Action> {
-    if node.ty().is_some() || node.children().is_some() {
-        return Err(invalid("POLICY_INVALID_RESPONSE", "respond", origin));
-    }
-    let mut status = None;
-    let mut text = None;
-    let mut content_type = None;
-    for e in node.entries() {
-        if e.ty().is_some() {
-            return Err(invalid("POLICY_INVALID_RESPONSE", "respond", origin));
-        }
-        match e.name().map(kdl::KdlIdentifier::value) {
-            None if status.is_none() => {
-                status = Some(
-                    e.value()
-                        .as_integer()
-                        .and_then(|v| u16::try_from(v).ok())
-                        .ok_or_else(|| invalid("POLICY_INVALID_RESPONSE", "respond", origin))?,
-                );
-            }
-            None => return Err(invalid("POLICY_INVALID_RESPONSE", "respond", origin)),
-            Some("text") if text.is_none() => text = e.value().as_string().map(str::to_owned),
-            Some("content-type") if content_type.is_none() => {
-                content_type = e.value().as_string().map(str::to_owned)
-            }
-            _ => return Err(invalid("CONFIG_UNKNOWN", "respond", origin)),
-        }
-        if e.name().is_some() && e.value().as_string().is_none() {
-            return Err(invalid("POLICY_INVALID_RESPONSE", "respond", origin));
-        }
-    }
-    let status = status
-        .filter(|s| (200..=599).contains(s))
-        .ok_or_else(|| invalid("POLICY_INVALID_RESPONSE", "respond", origin))?;
-    let text = text.unwrap_or_default();
-    let content_type = content_type.unwrap_or_else(|| "text/plain; charset=utf-8".into());
-    if (matches!(status, 204 | 304) && !text.is_empty())
-        || http::HeaderValue::from_str(&content_type).is_err()
-    {
-        return Err(invalid("POLICY_INVALID_RESPONSE", "respond", origin));
-    }
-    Ok(Action::Respond {
-        status,
-        text,
-        content_type,
-    })
-}
-fn action(node: &KdlNode, origin: &Origin, depth: usize, count: &mut usize) -> Result<Action> {
-    if depth > 16 {
-        return Err(invalid("POLICY_LIMIT", "branch", origin));
-    }
-    match node.name().value() {
-        "continue" => {
-            shape(node, origin, "continue", 0..=0, false)?;
-            Ok(Action::Continue)
-        }
-        "respond" => respond(node, origin),
-        "proxy" => {
-            if node.ty().is_some() || node.children().is_some() {
-                return Err(invalid("CONFIG_UNKNOWN", "proxy", origin));
-            }
-            let mut target = None;
-            let mut host = None;
-            let mut protocol = None;
-            for entry in node.entries() {
-                if entry.ty().is_some() {
-                    return Err(invalid("CONFIG_UNKNOWN", "proxy", origin));
-                }
-                match entry.name().map(kdl::KdlIdentifier::value) {
-                    None if target.is_none() => {
-                        target = entry.value().as_string().map(str::to_owned)
-                    }
-                    Some("host") if host.is_none() => {
-                        host = entry.value().as_string().map(str::to_owned)
-                    }
-                    Some("protocol") if protocol.is_none() => {
-                        protocol = entry.value().as_string().map(str::to_owned)
-                    }
-                    _ => return Err(invalid("CONFIG_UNKNOWN", "proxy", origin)),
-                }
-                if entry.value().as_string().is_none() {
-                    return Err(invalid("CONFIG_UNKNOWN", "proxy", origin));
-                }
-            }
-            if protocol.as_deref().is_some_and(|p| p != "http1") {
-                return Err(invalid("CONFIG_UNSUPPORTED", "protocol", origin));
-            }
-            if host
-                .as_ref()
-                .is_some_and(|h| h.parse::<http::uri::Authority>().is_err())
-            {
-                return Err(invalid("POLICY_INVALID_RESPONSE", "proxy", origin));
-            }
-            let target = crate::config::source::Located::new(
-                target
-                    .filter(|v| !v.is_empty())
-                    .ok_or_else(|| invalid("CONFIG_TYPE", "proxy", origin))?,
-                origin.clone(),
-            );
-            Ok(Action::Route {
-                raw: Box::new(crate::config::model::RawRoute {
-                    pattern: crate::config::source::Located::new("/*".into(), origin.clone()),
-                    index: None,
-                    proxy_host: host
-                        .map(|value| crate::config::source::Located::new(value, origin.clone())),
-                    uses: Vec::new(),
-                    parameters: Default::default(),
-                    action: crate::config::model::RawAction::Proxy(target),
-                    spa: None,
-                    cache_control: None,
-                    precompressed: None,
-                    browse: None,
-                    error_pages: Default::default(),
-                }),
-                index: None,
-            })
-        }
-        "serve-files" => {
-            if node.ty().is_some()
-                || node.entries().len() != 1
-                || node.entries()[0].name().map(kdl::KdlIdentifier::value) != Some("root")
-                || node.entries()[0].ty().is_some()
-            {
-                return Err(invalid("CONFIG_UNKNOWN", "serve-files", origin));
-            }
-            let root = node.entries()[0]
-                .value()
-                .as_string()
-                .filter(|v| !v.is_empty())
-                .ok_or_else(|| invalid("POLICY_INVALID_PATH", "serve-files", origin))?;
-            let mut raw = crate::config::model::RawRoute {
-                pattern: crate::config::source::Located::new("/*".into(), origin.clone()),
-                index: None,
-                proxy_host: None,
-                uses: Vec::new(),
-                parameters: Default::default(),
-                action: crate::config::model::RawAction::Root(crate::config::source::Located::new(
-                    origin.relative_path(root),
-                    origin.clone(),
-                )),
-                spa: None,
-                cache_control: None,
-                precompressed: None,
-                browse: None,
-                error_pages: Default::default(),
-            };
-            let mut seen = BTreeSet::new();
-            for child in children(node) {
-                let loc = at(child, origin);
-                if !seen.insert(child.name().value().to_owned()) {
-                    return Err(invalid("POLICY_INVALID_PATH", "serve-files", &loc));
-                }
-                match child.name().value() {
-                    "spa" => raw.spa = Some(super::values::boolean(child, &loc, "spa")?),
-                    "browse" => raw.browse = Some(super::values::boolean(child, &loc, "browse")?),
-                    "precompressed" => {
-                        raw.precompressed =
-                            Some(super::values::boolean(child, &loc, "precompressed")?)
-                    }
-                    "cache-control" => {
-                        raw.cache_control = Some(string(child, &loc, "cache-control")?)
-                    }
-                    "index" => {
-                        let index = string(child, &loc, "index")?;
-                        if index.value.len() > 1024 {
-                            return Err(invalid("POLICY_LIMIT", "index", &loc));
-                        }
-                        if index.value.contains(['/', '\\'])
-                            || matches!(index.value.as_str(), "." | "..")
-                        {
-                            return Err(invalid("POLICY_INVALID_PATH", "index", &loc));
-                        }
-                        raw.index = Some(index);
-                    }
-                    _ => return Err(unknown(child, &loc)),
-                }
-            }
-            Ok(Action::Route {
-                raw: Box::new(raw),
-                index: None,
-            })
-        }
-        "branch" => {
-            shape(node, origin, "branch", 0..=0, true)?;
-            let mut branches = Vec::new();
-            let mut otherwise = false;
-            for n in children(node) {
-                let loc = at(n, origin);
-                if otherwise {
-                    return Err(invalid("POLICY_INVALID_BRANCH", "branch", &loc));
-                }
-                let is_when = match n.name().value() {
-                    "when" => true,
-                    "otherwise" => {
-                        otherwise = true;
-                        false
-                    }
-                    _ => return Err(invalid("POLICY_INVALID_BRANCH", "branch", &loc)),
-                };
-                shape(n, &loc, "branch", 0..=0, true)?;
-                let mut iter = children(n);
-                let m = if is_when {
-                    let child = iter
-                        .next()
-                        .ok_or_else(|| invalid("POLICY_INVALID_BRANCH", "when", &loc))?;
-                    if child.name().value() != "match" {
-                        return Err(invalid("POLICY_INVALID_BRANCH", "when", &loc));
-                    }
-                    Some(match_block(child, &at(child, &loc), depth + 1, count)?)
-                } else {
-                    None
-                };
-                let a = iter
-                    .next()
-                    .ok_or_else(|| invalid("POLICY_INVALID_CHAIN", "branch", &loc))?;
-                let act = action(a, &at(a, &loc), depth + 1, count)?;
-                if iter.next().is_some() {
-                    return Err(invalid("POLICY_INVALID_CHAIN", "branch", &loc));
-                }
-                branches.push(Branch {
-                    matcher: m,
-                    action: act,
-                    origin: loc,
-                });
-            }
-            if branches.is_empty() {
-                return Err(invalid("POLICY_INVALID_BRANCH", "branch", origin));
-            }
-            Ok(Action::Branch(branches))
-        }
-        "header" | "rewrite" | "strip-prefix" | "try-files" | "reenter" | "basic-auth"
-        | "static-token" | "webdav" | "dynamic-proxy" | "body-replace" | "encode" => {
-            Err(invalid("CONFIG_UNSUPPORTED", "action", origin))
-        }
-        _ => Err(unknown(node, origin)),
-    }
-}
-pub fn parse(node: &KdlNode, origin: &Origin) -> Result<Chain> {
-    shape(node, origin, "chain", 0..=0, true)?;
+fn parse_rules<'a>(
+    nodes: impl IntoIterator<Item = &'a KdlNode>,
+    origin: &Origin,
+    error_chain: bool,
+    total: &mut usize,
+) -> Result<Vec<Rule>> {
     let mut rules = Vec::new();
     let mut ids = BTreeSet::new();
     let mut count = 0;
-    for n in children(node) {
+    for n in nodes {
         let loc = at(n, origin);
         if n.name().value() == "handle-errors" {
-            return Err(invalid("CONFIG_UNSUPPORTED", "handle-errors", &loc));
+            return Err(invalid("POLICY_INVALID_CHAIN", "handle-errors", &loc));
         }
         if n.name().value() != "rule" {
             return Err(unknown(n, &loc));
         }
-        if rules.len() >= 4096 {
+        *total = total
+            .checked_add(1)
+            .ok_or_else(|| invalid("POLICY_LIMIT", "rule", &loc))?;
+        if *total > 4096 {
             return Err(invalid("POLICY_LIMIT", "rule", &loc));
         }
         shape(n, &loc, "rule", 0..=1, true)?;
@@ -413,31 +208,71 @@ pub fn parse(node: &KdlNode, origin: &Origin) -> Result<Chain> {
         let first = iter
             .next()
             .ok_or_else(|| invalid("POLICY_INVALID_CHAIN", "rule", &loc))?;
-        let (m, a) = if first.name().value() == "match" {
+        let (matcher, first_action) = if first.name().value() == "match" {
             (
-                Some(match_block(first, &at(first, &loc), 1, &mut count)?),
+                Some(match_block(
+                    first,
+                    &at(first, &loc),
+                    1,
+                    &mut count,
+                    error_chain,
+                )?),
                 iter.next()
                     .ok_or_else(|| invalid("POLICY_INVALID_CHAIN", "rule", &loc))?,
             )
         } else {
             (None, first)
         };
-        let act = action(a, &at(a, &loc), 1, &mut count)?;
-        if iter.next().is_some() {
-            return Err(invalid("POLICY_INVALID_CHAIN", "rule", &loc));
-        }
+        let actions = sequence(
+            std::iter::once(first_action).chain(iter),
+            &loc,
+            "rule",
+            1,
+            &mut count,
+            error_chain,
+        )?;
         rules.push(Rule {
             id,
-            matcher: m,
-            action: act,
+            matcher,
+            actions,
             origin: loc,
         });
     }
     if rules.is_empty() {
         return Err(invalid("POLICY_INVALID_CHAIN", "chain", origin));
     }
+    Ok(rules)
+}
+pub fn parse(node: &KdlNode, origin: &Origin) -> Result<Chain> {
+    shape(node, origin, "chain", 0..=0, true)?;
+    let nodes: Vec<_> = children(node).collect();
+    let mut total = 0;
+    let position = nodes
+        .iter()
+        .position(|n| n.name().value() == "handle-errors");
+    let (main, error_node) = if let Some(i) = position {
+        if i + 1 != nodes.len() {
+            return Err(invalid(
+                "POLICY_INVALID_CHAIN",
+                "handle-errors",
+                &at(nodes[i], origin),
+            ));
+        }
+        (&nodes[..i], Some(nodes[i]))
+    } else {
+        (&nodes[..], None)
+    };
+    let rules = parse_rules(main.iter().copied(), origin, false, &mut total)?;
+    let errors = if let Some(node) = error_node {
+        let loc = at(node, origin);
+        shape(node, &loc, "handle-errors", 0..=0, true)?;
+        Some(parse_rules(children(node), &loc, true, &mut total)?)
+    } else {
+        None
+    };
     Ok(Chain {
         rules,
+        errors,
         origin: origin.clone(),
     })
 }

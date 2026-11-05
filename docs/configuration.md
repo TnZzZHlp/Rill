@@ -15,7 +15,7 @@
 
 ## Caddy 能力补齐 002：规则链与固定响应
 
-本节的 002 是 Caddy 能力补齐阶段，不是前文历史配置管线的 002。站点选择 `chain` 时不能同时声明旧 `route`、`use-snippet` 或站点简写 `proxy`/`root`。链按顺序匹配；没有命中返回 404。`match` 包含一个表达式，支持 `all`、`any`、`not`、`method`、`header-equal`、`header-prefix`、`path-glob`、`path-regex` 和 `client-cidr`。路径 glob 的 `*` 可跨 `/`，`?` 匹配一个字符，反斜杠转义；客户 IP 使用可信代理策略计算，不直接信任入口转发头。`error-status` 仅用于后续阶段的错误链，目前拒绝。
+本节的 002 是 Caddy 能力补齐阶段，不是前文历史配置管线的 002。站点选择 `chain` 时不能同时声明旧 `route`、`use-snippet` 或站点简写 `proxy`/`root`。链按顺序匹配；没有命中返回 404。`match` 包含一个表达式，支持 `all`、`any`、`not`、`method`、`header-equal`、`header-prefix`、`path-glob`、`path-regex` 和 `client-cidr`。路径 glob 的 `*` 可跨 `/`，`?` 匹配一个字符，反斜杠转义；客户 IP 使用可信代理策略计算，不直接信任入口转发头。`error-status` 只允许在 `handle-errors` 中使用，接受 400–599 整数；不代表所有状态都可进入错误链。
 
 ```kdl
 site "example.test" {
@@ -29,7 +29,7 @@ site "example.test" {
 }
 ```
 
-规则以 `respond`、固定 `proxy`、`serve-files` 或 `branch` 终止，显式 `continue` 才继续后续规则。branch 只执行首个匹配的 `when`，否则执行可选末尾 `otherwise`；没有匹配分支时终止并返回 404。`respond` 状态为 200–599，默认空文本和 `text/plain; charset=utf-8`；204/304 不允许正文，HEAD 不发送正文。固定代理当前仅支持 http1；静态动作使用现有 root 保护并支持 `index`、`spa`、`cache-control`、`precompressed`、`browse`。header、路径改写、错误链、鉴权和其他后续动作暂不支持，不会静默忽略。正则运行工作区独立限额为全进程 64 MiB；额度不足返回 503。
+规则以 `respond`、固定 `proxy`、`serve-files` 或 `branch` 终止，显式 `continue` 才继续后续规则。branch 只执行首个匹配的 `when`，否则执行可选末尾 `otherwise`；没有匹配分支时终止并返回 404。`respond` 状态为 200–599，默认空文本和 `text/plain; charset=utf-8`；204/304 不允许正文，HEAD 不发送正文。固定代理当前仅支持 http1；静态动作使用现有 root 保护并支持 `index`、`spa`、`cache-control`、`precompressed`、`browse`。`header` 支持请求和响应头动作；`rewrite`、`strip-prefix` 和 `try-files` 按链顺序更新当前路径并保留原查询，`reenter` 从链首重新匹配且最多四次。`try-files` 仅对受约束 root 下的普通文件命中，只有缺失才继续下一候选。链尾可声明一次 `handle-errors`：仅本地缺失、方法不支持及本地临时不可用可进入；安全拒绝、容量耗尽、上游响应/传输错误和已提交响应不进入。错误链共享步骤及重入预算，只进入一次；`respond` 不允许 2xx/3xx，错误文件保留原状态且不按 Range/条件请求返回 206/304。鉴权和其他后续动作暂不支持，不会静默忽略。`{upstream-authority}` 使用经验证的连接目标规范 authority，始终包含端口，IPv6 使用方括号；不使用 DNS 候选地址或 `proxy` 的 `host` 覆盖值。动作执行时尚未确定上游则使用该变量明确失败并返回 503，不填空、不猜目标、不重放规则；延后响应头动作可在代理目标确定后使用，respond/static 无上游时同样失败。正则运行工作区独立限额为全进程 64 MiB；额度不足返回 503。
 
 ## 2. CLI
 

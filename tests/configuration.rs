@@ -1268,8 +1268,24 @@ fn chain_configuration_compiles_and_rejects_invalid_candidates() -> TestResult {
             Some("POLICY_INVALID_REGEX"),
         ),
         (
-            "chain { rule { header \"response\" { }; continue; }; }",
-            Some("CONFIG_UNSUPPORTED"),
+            "chain { rule { header \"response\" { }; }; }",
+            Some("POLICY_INVALID_CHAIN"),
+        ),
+        (
+            "chain { rule { respond 200; respond 201; }; }",
+            Some("POLICY_INVALID_CHAIN"),
+        ),
+        (
+            "chain { rule { continue; respond 200; }; }",
+            Some("POLICY_INVALID_CHAIN"),
+        ),
+        (
+            "chain { rule { branch { otherwise { reenter; respond 200; }; }; }; }",
+            Some("POLICY_INVALID_CHAIN"),
+        ),
+        (
+            "chain { rule { branch { otherwise { }; }; }; }",
+            Some("POLICY_INVALID_CHAIN"),
         ),
     ];
     for (site, expected) in cases {
@@ -1299,13 +1315,16 @@ fn policy_regex_captures_do_not_leak_from_failed_matches() -> TestResult {
         .chain
         .as_ref()
         .ok_or("missing chain")?;
-    let headers = http::HeaderMap::new();
+    let mut headers = http::HeaderMap::new();
     let mut ctx = MatchContext {
         method: &http::Method::GET,
-        path: "/secret",
-        headers: &headers,
+        path: "/secret".into(),
+        headers: &mut headers,
+        state: None,
         client_ip: "127.0.0.1".parse()?,
         steps_left: 1024,
+        reentries: 0,
+        error_status: None,
         captures: [None; 9],
     };
     assert!(matches!(
@@ -1334,13 +1353,16 @@ fn policy_steps_short_circuit_and_branch_are_bounded() -> TestResult {
         .chain
         .as_ref()
         .ok_or("missing chain")?;
-    let headers = http::HeaderMap::new();
+    let mut headers = http::HeaderMap::new();
     let mut ctx = MatchContext {
         method: &http::Method::GET,
-        path: "/value",
-        headers: &headers,
+        path: "/value".into(),
+        headers: &mut headers,
+        state: None,
         client_ip: "127.0.0.1".parse()?,
         steps_left: 1024,
+        reentries: 0,
+        error_status: None,
         captures: [None; 9],
     };
     assert!(matches!(
@@ -1371,6 +1393,207 @@ fn policy_steps_short_circuit_and_branch_are_bounded() -> TestResult {
     ));
     assert_eq!(ctx.steps_left, 1);
     assert_eq!(ctx.captures, [None; 9]);
+    fs::remove_file(entry)?;
+    Ok(())
+}
+
+#[test]
+fn header_policy_schema_and_templates() -> TestResult {
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let entry =
+        std::env::temp_dir().join(format!("rill-headers-{}-{unique}.kdl", std::process::id()));
+    let cases = [
+        (
+            r#"header "request" real-client-ip="X-Real-IP" { set "X-Test" "{client-ip}/{site}/{path}/{capture.1}/{upstream-authority}"; add "X-Test" "value"; replace "X-Test" "" "x"; delete "X-Old"; }; header "response" when-content-type="text/html" when-status="200..399" { vary "Accept-Encoding"; }; continue;"#,
+            None,
+        ),
+        (
+            r#"header "request" when-status="200..399" {}; continue;"#,
+            Some("CONFIG_UNKNOWN"),
+        ),
+        (
+            r#"header "response" when-status="400..200" {}; continue;"#,
+            Some("POLICY_INVALID_RESPONSE"),
+        ),
+        (
+            r#"header "response" when-status="199..200" {}; continue;"#,
+            Some("POLICY_INVALID_RESPONSE"),
+        ),
+        (
+            r#"header "response" unexpected="x" {}; continue;"#,
+            Some("CONFIG_UNKNOWN"),
+        ),
+        (
+            r#"header "request" real-client-ip="X-Other" {}; continue;"#,
+            Some("POLICY_PROTECTED_HEADER"),
+        ),
+        (
+            r#"header "response" { delete "content-length"; }; continue;"#,
+            Some("POLICY_PROTECTED_HEADER"),
+        ),
+        (
+            r#"header "request" { set "X-Forwarded-For" "x"; }; continue;"#,
+            Some("POLICY_PROTECTED_HEADER"),
+        ),
+        (
+            r#"header "request" { set "X-Test" "{secret}"; }; continue;"#,
+            Some("POLICY_INVALID_TEMPLATE"),
+        ),
+        (
+            r#"header "request" { set "X-Test" "oops{path"; }; continue;"#,
+            Some("POLICY_INVALID_TEMPLATE"),
+        ),
+        (
+            r#"header "request" { set "X-Test" "bad\r\nvalue"; }; continue;"#,
+            Some("POLICY_INVALID_TEMPLATE"),
+        ),
+        (
+            r#"header "request" { vary "Accept"; }; continue;"#,
+            Some("POLICY_INVALID_RESPONSE"),
+        ),
+    ];
+    for (body, expected) in cases {
+        fs::write(
+            &entry,
+            format!(
+                "server {{ http \"127.0.0.1:8080\"; }}
+site \"example.test\" {{ chain {{ rule {{ {body} }}; }}; }}"
+            ),
+        )?;
+        match (build(&entry, &ConfigurationOnly), expected) {
+            (Ok(_), None) => (),
+            (Err(error), Some(code)) => assert_eq!(error.code, code),
+            (result, expected) => panic!("unexpected result {result:?}; expected {expected:?}"),
+        }
+    }
+    fs::remove_file(entry)?;
+    Ok(())
+}
+
+#[test]
+fn chain_path_actions_validate_templates_and_prepare_roots() -> TestResult {
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let entry =
+        std::env::temp_dir().join(format!("rill-paths-{}-{unique}.kdl", std::process::id()));
+    let cases = [
+        (
+            "rewrite \"https://example.org/\"; continue;",
+            Some("POLICY_INVALID_PATH"),
+        ),
+        ("rewrite \"/a?x=1\"; continue;", Some("POLICY_INVALID_PATH")),
+        (
+            "rewrite \"/{client-ip}\"; continue;",
+            Some("POLICY_INVALID_TEMPLATE"),
+        ),
+        (
+            "strip-prefix \"/a/../b\"; continue;",
+            Some("POLICY_INVALID_PATH"),
+        ),
+        (
+            "try-files root=\".\"; continue;",
+            Some("POLICY_INVALID_PATH"),
+        ),
+        (
+            "try-files root=\".\" \"/../x\"; continue;",
+            Some("POLICY_INVALID_PATH"),
+        ),
+        (
+            "try-files root=\".\" \"/{site}\"; continue;",
+            Some("POLICY_INVALID_TEMPLATE"),
+        ),
+        (
+            "try-files root=\"rill-nonexistent-root\" \"/x\"; continue;",
+            Some("RESOURCE_IO"),
+        ),
+        (
+            "rewrite \"/safe/{capture.1}\"; strip-prefix \"/safe\"; continue;",
+            None,
+        ),
+        ("rewrite \"/%{capture.1}\"; continue;", None),
+        (
+            "try-files root=\".\" \"/missing\" \"/{path}\"; continue;",
+            None,
+        ),
+    ];
+    for (body, expected) in cases {
+        fs::write(
+            &entry,
+            format!(
+                "server {{ http \"127.0.0.1:8080\"; }}\nsite \"example.test\" {{ chain {{ rule {{ {body} }}; }}; }}"
+            ),
+        )?;
+        match (build(&entry, &ConfigurationOnly), expected) {
+            (Ok(_), None) => (),
+            (Err(error), Some(code)) => assert_eq!(error.code, code, "{body}"),
+            (result, expected) => panic!("unexpected result {result:?}; expected {expected:?}"),
+        }
+    }
+    fs::remove_file(entry)?;
+    Ok(())
+}
+
+#[test]
+fn error_chain_schema_rejects_success_and_invalid_matchers() -> TestResult {
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let entry = std::env::temp_dir().join(format!(
+        "rill-error-chain-{}-{unique}.kdl",
+        std::process::id()
+    ));
+    let cases = [
+        (
+            "rule { respond 404; }; handle-errors { rule { match { error-status 404; }; respond 404; }; };",
+            None,
+        ),
+        (
+            "rule { respond 404; }; handle-errors { rule { match { error-status 502; }; respond 500; }; };",
+            None,
+        ),
+        (
+            "rule { respond 404; }; handle-errors { rule { match { error-status 399; }; respond 404; }; };",
+            Some("POLICY_INVALID_MATCHER"),
+        ),
+        (
+            "rule { respond 404; }; handle-errors { rule { match { error-status 600; }; respond 404; }; };",
+            Some("POLICY_INVALID_MATCHER"),
+        ),
+        (
+            "rule { respond 404; }; handle-errors { rule { match { error-status 404 405; }; respond 404; }; };",
+            Some("POLICY_INVALID_MATCHER"),
+        ),
+        (
+            "rule { respond 404; }; handle-errors { rule { respond 200; }; };",
+            Some("POLICY_INVALID_RESPONSE"),
+        ),
+        (
+            "rule { respond 404; }; handle-errors { rule { respond 304; }; };",
+            Some("POLICY_INVALID_RESPONSE"),
+        ),
+        (
+            "rule { respond 404; }; handle-errors { rule { branch { otherwise { respond 200; }; }; }; };",
+            Some("POLICY_INVALID_RESPONSE"),
+        ),
+        (
+            "rule { respond 404; }; handle-errors { rule { respond 404; }; }; rule { respond 404; };",
+            Some("POLICY_INVALID_CHAIN"),
+        ),
+        (
+            "rule { respond 404; }; handle-errors { handle-errors { rule { respond 404; }; }; };",
+            Some("POLICY_INVALID_CHAIN"),
+        ),
+    ];
+    for (body, expected) in cases {
+        fs::write(
+            &entry,
+            format!(
+                "server {{ http \"127.0.0.1:8080\"; }}\nsite \"example.test\" {{ chain {{ {body} }}; }}"
+            ),
+        )?;
+        match (build(&entry, &ConfigurationOnly), expected) {
+            (Ok(_), None) => (),
+            (Err(error), Some(code)) => assert_eq!(error.code, code, "{body}"),
+            (result, expected) => panic!("unexpected result {result:?}; expected {expected:?}"),
+        }
+    }
     fs::remove_file(entry)?;
     Ok(())
 }
