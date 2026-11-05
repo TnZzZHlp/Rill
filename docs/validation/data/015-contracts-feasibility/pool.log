@@ -1,0 +1,27 @@
+POLICY good group=1
+POLICY wrong-ca group=2
+POLICY wrong-name group=3
+POLICY h1 group=4
+POLICY target-one group=5
+POLICY target-two group=6
+POLICY plain-h1 group=7
+POLICY plain-h2 group=8
+POLICY forced-collision group=1 token=2
+proxy ready: 127.0.0.1:36811 -> 127.0.0.1:45553 tls-h2
+POOL policy=good reused=false fd=15 token=1
+POOL policy=good reused=true fd=15 token=1
+proxy failure: Upstream InvalidCert context: TLS connect() failed: error:0A000086:SSL routines:tls_post_process_server_certificate:certificate verify failed:ssl/statem/statem_clnt.c:2125:, SNI: grpc.test cause: local address 127.0.0.1:40902
+proxy failure: Upstream InvalidCert context: TLS connect() failed: error:0A000086:SSL routines:tls_post_process_server_certificate:certificate verify failed:ssl/statem/statem_clnt.c:2125:, SNI: wrong.test cause: local address 127.0.0.1:40904
+proxy failure: Upstream TLSHandshakeFailure context: TLS connect() failed: error:0A000460:SSL routines:ssl3_read_bytes:tlsv1 alert no application protocol:ssl/record/rec_layer_s3.c:918:SSL alert number 120, SNI: grpc.test cause: local address 127.0.0.1:40920
+POOL policy=good reused=true fd=15 token=1
+POOL policy=target-one reused=false fd=16 token=5
+POOL policy=target-two reused=false fd=17 token=6
+POOL policy=target-one reused=true fd=16 token=5
+POOL_IDENTITY_MISMATCH policy=forced-collision reused=true fd=15 expected=2 actual=Some(1)
+proxy failure:  POOL_IDENTITY_MISMATCH context: Peer: addr: 127.0.0.1:45553, scheme: HTTPS, sni: grpc.test cause:
+POOL policy=good reused=true fd=15 token=1
+POOL policy=plain-h1 reused=false fd=18 token=7
+POOL policy=plain-h1 reused=true fd=18 token=7
+POOL policy=plain-h2 reused=false fd=19 token=8
+proxy failure: Upstream ReadError context: Peer: addr: 127.0.0.1:47497, scheme: HTTP cause:  context: while reading h2 header cause: stream closed because of a broken pipe
+POOL policy=plain-h1 reused=true fd=18 token=7

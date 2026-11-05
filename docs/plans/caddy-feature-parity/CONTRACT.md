@@ -2,13 +2,13 @@
 
 ## 1. 基线与排除项
 
-本文件是 001-T02 提交用户验收的契约，不是实现或可行性证明。001-T03 的隔离验证已部分执行但尚未齐备（原 h2 连接器阻断系测试后端驱动错误，已修复并撤回；见 [验证记录](../../validation/013-caddy-001-contracts-feasibility.md) 第 4 节），001-T04 用户验收尚未取得；后续阶段不得以本文存在代替关卡。
+本文件是 001-T02 提交用户验收的契约，不是实现或可行性证明。001-T03 的机制隔离验证与独立复审已通过（[015 收口记录](../../validation/015-caddy-contracts-feasibility-closure.md)），001-T04 用户在最终验收请求后明确回复“验收通过”，本契约及第 9 节清单已确认冻结；后续阶段仍需单独实施授权。
 
 基线 HEAD 为 `450722f`，原 rill-web-server 012 完成提交为 `c5e6fa7`；记录的 rustc/cargo 为 1.99.1，未验证 1.95。`target` 是指向外部共享缓存的符号链接，不得删除或替换。观测功能移除后的源码只有 logging、access、identity、owner、request；没有 metrics、OTLP、tracing 代码，配置依现行 `docs/configuration.md` 拒绝相应字段。不得恢复这些功能。
 
 差距文档中的 25 个域名来自磁盘配置调查，未逐一在线验证；“约 12 个可迁移”没有逐站验收；606 MiB 是目录大小，不是响应正文大小；并未扫描所有静态 root 的 sidecar。历史 RouteId 是 SHA-256 前缀渲染为 32 个十六进制字符，而非 16 个；当前 metrics 已不存在。这些历史描述均不能作为交付证据。
 
-2.11 全部排除；OTLP、tracing、metrics 全部排除，2.10 仅日志身份。排除生产切换、Caddyfile、CEL、PCRE 回溯引用及断言、CONNECT/SOCKS、负载均衡、健康检查、ACME、HTTP/3、插件及分布式配置。通用 gRPC 在拟批准范围内，Pingora h2/gRPC 可行性待 001-T03 隔离验证。冻结验收清单见第 9 节，须逐项接受或拒绝。
+2.11 全部排除；OTLP、tracing、metrics 全部排除，2.10 仅日志身份。排除生产切换、Caddyfile、CEL、PCRE 回溯引用及断言、CONNECT/SOCKS、负载均衡、健康检查、ACME、HTTP/3、插件及分布式配置。通用 gRPC 在批准范围内，Pingora 原型四类调用与池政策机制已由 014/015 实测，生产功能由 005 实现。冻结验收清单见第 9 节，须逐项接受或拒绝。
 
 ## 2. 差距追溯矩阵
 
@@ -28,7 +28,7 @@
 
 ## 3. KDL 契约
 
-以下是拟实施的精确语法，非当前已支持的语法。KDL v2 使用 `#true`/`#false`；未知节点、属性和参数拒绝，错误码 `UNKNOWN_FIELD`。路径相对声明它的文件；Profile 仍只允许现有五个超时/WebSocket 字段，Snippet 仍只展开旧 route，来源和引用 span 不丢失。示例中的路径和值均为占位示意，不是真实秘密。示例片段位于现有合法 `site` 内，除非注明其他位置；其余必需的 server/TLS 仍遵循现有配置契约。
+以下是拟实施的精确语法，非当前已支持的语法。KDL v2 使用 `#true`/`#false`；未知节点、属性和参数拒绝，错误码 `CONFIG_UNKNOWN`。路径相对声明它的文件；Profile 仍只允许现有五个超时/WebSocket 字段，Snippet 仍只展开旧 route，来源和引用 span 不丢失。示例中的路径和值均为占位示意，不是真实秘密。示例片段位于现有合法 `site` 内，除非注明其他位置；其余必需的 server/TLS 仍遵循现有配置契约。
 
 ### 3.1 模式与链
 
@@ -47,7 +47,7 @@ chain {
 
 ### 3.2 匹配器
 
-`match` 恰有一个表达式；`all`、`any` 有一个或多个表达式，`not` 恰有一个。叶子为 `method "GET"`、`header-equal "name" "value"`、`header-prefix "name" "prefix"`、`path-glob "/api/*"`、`path-regex "^/api/"`、`client-cidr "192.0.2.0/24"`、`error-status 404`。方法区分大小写；头名不区分大小写，值逐个比较且不拼接；路径是已验证的原始路径，不含查询；glob 的 `*` 可跨 `/`、`?` 匹配一个字符，反斜杠转义字面字符。客户 IP 来自现有可信代理解析。`error-status` 仅在错误链有效。正则采用 Rust regex 左最先匹配，无回溯引用或前后向断言。
+`match` 恰有一个表达式；`all`、`any` 有一个或多个表达式，`not` 恰有一个。叶子为 `method "GET"`、`header-equal "name" "value"`、`header-prefix "name" "prefix"`、`path-glob "/api/*"`、`path-regex "^/api/"`、`client-cidr "192.0.2.0/24"`、`error-status 404`。方法区分大小写；头名不区分大小写，值逐个比较且不拼接；路径取当前 RequestContext.uri 的已验证、尚未做静态文件单次解码的 path，不含查询；rewrite/strip-prefix/try-files 后以及 reenter 的后续匹配均看到更新后的当前 path。original_uri 仅用于入口诊断与日志，不参与重入匹配；glob 的 `*` 可跨 `/`、`?` 匹配一个字符，反斜杠转义字面字符。客户 IP 来自现有可信代理解析。`error-status` 仅在错误链有效。正则采用 Rust regex 左最先匹配，无回溯引用或前后向断言。
 
 接受：
 ```kdl
@@ -63,7 +63,7 @@ match {
 
 ### 3.3 头部
 
-非终止动作 `header` 的首参数为 `request` 或 `response`；块中操作依次为 `set "name" "value"`、`add "name" "value"`、`delete "name"`、`replace "name" "literal" "replacement"`、`vary "token"`。`vary` 仅响应侧，按大小写不敏感去重。响应块可使用 `when-content-type="text/html"` 按不含参数的 MIME 类型匹配，及 `when-status="200..399"` 按闭区间匹配最终状态；两者同时出现时均须满足，状态范围端点为 200–599 且起点不大于终点，否则 `POLICY_INVALID_RESPONSE`。请求块不允许这些属性；`match` 仅匹配请求，错误链的 `error-status` 除外，不提供响应状态叶子。Location 使用同一 set/replace，不改变连接目标。`real-client-ip="X-Real-IP"` 仅为 `header "request"` 的属性，写入可信代理解析所得地址；可信代理列表为空时拒绝配置并返回 `POLICY_INVALID_CHAIN`。普通 header 块对 Host 或 authority 的操作均以 `POLICY_PROTECTED_HEADER` 拒绝；上游 Host 改写只允许固定 `proxy` 的 `host` 属性。值不支持任意环境变量；只允许字面值和 `{client-ip}`、`{upstream-authority}`、`{path}`、`{site}`、`{capture.1}` 至 `{capture.9}`，替换后校验头值。
+非终止动作 `header` 的首参数为 `request` 或 `response`；块中操作依次为 `set "name" "value"`、`add "name" "value"`、`delete "name"`、`replace "name" "literal" "replacement"`、`vary "token"`。`vary` 仅响应侧，按大小写不敏感去重。响应块可使用 `when-content-type="text/html"` 按不含参数的 MIME 类型匹配，及 `when-status="200..399"` 按闭区间匹配最终状态；两者同时出现时均须满足，状态范围端点为 200–599 且起点不大于终点，否则 `POLICY_INVALID_RESPONSE`。请求块不允许这些属性；`match` 仅匹配请求，错误链的 `error-status` 除外，不提供响应状态叶子。Location 使用同一 set/replace，不改变连接目标。`real-client-ip="X-Real-IP"` 仅为 `header "request"` 的属性，只允许目标字段 `X-Real-IP`（大小写不敏感），其他名称以 `POLICY_PROTECTED_HEADER` 拒绝；值来自现有客户地址解析。可信代理列表为空时使用真实对端地址，非空时仅对可信直接对端解析转发链，不额外信任原始 X-Real-IP。普通 header 块对 Host 或 authority 的操作均以 `POLICY_PROTECTED_HEADER` 拒绝；上游 Host 改写只允许固定 `proxy` 的 `host` 属性。值不支持任意环境变量；只允许字面值和 `{client-ip}`、`{upstream-authority}`、`{path}`、`{site}`、`{capture.1}` 至 `{capture.9}`，替换后校验头值。
 
 接受：
 ```kdl
@@ -87,7 +87,7 @@ continue
 
 ### 3.5 路径、分支与错误
 
-`rewrite "/path"` 替换路径并保留原查询，`strip-prefix "/api"` 要求路径段边界匹配，否则该动作失败；两者非终止，重新校验路径，显式 `reenter` 从链头开始并消耗预算。`try-files root="/srv/www" "/a" "/index.html"` 依次在约束 root 下检查普通文件，首个存在则将路径改为该项；仅 Missing 继续，其他错误分类处理。`branch` 内顺序排列 `when { match {...}; ... }` 和最多一个末尾 `otherwise {...}`，只执行首个匹配分支；分支必须终止或显式 continue。`handle-errors` 是 chain 的可选末尾节点，包含 rule，不能嵌套 handle-errors；仅处理第 7 节可捕获的本地错误。
+`rewrite "/path"` 替换路径并保留原查询，目标不能自带查询或 fragment；`strip-prefix "/api"` 要求路径段边界匹配，不匹配产生 `POLICY_PATH_MISS`（LocalNotFound/404，可进入错误链），不继续下一规则；精确剥完路径时得到 `/`。两者非终止，重新校验路径，显式 `reenter` 从链头开始并消耗预算。rewrite/try-files 候选可使用 `{path}` 与 `{capture.1}`–`{capture.9}`，分别取当前已验证路径和当前成功规则捕获；其他变量为 `POLICY_INVALID_TEMPLATE`，展开后仍执行完整路径与 root 约束验证，不二次解码。`try-files root="/srv/www" "/a" "/index.html"` 依次在约束 root 下检查普通文件，首个存在则将路径改为该项并保留原查询；仅 Missing 继续尝试下一个候选，所有候选 Missing 时产生 `POLICY_FILE_MISS`（LocalNotFound/404，可进入错误链），不保留原路径继续。其他 IO/权限错误不能按 Missing 处理。`branch` 内顺序排列 `when { match {...}; ... }` 和最多一个末尾 `otherwise {...}`，只执行首个匹配分支；分支必须终止或显式 continue。`handle-errors` 是 chain 的可选末尾节点，包含 rule，不能嵌套 handle-errors；仅处理第 7 节可捕获的本地错误。
 
 接受：
 ```kdl
@@ -171,7 +171,7 @@ webdav root="/srv/dav" storage-id="documents"
 
 ### 3.10 替换及编码
 
-`body-replace mime="text/html"` 包含按序的 `literal "old" "new"` 或 `regex "pattern" "replacement"`；正则替换支持 `$1` 至 `$9` 及 `$$`。`encode mime="text/html" { gzip level=3; zstd level=3; }` 启用协商，两者至少一个。均为非终止响应过滤声明；body-replace 可在同一链中多次声明，encode 在主链与错误链合计最多声明一次，超出以 `POLICY_LIMIT` 拒绝；仅累积实际执行路径上、终止前已执行的声明，按执行声明顺序收集。它们作用于最终终止动作的响应，包括 serve-files、proxy、respond 和错误链响应；进入错误链后保留此前已执行的声明，再追加错误链实际执行的声明，错误链未执行的声明不生效。所有 body-replace 内 literal/regex 合计每响应最多 16 条，跨声明及错误链累计；编译时对可能路径超限拒绝 `POLICY_LIMIT`，运行时仍执行同一上限。所有替换按收集顺序运行，再应用唯一已执行的 encode 协商。MIME 必须显式列出，可重复 mime 属性以外的节点 `mime "type"` 扩展；不支持通配。流式策略及例外见第 4 节。
+`body-replace mime="text/html"` 包含按序的 `literal "old" "new"` 或 `regex "pattern" "replacement"`；正则替换支持 `$1` 至 `$9` 及 `$$`；不存在的捕获展开为空。其他 `$` 形式、命名捕获替换及两位编号以 `POLICY_INVALID_REPLACEMENT` 拒绝，避免 `$1name` 的词法歧义，捕获后的字面文字必须以非字母数字/下划线分隔。`encode mime="text/html" { gzip level=3; zstd level=3; }` 启用协商，两者至少一个。均为非终止响应过滤声明；body-replace 可在同一链中多次声明，encode 在主链与错误链合计最多声明一次，超出以 `POLICY_LIMIT` 拒绝；仅累积实际执行路径上、终止前已执行的声明，按执行声明顺序收集。它们作用于最终终止动作的响应，包括 serve-files、proxy、respond 和错误链响应；进入错误链后保留此前已执行的声明，再追加错误链实际执行的声明，错误链未执行的声明不生效。所有 body-replace 内 literal/regex 合计每响应最多 16 条，跨声明及错误链累计；编译时对可能路径超限拒绝 `POLICY_LIMIT`，运行时仍执行同一上限。所有替换按收集顺序运行，再应用唯一已执行的 encode 协商。MIME 必须显式列出，可重复 mime 属性以外的节点 `mime "type"` 扩展；不支持通配。流式策略及例外见第 4 节。无界正则经 regex-syntax HIR 的 maximum_len=None 判定后使用保守 EOF 回退：逐块累积尚不可判定的输入，累计待决到 1 MiB 即拒绝后续字节，不使用固定重叠窗口；到 EOF 后在完整待决序列上执行同一次 Rust 左最先匹配及捕获展开，输出按不大于 64 KiB 的片段交接且累计上限 64 MiB。该回退可能完全不能提前输出，是 D06 已接受的边界，不允许为保证成功而无限聚合或落盘。字面量使用模式长度决定的待决前缀；有界正则必须保留其实际最大匹配长度与边界断言所需上下文，不能把字面量窗口当成任意正则的正确性依据。
 
 接受：
 ```kdl
@@ -185,7 +185,7 @@ continue
 
 ### 3.11 文件日志与身份
 
-site 内 `access-log`：`file`、`rotate-size`、`retain-files`、`retain-days` 为必需属性；`field` 可重复，白名单为 `timestamp`、`site`、`route`、`method`、`status`、`duration-ms`、`bytes`、`path`、`client-ip`。默认前七项，path/client-ip 只在明确配置时记录；不得记录任意头、凭据或 Cookie。`site-label` 为 site 静态身份，缺省使用规范化配置域名；rule 参数为 route 身份，未命名按配置顺序生成 `rule-N`。不能使用请求 Host/URI 作为身份。site 未配置 `access-log` 时回退现有全局 stderr 访问日志，由现有 observability access-log 设置控制；两者均配置时，站点文件日志和已启用的全局 stderr 日志各自输出，关闭全局设置不关闭站点文件日志。
+site 内 `access-log`：`file`、`rotate-size`、`retain-files`、`retain-days` 为必需属性；数值分别接受 16 KiB–10 MiB、1–5、1–7（天），其他值为 `LOG_LIMIT`。`field` 可重复，白名单为 `timestamp`、`site`、`route`、`method`、`status`、`duration-ms`、`bytes`、`path`、`client-ip`。默认前七项，path/client-ip 只在明确配置时记录；不得记录任意头、凭据或 Cookie。`site-label` 为 site 静态身份，缺省使用规范化配置域名；rule 参数为 route 身份，未命名按配置顺序生成 `rule-N`。不能使用请求 Host/URI 作为身份。site 未配置 `access-log` 时回退现有全局 stderr 访问日志，由现有 observability access-log 设置控制；两者均配置时，站点文件日志和已启用的全局 stderr 日志各自输出，关闭全局设置不关闭站点文件日志。
 
 接受：
 ```kdl
@@ -200,13 +200,13 @@ access-log file="/var/log/rill/site.jsonl" rotate-size=10485760 retain-files=5 r
 
 ## 4. 执行顺序与语义
 
-请求开始读取一次 `Arc<RuntimeSnapshot>`，直至流结束持有；旧请求不重读活动代次。按声明顺序短路求值，all 遇假、any 遇真停止，not 取反。每个求值节点、动作、分支进入和重入计入共同步数；首个匹配分支排他。规则按序执行；serve-files、respond、proxy、dynamic-proxy、webdav 终止；非终止序列必须显式 continue；reenter 从头开始且最多 4 次。嵌套和步数见第 5 节。错误链最多进入一次，错误链失败直接失败。
+请求开始读取一次 `Arc<RuntimeSnapshot>`，直至流结束持有；旧请求不重读活动代次。按声明顺序短路求值，all 遇假、any 遇真停止，not 取反。每个实际访问的 matcher 节点先消耗共享 steps_left；预算不足立即失败，不计算未访问分支。规则在临时捕获集合中求值：false 全部丢弃，not 永不输出捕获；all 全真采用最后一个已成功求值的正向 path-regex 捕获，any 采用首个真分支捕获，无正则则为空。仅规则整体匹配后替换 RequestContext.captures；进入下一条成功规则或 reenter 时不能沿用旧捕获。延后响应过滤声明在登记时创建请求级 ResponseFilterInstance，冻结该规则捕获 Arc 值，不从后续规则读回已变更的捕获；同一组共享字节只计一次，旧实例仍持有的捕获在释放前继续占用 36 KiB 预算，重入追加实例也受 256 个及 64 KiB 元数据预算限制。每个求值节点、动作、分支进入和重入计入共同步数；首个匹配分支排他。规则按序执行；serve-files、respond、proxy、dynamic-proxy、webdav 终止；非终止序列必须显式 continue；reenter 从头开始且最多 4 次。嵌套和步数见第 5 节。错误链最多进入一次，错误链失败直接失败。
 
-请求处理为匹配、鉴权、请求头/路径动作、终止动作；有资格的本地错误在响应头发送前进入错误链。响应头条件在终止动作产生最终状态和上游响应头后求值，MIME 匹配解析后的 Content-Type，不对请求条件提前猜测。先解码受支持的 Content-Encoding，再按声明顺序替换，再按 Accept-Encoding 协商编码，最后统一生成分帧和响应头；上游未知编码、`Cache-Control: no-transform`、Range、SSE、gRPC、WS 不变换；Pingora h2/gRPC 可行性仍待 001-T03 隔离验证。HEAD、204、304 不发送正文；HEAD 使用对应 GET 表示的可确定元数据，无法预知变换长度时不发送 Content-Length。变换移除原 Content-Length、强 ETag 和 Content-MD5；合并 Vary: Accept-Encoding；不可接受任何编码时 406。未变换静态 sidecar 维持既有协商与 Range 语义。变换后不得错误复用源表示缓存验证器。
+请求处理为匹配、鉴权、请求头/路径动作、终止动作；有资格的本地错误在响应头发送前进入错误链。响应头条件在终止动作产生最终状态和上游响应头后求值，MIME 匹配解析后的 Content-Type，不对请求条件提前猜测。先解码受支持的 Content-Encoding，再按声明顺序替换，再按 Accept-Encoding 协商编码，最后统一生成分帧和响应头；上游未知编码、`Cache-Control: no-transform`、Range、SSE、gRPC、WS 不变换；Pingora h2/gRPC 可行性仍待 001-T03 隔离验证。HEAD、204、304 不发送正文；HEAD 使用对应 GET 表示的可确定元数据，无法预知变换长度时不发送 Content-Length。变换移除原 Content-Length、强 ETag 和 Content-MD5；合并 Vary: Accept-Encoding；不可接受任何编码时 406。未变换静态 sidecar 维持既有协商与 Range 语义。变换后不得错误复用源表示缓存验证器。gRPC/SSE/WS、no-transform 与 Range 旁路依据终止动作/原始响应元数据判断，不能通过自定义响应头改 MIME 来绕过；响应条件在变换前求值，表示/framing 修正最后执行。静态 body-replace 命中时从 identity 表示读取，不因选中 br/gz sidecar 跳过已声明替换；仅 encode 命中而不替换时保留已有 sidecar 协商。
 
 | 头类别 | 规则 |
 | --- | --- |
-| Content-Length、Transfer-Encoding | 用户不能设置、追加、替换或删除；框架拥有分帧 |
+| Content-Length、Transfer-Encoding、Content-Encoding | 通用头动作不能设置、追加、替换或删除；协议/正文适配层拥有分帧和编码，避免头与实际正文不一致 |
 | Connection 及其列出的 token、Keep-Alive、Upgrade、TE、Trailer、Proxy-Connection | 通用头动作禁止；协议适配层拥有 |
 | Host、`:authority` | 通用动作禁止；仅固定 proxy 的 host 属性，不能改变 TLS 身份 |
 | Forwarded、X-Forwarded-* | 通用动作禁止，现有可信代理策略拥有 |
@@ -217,7 +217,7 @@ respond 的 Content-Length 由 UTF-8 字节数决定；HEAD 不发送体但在�
 
 ## 5. 限额表
 
-以下新限额为待验收的硬上限，不是性能承诺；超限不能静默截断。配置期错误为 ConfigError code，请求期代码为内部脱敏失败码，状态见第 7 节。MiB/KiB 为二进制单位。
+以下新限额为已获用户验收的硬上限，不是性能承诺；超限不能静默截断。配置期错误为 ConfigError code，请求期代码为内部脱敏失败码，状态见第 7 节。MiB/KiB 为二进制单位。
 
 | 对象与作用域 | 上限/默认 | 失败码及执行模块 |
 | --- | --- | --- |
@@ -232,13 +232,13 @@ respond 的 Content-Length 由 UTF-8 字节数决定；HEAD 不发送体但在�
 | 每链 matcher 节点 | 256 | `POLICY_LIMIT`；config/http_policy |
 | 每正则 UTF-8 字节 | 4096 | `POLICY_INVALID_REGEX`；config/http_policy |
 | 正则显式重复次数 | 1000；无界重复允许 | `POLICY_INVALID_REGEX`；config/http_policy |
-| 每正则编译程序及 DFA 缓存 | 各 2 MiB | `POLICY_INVALID_REGEX`；http_policy/body_transform |
+| 每正则编译程序及 DFA 缓存 | 各 2 MiB；进程编译策略和 DFA 缓存分别最多 64 MiB，含候选及旧代次 | `POLICY_INVALID_REGEX`/`POLICY_LIMIT`；http_policy/body_transform |
 | 每 glob 字节 | 1024 | `POLICY_LIMIT`；http_policy |
 | rewrite 重入 | 每请求 4 次 | `POLICY_BUDGET_EXCEEDED`；http_policy |
 | 替换规则 | 每响应 16 条 | `POLICY_LIMIT`；body_transform |
 | 待决和替换缓冲 | 每请求合计 1 MiB，全进程 64 MiB | `BODY_BUDGET_EXCEEDED`；body_transform |
 | 解码总输出、膨胀 | 每响应 64 MiB、至多输入的 100 倍加 64 KiB | `BODY_BUDGET_EXCEEDED`；body_transform |
-| 替换输出与 CPU | 每响应 64 MiB，处理 CPU 2 秒 | `BODY_BUDGET_EXCEEDED`；body_transform |
+| 替换输出、CPU 与等待预算 | 每响应 64 MiB，CPU 完成预算 2 秒、执行等待 2 秒 | `BODY_BUDGET_EXCEEDED`；body_transform；CPU 在匹配/展开安全检查点累计，单次库调用不可抢占；超时不发布迟到结果，仍运行任务继续占用许可 |
 | 变换并发 | 64 响应 | `BODY_CAPACITY`；body_transform |
 | 压缩 | gzip level 3、window 32 KiB；zstd level 3、window 1 MiB；不接受其他 level | `POLICY_LIMIT`；body_transform |
 | bcrypt | cost 10–14 | `AUTH_INVALID_HASH`；auth |
@@ -252,10 +252,13 @@ respond 的 Content-Length 由 UTF-8 字节数决定；HEAD 不发送体但在�
 | DAV 临时写入期限 | 300 秒 | `DAV_TIMEOUT`；webdav |
 | 动态目标 | URL 4096 字节；代理跳数最多 1，不跟随重定向 | `DYNAMIC_TARGET_INVALID`；proxy |
 | 动态代理资源 | 全进程 128 个活动请求、DNS 候选 64、每目标 8 连接 | `DYNAMIC_CAPACITY`；proxy |
+| 池政策身份 | 全进程 4096 个，含候选与旧政策；唯一 u64 token checked_add 分配、不回绕复用 | `POLICY_LIMIT`；proxy/runtime |
+| 政策生成的头及捕获 | 请求/响应头各 64 KiB；每组最多 9 个路径捕获，当前及冻结捕获合计每请求 36 KiB；响应过滤实例最多 256 个，元数据合计 64 KiB | `POLICY_LIMIT`/`POLICY_BUDGET_EXCEEDED`；http_policy |
 | 日志队列 | 每站点 1024 条，全进程 16384 条；每条 16 KiB | `LOG_DROPPED`；observability |
-| 日志站点/FD/worker | 全进程各 64；含旧代次尚持有资源 | `LOG_CAPACITY`；observability |
+| 日志站点/sink/worker | 全进程各 64；含候选及旧代次尚持有资源 | `LOG_CAPACITY`；observability |
+| 日志 FD | 全进程 256，包含父目录、活动文件、候选与轮转交接 FD | `LOG_CAPACITY`；observability |
 | 日志轮转 | 每文件 10 MiB；保留 5 个轮转文件、7 天；各配置不得超过此值 | `LOG_LIMIT`；observability |
-| 日志磁盘 | 每站点最多 6 文件、60 MiB；全进程最多 384 文件、3840 MiB | `LOG_LIMIT`；observability |
+| 日志磁盘 | 每站点最多 6 文件、60 MiB；全进程最多 384 文件、3840 MiB；每父目录扫描最多 4096 项 | `LOG_LIMIT`；observability |
 | 日志关闭等待 | 5 秒；请求不等待磁盘 | `LOG_TIMEOUT`；observability |
 | 固定上游 DNS | 缓存 60 秒，失败退避 1 秒，候选 64，建连尝试 8 | 既有地址/上游错误；proxy |
 | 代理默认期限 | connect 5 秒、read 60 秒、request 300 秒、idle 60 秒；现有配置可覆盖 | 既有超时；proxy |
@@ -277,11 +280,49 @@ respond 的 Content-Length 由 UTF-8 字节数决定；HEAD 不发送体但在�
 pub struct RuleChain { pub rules: Vec<Rule>, pub errors: Option<ErrorChain> } // 手动 impl Debug
 pub struct Rule { pub id: Box<str>, pub matcher: Box<dyn Matcher>, pub actions: Vec<Box<dyn Action>> }
 pub struct ErrorChain { pub rules: Vec<Rule> }
-pub struct RequestContext { /* 单请求、固定快照及预算 */ }
-pub struct ResponseContext { /* 状态、头及发送状态 */ }
-pub enum ActionResult { Continue, ServeFiles, Respond, Proxy, DynamicProxy, WebDav, Reenter }
+pub struct ExecutionBudget { pub steps_left: u16, pub reentries: u8, pub error_entered: bool }
+pub struct ActionId(pub u32);
+pub struct AuthId(pub u32);
+pub struct FilterId(pub u32);
+pub struct ResponseFilterInstance {
+    pub filter: FilterId,
+    pub captures: [Option<std::sync::Arc<str>>; 9],
+}
+pub enum AuthIdentity { Anonymous, User(Box<str>), TokenPolicy(AuthId) }
+pub struct RequestContext {
+    pub snapshot: std::sync::Arc<crate::runtime::state::RuntimeSnapshot>,
+    pub site: usize,
+    pub original_uri: http::Uri,
+    pub uri: http::Uri,
+    pub method: http::Method,
+    pub headers: http::HeaderMap,
+    pub client_ip: std::net::IpAddr,
+    pub authenticated: AuthIdentity,
+    pub captures: [Option<std::sync::Arc<str>>; 9],
+    pub response_filters: Vec<ResponseFilterInstance>,
+    pub error: Option<PolicyError>,
+    pub budget: ExecutionBudget,
+}
+pub enum ResponseSource { Local, FixedProxy, DynamicProxy, WebDav }
+pub struct ResponseContext {
+    pub status: u16,
+    pub headers: http::HeaderMap,
+    pub source: ResponseSource,
+    pub original_content_type: Option<http::HeaderValue>,
+    pub committed: bool,
+}
+pub enum ActionResult { Continue, Reenter, Authorize(AuthId), Terminal(ActionId) }
+pub struct MatchContext<'a> {
+    pub method: &'a http::Method,
+    pub path: &'a str,
+    pub headers: &'a http::HeaderMap,
+    pub client_ip: std::net::IpAddr,
+    pub error_status: Option<u16>,
+    pub steps_left: &'a mut u16,
+}
+pub struct MatchResult { pub matched: bool, pub captures: [Option<std::sync::Arc<str>>; 9] }
 pub trait Matcher: Send + Sync {
-    fn matches(&self, ctx: &RequestContext) -> Result<bool, PolicyError>;
+    fn matches(&self, ctx: &mut MatchContext<'_>) -> Result<MatchResult, PolicyError>;
 }
 pub trait Action: Send + Sync {
     fn execute(&self, ctx: &mut RequestContext) -> Result<ActionResult, PolicyError>;
@@ -294,7 +335,7 @@ pub fn compile(config: &crate::config::model::ValidatedConfig)
     -> crate::config::error::Result<Vec<Option<RuleChain>>>;
 ```
 
-`RequestContext` 和 `ResponseContext` 的字段由实施阶段按现有 HTTP 类型填充，不是 Pingora API；异步动作由执行器持有经编译的动作描述后分派，trait 的同步方法只产生控制决策，不阻塞执行 IO。`Vec` 与 sites 一一对应，旧模式为 None。matcher 编译、资源准备错误都携带源位置；新字段纳入既有 parse → normalize → validate，再由 `config::prepare::build`/`build_for_run`/`build_tracked` 中的 ResourcePreparer 调用 compile 和 prepare。不得从 CLI 另建路径。
+上述 context 和 ID 是 Rill 内部类型，不是 Pingora API；ID 只能索引同一快照内的已准备动作/鉴权/过滤器，不能回读活动配置。异步动作由执行器分派：Authorize 成功后继续当前规则，失败直接终止；Terminal 结束规则遍历。trait 的同步方法只产生控制决策，不阻塞执行 IO。`Vec` 与 sites 一一对应，旧模式为 None。matcher 编译、资源准备错误都携带源位置；新字段纳入既有 parse → normalize → validate，再由 `config::prepare::build`/`build_for_run`/`build_tracked` 中的 ResourcePreparer 调用 compile 和 prepare。不得从 CLI 另建路径。
 
 ```rust
 // 既有 src/config/prepare.rs，扩展而不取代
@@ -328,34 +369,81 @@ pub struct PreparedPolicy { pub chains: Vec<Option<RuleChain>> } // 手动 impl 
 pub struct StorageIdentity { pub storage_id: Box<str>, pub device: u64, pub inode: u64 }
 pub struct StorageRegistry; // 进程所有；不是 RuntimeSnapshot 所有
 pub struct StorageHandle;
+pub struct StorageCandidate;
+pub struct ActivatedStorage; // 未提交 Drop 只撤销自己的未发布 registry/属性候选
 pub struct DavError;
 impl StorageRegistry {
-    pub fn prepare(&self, identity: StorageIdentity) -> Result<StorageHandle, DavError>;
-    pub fn activate(&self, handle: &StorageHandle) -> Result<(), DavError>;
+    pub fn prepare(&self, identity: StorageIdentity,
+        root: std::sync::Arc<std::fs::File>) -> Result<StorageCandidate, DavError>;
+}
+impl StorageCandidate {
+    pub fn activate(self) -> Result<ActivatedStorage, DavError>;
+}
+impl ActivatedStorage {
+    pub fn handle(&self) -> &std::sync::Arc<StorageHandle>;
+    pub fn commit(self); // 单快照 store 后无失败提交，不迁移/清空旧锁
 }
 ```
 
 现有 `ResourcePreparer` 的默认 `prepare_tracked` 在存在证书时返回 INTERNAL，否则委托 `prepare`；`ConfigurationOnly` 和 `HttpPreparer` 均覆盖该方法以跟踪依赖。扩展两者而非替换接口：check 的 `CheckResources` 携带经编译的 `PreparedPolicy` 并报告策略验证结果，不创建策略运行资源、日志文件或 worker；现有 TLS 和静态 root 检查仍照常准备，不声称 check 不打开任何资源。run 的 `HttpResources` 持有完整准备策略，按 site 索引移入快照。
 
-锁由进程级 registry 以 storage-id 和准备时 root 的设备/ inode 身份拥有；同身份跨 reload 保锁，重启失锁。同 storage-id 的 root 身份变化返回 `RESTART_REQUIRED`，不得把旧锁转到新 root。准备不修改活动 registry，激活与候选提交串行；旧请求持有原 handle。属性持久化独立于内存锁，原子性按 3.8。
+锁由进程级 registry 以 storage-id 和准备时 root 的设备/ inode 身份拥有；同身份跨 reload 保锁，重启失锁。同 storage-id 的 root 身份变化返回 `RESTART_REQUIRED`，不得把旧锁转到新 root。准备不修改活动 registry；所有可失败的检查、配额、属性存储与候选激活均在快照 store 前完成，ActivatedStorage 以 RAII 持有未发布资源，其他资源激活失败或最终 gate 检查失败时 Drop 只回滚自己的未发布条目，不触碰旧锁/handle。完整候选持有这些 handle 后一次 store，随后 commit 不可失败；不得在 store 后执行返回 Result 的资源准备。激活与候选提交串行；旧请求持有原 handle。registry 同时持有跨代 namespace 锁：内部 PUT 提交、DELETE、MOVE、MKCOL、COPY 与属性变更遵守同一锁，覆盖父 FD 解析、身份复验及提交；临时上传需持有能阻止父目录 MOVE 的 namespace 保护，取消会清理同一父 FD 下本事务拥有的临时条目。命名空间锁不能替代 WebDAV 逻辑锁/token 验证；后者在相同临界区再次校验。承袭现有静态 root 的信任边界：服务 UID/root/管理员对本地文件系统的并发变更是受信行为，不声称抵御恶意管理员在复验之后移动父目录；内部 DAV 操作不能绕过 namespace 锁。属性持久化独立于内存锁，原子性按 3.8。
 
 ```rust
 // src/observability/owner.rs
 pub struct LogCandidate;
-pub struct ActiveLog;
+pub struct ActivatedLogs; // 未提交时 Drop 撤销候选独占创建的新文件
+pub struct LogSink;
+pub struct LogRegistry; // 进程持有，按完整目录身份、文件名与打开文件身份索引
 pub struct LogError;
 pub enum PrepareMode { Check, Run }
 impl LogCandidate {
-    pub fn prepare(config: &LogConfig, mode: PrepareMode) -> Result<Self, LogError>;
-    pub fn activate(self) -> Result<ActiveLog, LogError>;
-    pub fn rollback(self);
+    pub fn prepare(config: &[LogConfig], mode: PrepareMode,
+        registry: &LogRegistry) -> Result<Self, LogError>;
+    pub fn activate(self) -> Result<ActivatedLogs, LogError>;
+}
+impl ActivatedLogs {
+    pub fn sinks(&self) -> &[std::sync::Arc<LogSink>];
+    pub fn commit(self); // 发布后不可失败，解除候选回滚并唤醒已就绪 worker
 }
 pub struct LogConfig; // 经验证的 site 日志声明
 ```
 
-check 仅验证配置、父目录安全与可观察权限，不创建文件、不轮转、不启动 worker；不能保证实际写入必成功。run 候选准备只打开并验证现有父目录 FD、预留有界配额，不创建或修改目标。激活以私有临时文件及可回滚重命名准备所有目标，任何失败恢复所有候选路径；只有全部可激活时在提交锁内一次发布完整快照，旧 worker 不停止直至旧引用释放。发布前失败回滚候选，绝不改变活动资源；无法证明文件系统回滚原子性时 001-T03 判阻断，不假设可行。慢盘只丢日志并有界诊断。路径冲突、旧代持有导致的预算不足拒绝候选。
+check 仅验证配置、父目录安全与可观察权限，不创建文件、不轮转、不启动 worker；不能保证实际写入必成功。run 候选准备只打开并验证现有父目录 FD、预留有界配额，不创建或修改目标。激活不重命名、不截断、不轮转活动文件：同一安全目录/文件身份直接复用现有 Arc<LogSink> 与 worker；新目标以受约束 O_CREAT|O_EXCL 打开，并将创建所得身份记入回滚日志。未知既存普通目标用 O_APPEND|O_NOFOLLOW 安全打开；准备与激活复验需有界枚举本目标管理的全部 `file.N`（N 为正整数；1 最新，最多保留至 5）轮转集合，单父目录至多扫描 4096 项，超限拒绝 `LOG_LIMIT`。逐个拒绝链接/非普通文件，核对每文件不超过第 5 节绝对 10 MiB 上限、数量不超过 retain-files、总字节不超过站点/进程配额，超过保留期限的既存轮转也拒绝 `LOG_LIMIT`；不在失败候选中整理旧文件。写权限失败只拒绝候选，发布前不写入；同一候选重复目标或相互冲突的打开/轮转声明拒绝。每次实际写入前再次计入即将写入的完整有界记录，超过该记录所属快照的 rotate-size 则先按序轮转并回收超龄/超量轮转；rotate-size 是新记录的触发阈值，不承诺既存或旧代生成的轮转文件立即缩小到新阈值，但任何文件仍受 10 MiB、每站点 6 文件/60 MiB 的绝对上限约束。字段白名单和轮转声明随记录持有原请求快照，旧请求可以完成旧政策；无法在约束内轮转或写入时丢弃该条并记录限频诊断，不突破硬上限。外部同 UID/root 任意改写日志文件不在配额保证内。worker 与队列配额提前保留，所有 worker 就绪后仍停在候选门闩；任何激活失败撤销候选拥有的新文件，不删除既存目标。提交 gate 内先检查关闭/期限/启动项，再把持有 sinks 的完整快照一次 store；随后 commit 无失败唤醒 worker，store 与唤醒间的记录仅进入有界队列。旧 worker 不停止直至最后旧请求/快照持有者释放；停止/flush 由 registry 管理，不在业务请求 Drop 中无限 join。回滚仅在 dev/ino/type 与本候选记录一致时删除自己的新文件。该协议保证失败候选不污染活动资源，不承诺进程崩溃时多个文件系统路径整体原子回滚；不允许以多目标 rename 的假想原子性替代单快照提交。慢盘只丢日志并有界诊断。路径冲突、旧代持有导致的预算不足拒绝候选。
 
 `src/auth/` 拥有验证配额与凭据；`src/body_transform/` 拥有流式变换及全局预算；`src/routing/` 只选择 site 和旧路由/新链；`src/proxy/` 负责协议、地址策略及流生命周期；`src/runtime/` 拥有进程 registry 和单发布点。源代码 `PeerOptions::set_http_version(max, min)` 存在；Pingora 0.9.0 的 h2 路径有 response trailers 处理和 trailer filter，h1 路径标记 trailers TODO。这些源码事实不证明完整双向 gRPC、跨协议 trailers 或取消可用；机制必须经 001-T03 实际隔离验证，失败阻断，不静默降级、发明 API 或更换框架。流式正则、DAV 事务和日志无副作用激活也受同一关卡约束。
+
+### 6.1 上游池政策身份与 trailers 边界
+
+`PoolIdentity` 按完整协议、已批准目标 SocketAddr、TLS 开关、验证名、完整信任材料和连接选项精确比较。进程 registry 为不同身份 checked_add 分配唯一 u64 `PoolToken`，作为 HttpPeer.group_key 的输入；token 不从 64 位截断哈希推断身份。政策/请求持有同一 registry lease，Reload 复用相同身份，失败候选不修改任何已活动身份；无持有者的表项可回收，但已分配的 token 不重用。池本身仍由 Pingora 管理，不换框架。
+
+Pingora 0.9.0 默认 HttpPeer::Hash 不涵盖 CA 内容与 ALPN，不能只设置 PeerOptions 后假定池隔离成立。group_key 也不是授权：connected_to_upstream 在发送业务 HTTP 字节前，对连接记录的完整政策 token 做精确复验，不匹配或缺失一律 `UPSTREAM_POLICY_MISMATCH` 拒绝。连接记录绑定连接出生身份与弱引用生命周期，不以裸 fd 整数当永久身份；关闭清除，fd 重新分配属于新连接。未知连接先拒绝而不是猜测可复用，内部额度包含尚未结束的旧请求。原型用有限 fd→token 表验证该挂钩和强制哈希键碰撞下的 fail-closed 行为；005 落地必须补齐连接出生/回收及并发准入，不能原样移植无界表。
+
+```rust
+// src/proxy/pool_policy.rs
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PoolIdentity {
+    pub protocol: UpstreamProtocol,
+    pub target: std::net::SocketAddr,
+    pub tls_name: Option<Box<str>>,
+    pub trust_der: Vec<Box<[u8]>>,
+    pub connection_options: Box<[u8]>, // 规范化的全部影响连接身份/验证的选项
+}
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum UpstreamProtocol { Http1, H2c, TlsH2 }
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PoolToken(pub u64);
+pub struct PoolLease; // 持有完整 identity 和 token
+pub struct PoolRegistry;
+impl PoolRegistry {
+    pub fn prepare(&self, identity: PoolIdentity) -> crate::config::error::Result<std::sync::Arc<PoolLease>>;
+    pub fn verify_reused(&self, lease: &PoolLease,
+        connection: &ConnectionIdentity) -> Result<(), crate::http_policy::PolicyError>;
+}
+pub struct ConnectionIdentity; // 活连接出生身份，不可仅为 RawFd
+```
+
+本计划的完整 gRPC 包括四类 Length-Prefixed-Message 调用及响应 trailers/trailers-only；请求消息结束是 EOS，不能和通用 HTTP 请求 trailers 混为一谈。先前记录把“请求 trailers 尚未验证”加为独立必需项，没有原始需求依据，现纠正为能力边界：Pingora 0.9.0 公开请求读取/转发路径未暴露对应 trailers 接口，不宣称透传通用 HTTP 请求 trailers；响应 grpc-status/grpc-message/custom metadata 已由容器实测。HTTP/1 framing 与 trailers 的限制保持显式，不能把 HTTP/2 gRPC 静默降级到 HTTP/1。
 
 ## 7. 错误与失败语义
 
@@ -378,8 +466,9 @@ check 仅验证配置、父目录安全与可观察权限，不创建文件、�
 
 | crate | 精确版本 | 状态 | 用途、feature | 许可证 |
 | --- | --- | --- | --- | --- |
-| regex | =1.13.1 | 在 lock 中，需添加直接依赖条目 | 规则/正文正则，默认 Unicode | MIT OR Apache-2.0 |
-| h2 | =0.4.20 | 在 lock 中；001 已作为 dev-dependency 直接引入，生产用途仍需新增直接依赖条目 | gRPC 测试；h2c/TLS h2 四类调用原型容器通过，生产集成与池隔离仍待验证 | MIT |
+| regex | =1.13.1 | 001 已作为 dev-dependency 直接引入，生产用途仍需直接依赖条目 | 规则/正文正则，默认 Unicode | MIT OR Apache-2.0 |
+| regex-syntax | =0.8.11 | 001 已作为 dev-dependency 直接引入；原已在 lock 中 | HIR maximum_len 检查，默认 | MIT OR Apache-2.0 |
+| h2 | =0.4.20 | 在 lock 中；001 已作为 dev-dependency 直接引入，生产用途仍需新增直接依赖条目 | gRPC 测试；h2c/TLS h2 四类调用原型容器通过，生产集成仍由 005 实现；池政策原型及强制碰撞已验证 | MIT |
 | zstd | =0.13.4 | 在 lock 中，需添加直接依赖条目 | 编码，默认 | BSD-3-Clause |
 | flate2 | =1.1.10 | 在 lock 中，需添加直接依赖条目 | gzip，默认 Rust 后端 | MIT OR Apache-2.0 |
 | futures | =0.3.34 | 在 lock 中，需添加直接依赖条目 | 有界流组合，默认 | MIT OR Apache-2.0 |
@@ -395,23 +484,23 @@ check 仅验证配置、父目录安全与可观察权限，不创建文件、�
 | hyper | =1.6.0 | 不在 lock 中，新增包且需修改 lock | 仅 dev-dependency；隔离 HTTP/gRPC 测试，client/server/http1/http2；可行性待 001-T03 | MIT |
 | prost | =0.13.5 | 不在 lock 中，新增包且需修改 lock | 仅 dev-dependency；测试消息，默认 | Apache-2.0 |
 
-001 已按本记录新增 `[dev-dependencies] h2 = "=0.4.20"` 与 `http = "=1.5.0"`；两者本已在 Cargo.lock 中，锁文件仅多出 rill 包的两条依赖名，无新包、无版本变化（见验证记录第 6 节）。其余 crate 均未引入。已检查本地 cargo 缓存：quick-xml 0.38.4 的离线包可用，但仅在本地缓存而不在 Cargo.lock；加入会修改 Cargo.lock 及其传递依赖树。离线可用不构成依赖批准，新增依赖仍需记录批准。
+001 主工程 dev-dependencies 为 h2 0.4.20、http 1.5.0、regex 1.13.1、regex-syntax 0.8.11，四者本已在 Cargo.lock 中，锁文件仅增加 rill 包对应依赖名，无新包或版本变化。容器工具使用独立工作区/锁文件，tonic/prost 等不进入生产依赖；确切来源/版本见 014/015。已检查本地 cargo 缓存：quick-xml 0.38.4 的离线包可用，但仅在本地缓存而不在 Cargo.lock；加入会修改 Cargo.lock 及其传递依赖树。离线可用不构成依赖批准，新增依赖仍需记录批准。
 
 新增依赖需分别复核版本、feature、许可证及传递树；缓存检查不构成构建或可行性验证。锁文件中不存在的条目不得称作已锁定。精确 pin，使用 `--locked`，不得 `cargo update`；网络获取 crate、客户端工具或其他工件须另行批准。rclone/cadaver 仅用于 008 隔离验收，记录实际版本，不作为运行时依赖；不在本文工作中安装或运行。
 
-## 9. 待用户验收的清单
+## 9. 用户验收清单
 
-逐项明确接受或拒绝；未接受不得视为通过：
+用户在收到最终契约、015 证据和资源边界说明后明确回复“验收通过”，确认接受下列全部条目：
 
-- [ ] 接受或拒绝第 2 节范围与排除项，以及第 3–4 节 DSL、受保护头、响应条件和执行语义。
-- [ ] 接受或拒绝新增配置上限：index 每动作 1 个、1024 字节；try-files 每动作 64 项、每路径 4096 字节；access-log 每站点 1 个、每候选 64 个；每站点主链及错误链 4096 条规则；每候选编译策略 8 MiB、使用链的站点 128 个；超限按第 5 节拒绝。
-- [ ] 接受或拒绝策略限额：每请求 1024 步、嵌套 16、每链 matcher 256、正则 4096 字节及重复 1000、程序和 DFA 各 2 MiB、glob 1024 字节、重入 4 次、每响应替换 16 条、主链和错误链合计 encode 最多 1 个。
-- [ ] 接受或拒绝正文限额：每请求缓冲 1 MiB、全进程 64 MiB；解码 64 MiB、100 倍加 64 KiB；输出 64 MiB、CPU 2 秒、并发 64；gzip level 3/window 32 KiB、zstd level 3/window 1 MiB。
-- [ ] 接受或拒绝鉴权限额：bcrypt cost 10–14；Argon2id v19、8192–65536 KiB、迭代 1–3、并行度 1–2；4 个任务、2 秒、不排队；令牌文件与 Basic 输入各 4096 字节。
-- [ ] 接受或拒绝 DAV 限额：锁每存储 1024、全进程 4096、3600 秒；属性每资源 64 项/64 KiB，XML 1 MiB/深度 32；遍历 4096 项/深度 16；临时 PUT 每文件 256 MiB、全进程 1 GiB、并发 16、300 秒。
-- [ ] 接受或拒绝动态出口限额：URL 4096 字节、1 跳、不跟随重定向；活动请求 128、DNS 候选 64、连接尝试 8。
-- [ ] 接受或拒绝日志限额：队列每站点 1024、全进程 16384、每条 16 KiB；站点/FD/worker 各 64 含旧代；文件 10 MiB、轮转保留 5 个/7 天，每站点 6 文件/60 MiB、全进程 384 文件/3840 MiB，关闭等待 5 秒。
-- [ ] 接受或拒绝第 5 节其余既有限额：DNS 60 秒/失败退避 1 秒/64 候选/8 尝试；代理期限 5/60/300/60 秒；入口 60 秒/64 KiB/1024 槽；TLS/H2 10 秒/10 秒/100 流/64 KiB/60 秒；静态缓存 0 默认/256 MiB 最大/64 KiB 对象/1024 项及静态 IO 128 槽；加载 1 MiB 每文件/8 MiB 总量/512 文件/导入深度 64/KDL 深度 32；snippet 深度 64/4096 路由/16384 步/8 MiB；错误页 1 MiB、列表扫描 4096/展示 512/HTML 256 KiB；控制帧 64 KiB/首字节后 5 秒/reload 默认 30 秒。Pingora h2 可行性待 001-T03。
-- [ ] 接受或拒绝第 6 节接口、单快照发布、DAV 跨代锁及日志候选事务边界。
-- [ ] 接受或拒绝第 8 节各依赖、feature、许可证和必要客户端；任何网络获取须单独批准。
-- [ ] 001-T03 隔离证据已执行但未通过：字面量分块无关、h2 trailers/独立 DATA 帧、流取消隔离、WebDAV 受约束写入与锁、日志候选回滚编排有实测；[容器验收](../../validation/014-caddy-grpc-container.md)已补上原型 h2c/TLS h2 四类调用、响应 trailers、取消与 deadline，仍缺正则捕获分块无关性、同进程池隔离与请求 trailers 等；原 h2 探针驱动错误修复后 Pingora 与直接 h2 客户端各 100/100 次通过，协议阻断结论已撤回。001-T04 用户验收尚未给出；不得据此将子计划标记完成或以完成名义提交。补齐必要证据、完成审阅且用户明确验收后，001-T04 才可完成，002 及任何依赖阶段才可开始。
+- [x] 接受第 2 节范围与排除项，以及第 3–4 节 DSL、受保护头、响应条件和执行语义。
+- [x] 接受新增配置上限：index 每动作 1 个、1024 字节；try-files 每动作 64 项、每路径 4096 字节；access-log 每站点 1 个、每候选 64 个；每站点主链及错误链 4096 条规则；每候选编译策略 8 MiB、使用链的站点 128 个；超限按第 5 节拒绝。
+- [x] 接受策略限额：每请求 1024 步、嵌套 16、每链 matcher 256、正则 4096 字节及重复 1000、程序和 DFA 各 2 MiB、glob 1024 字节、重入 4 次、每响应替换 16 条、主链和错误链合计 encode 最多 1 个。
+- [x] 接受正文限额：每请求缓冲 1 MiB、全进程 64 MiB；解码 64 MiB、100 倍加 64 KiB；输出 64 MiB、CPU 完成预算及执行等待各 2 秒（不可抢占单次库调用，超时任务保留额度）、并发 64；gzip level 3/window 32 KiB、zstd level 3/window 1 MiB。
+- [x] 接受鉴权限额：bcrypt cost 10–14；Argon2id v19、8192–65536 KiB、迭代 1–3、并行度 1–2；4 个任务、2 秒、不排队；令牌文件与 Basic 输入各 4096 字节。
+- [x] 接受 DAV 限额：锁每存储 1024、全进程 4096、3600 秒；属性每资源 64 项/64 KiB，XML 1 MiB/深度 32；遍历 4096 项/深度 16；临时 PUT 每文件 256 MiB、全进程 1 GiB、并发 16、300 秒。
+- [x] 接受动态出口限额：URL 4096 字节、1 跳、不跟随重定向；活动请求 128、DNS 候选 64、连接尝试 8。
+- [x] 接受日志限额：队列每站点 1024、全进程 16384、每条 16 KiB；站点/sink/worker 各 64、FD 总计 256，均含候选和旧代；文件 10 MiB、轮转保留 5 个/7 天，每站点 6 文件/60 MiB、全进程 384 文件/3840 MiB，关闭等待 5 秒。
+- [x] 接受第 5 节其余既有限额：DNS 60 秒/失败退避 1 秒/64 候选/8 尝试；代理期限 5/60/300/60 秒；入口 60 秒/64 KiB/1024 槽；TLS/H2 10 秒/10 秒/100 流/64 KiB/60 秒；静态缓存 0 默认/256 MiB 最大/64 KiB 对象/1024 项及静态 IO 128 槽；加载 1 MiB 每文件/8 MiB 总量/512 文件/导入深度 64/KDL 深度 32；snippet 深度 64/4096 路由/16384 步/8 MiB；错误页 1 MiB、列表扫描 4096/展示 512/HTML 256 KiB；控制帧 64 KiB/首字节后 5 秒/reload 默认 30 秒。Pingora h2 可行性证据见 014/015。
+- [x] 接受第 6 节接口、单快照发布、DAV 跨代锁及日志候选事务边界。
+- [x] 接受第 8 节各依赖、feature、许可证和必要客户端；任何网络获取须单独批准。
+- [ ] 接受或拒绝 [015 收口记录](../../validation/015-caddy-contracts-feasibility-closure.md)：完整 gRPC 原型、响应 trailers、同进程政策池隔离与强制键碰撞拒绝、无界捕获正则 216 分块、DAV/日志跨快照资源机制均已实测；技术任务与独立复审通过。用户明确验收前 T04/AC02 保持未勾选，不创建阶段完成提交、不进入 002。

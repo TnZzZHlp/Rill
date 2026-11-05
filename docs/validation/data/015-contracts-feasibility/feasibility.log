@@ -1,0 +1,76 @@
+   Compiling openssl v0.10.82
+   Compiling tokio-openssl v0.6.5
+   Compiling pingora-openssl v0.9.0
+   Compiling pingora-core v0.9.0
+   Compiling pingora-cache v0.9.0
+   Compiling pingora-proxy v0.9.0
+   Compiling pingora v0.9.0
+   Compiling rill v0.1.0 (/root/github/Rill)
+mbx[progress]: 15s elapsed; 0 hits, 7 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 16.69s
+     Running tests/feasibility.rs (target/debug/deps/feasibility-644cc499e9f73406)
+
+running 31 tests
+test feasibility::configuration::v2_rejects_legacy_bare_booleans ... ok
+test feasibility::contract::frozen_contract_examples_parse_as_kdl_v2 ... ok
+test feasibility::logging::candidate_preparation_creates_no_file ... ok
+test feasibility::logging::mid_activation_failure_rolls_back_every_candidate_and_keeps_the_previous_file ... ok
+test feasibility::logging::worker_publication_reuse_failure_and_old_request_lifetime ... ok
+test feasibility::configuration::configuration_contract_examples_parse_as_kdl_v2 ... ok
+unbounded regex: exact 1MiB pending accepted; pending/expanded output overflow rejected
+test feasibility::regex::pending_and_expansion_limits_fail_without_returning_truncated_success ... ok
+test feasibility::streaming::h2c_cancel_of_one_stream_keeps_the_connection_usable ... ok
+test feasibility::streaming::h2c_request_streaming_preserves_chunk_order_and_trailers ... ok
+test feasibility::streaming::h2c_unary_call_carries_grpc_trailers ... ok
+test feasibility::streaming::literal_match_holds_the_bounded_prefix_until_end_of_stream ... ok
+test feasibility::streaming::literal_replacement_output_is_independent_of_input_chunking ... ok
+test feasibility::tls::handshake_crossing_publication_keeps_its_original_selection ... ok
+test feasibility::tls::new_handshakes_use_new_certificates_without_closing_existing_streams ... ok
+TLS library: OpenSSL 3.6.3 9 Jun 2026
+unbounded regex: 8 patterns, 216 partitions match batch output
+test feasibility::regex::unbounded_capture_replacement_is_identical_for_every_chunk_split ... ok
+test feasibility::tls::unknown_sni_cannot_receive_another_sites_certificate ... ok
+test feasibility::tls::pingora_listener_exposes_the_same_callbacks_and_http2_settings ... ok
+attempt 1: completed
+attempt 2: completed
+attempt 3: completed
+attempt 4: completed
+attempt 5: completed
+attempt 6: completed
+attempt 7: completed
+attempt 8: completed
+attempt 9: completed
+attempt 10: completed
+pingora connector: ok=10 fail=0
+test feasibility::upstream_h2c::pingora_h2c_connector_completion_rate_is_recorded ... ok
+raw attempt 1: completed
+raw attempt 2: completed
+raw attempt 3: completed
+raw attempt 4: completed
+raw attempt 5: completed
+raw attempt 6: completed
+raw attempt 7: completed
+raw attempt 8: completed
+raw attempt 9: completed
+test feasibility::transport::pingora_streams_before_upstream_completion_and_drains_during_shutdown ... ok
+test feasibility::write::cancelled_or_failed_temporary_write_preserves_target ... ok
+test feasibility::write::constrained_write_commits_atomically_and_leaves_no_temporary_file ... ok
+test feasibility::write::constrained_write_refuses_to_escape_the_root_through_a_symlink ... ok
+test feasibility::write::exclusive_locks_enforce_ownership_capacity_and_restart_reset ... ok
+test feasibility::write::held_descriptor_observes_old_inode_after_replacement ... ok
+test feasibility::write::lock_ttl_expiry_frees_the_slot_without_an_unlock ... ok
+test feasibility::write::locks_survive_snapshot_publication_and_root_replacement_is_rejected ... ok
+test feasibility::write::moved_parent_identity_is_rejected_before_write ... ok
+test feasibility::write::namespace_guard_serializes_move_across_snapshot_publication ... ok
+test feasibility::write::o_path_without_follow_yields_the_symlink_itself_so_writers_must_check_the_type ... ok
+test feasibility::write::storage_identity_is_the_device_and_inode_of_the_prepared_root ... ok
+raw attempt 10: completed
+raw h2 client: ok=10 fail=0
+test feasibility::upstream_h2c::raw_h2_client_completion_rate_is_recorded ... ok
+
+test result: ok. 31 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.80s
+
+mbx[cache]: 0 hits, 9 misses, 1 incremental; 0 B downloaded, 0 B uploaded, 169.9 MiB stored locally
+mbx[gc]: kept 1 target directories in use by running commands
+mbx[gc]: evicted 4184 objects and 2133 action results (4.4 GiB logical); 24.7 GiB logical remain
+mbx[savings]: 20428 cache hits and counting. rustc thinks it has been busy.

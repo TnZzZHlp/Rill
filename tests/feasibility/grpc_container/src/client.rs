@@ -49,6 +49,48 @@ pub async fn run(args: &[String]) -> Result {
         )?;
     }
     let mut client = Client::new(endpoint.connect().await?);
+    if args[2] == "poolcheck" {
+        for (policy, succeeds) in [
+            ("good", true),
+            ("good", true),
+            ("wrong-ca", false),
+            ("wrong-name", false),
+            ("h1", false),
+            ("good", true),
+            ("target-one", true),
+            ("target-two", true),
+            ("target-one", true),
+            ("forced-collision", false),
+            ("good", true),
+        ] {
+            client.ready().await?;
+            let mut request = Request::new(packet(
+                if policy.starts_with("target-") {
+                    "backend-id"
+                } else {
+                    "pool"
+                },
+                1,
+            ));
+            request
+                .metadata_mut()
+                .insert("x-pool-policy", policy.parse()?);
+            let response: std::result::Result<tonic::Response<Packet>, tonic::Status> = client
+                .unary(
+                    request,
+                    PathAndQuery::from_static("/acceptance.Probe/Unary"),
+                    tonic_prost::ProstCodec::<Packet, Packet>::default(),
+                )
+                .await;
+            assert_eq!(response.is_ok(), succeeds, "policy {policy}: {response:?}");
+            if policy.starts_with("target-") {
+                let expected = if policy == "target-one" { "one" } else { "two" };
+                assert_eq!(response?.into_inner().text, expected);
+            }
+            println!("PASS pool policy={policy} success={succeeds}");
+        }
+        return Ok(());
+    }
     if args[2] == "reject" {
         let error = unary(&mut client, packet("ping", 1))
             .await

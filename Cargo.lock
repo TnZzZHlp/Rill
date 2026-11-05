@@ -1442,6 +1442,8 @@ dependencies = [
  "nix",
  "openssl",
  "pingora",
+ "regex",
+ "regex-syntax",
  "serde",
  "serde_json",
  "socket2",

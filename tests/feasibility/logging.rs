@@ -1,4 +1,4 @@
-use std::fs::{self, DirBuilder, File, OpenOptions};
+use std::fs::{self, DirBuilder, OpenOptions};
 use std::io::Write;
 use std::os::unix::fs::{DirBuilderExt, MetadataExt};
 use std::path::PathBuf;
@@ -122,78 +122,109 @@ fn mid_activation_failure_rolls_back_every_candidate_and_keeps_the_previous_file
 }
 
 struct Worker {
-    stop: std::sync::mpsc::Sender<()>,
+    sender: std::sync::mpsc::Sender<(Vec<u8>, std::sync::mpsc::Sender<std::io::Result<()>>)>,
     handle: Option<std::thread::JoinHandle<()>>,
 }
 
 impl Worker {
-    fn start(path: PathBuf) -> TestResult<Self> {
-        let (stop, stopped) = std::sync::mpsc::channel();
+    fn start(path: &std::path::Path, closed: std::sync::mpsc::Sender<()>) -> std::io::Result<Self> {
+        let mut file = OpenOptions::new()
+            .create_new(true)
+            .append(true)
+            .open(path)?;
+        let (sender, receiver) =
+            std::sync::mpsc::channel::<(Vec<u8>, std::sync::mpsc::Sender<std::io::Result<()>>)>();
         let handle = std::thread::spawn(move || {
-            let mut file = OpenOptions::new().append(true).open(&path).unwrap();
-            loop {
-                match stopped.recv_timeout(Duration::from_millis(50)) {
-                    Ok(()) | Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => break,
-                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                        let _ = file.write_all(b"line\n");
-                        let _ = file.flush();
-                    }
-                }
+            for (bytes, ack) in receiver {
+                let result = file.write_all(&bytes).and_then(|()| file.flush());
+                let _ = ack.send(result);
             }
+            drop(file);
+            let _ = closed.send(());
         });
         Ok(Self {
-            stop,
+            sender,
             handle: Some(handle),
         })
     }
+    fn write(&self, bytes: &[u8]) -> TestResult {
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.sender.send((bytes.to_vec(), tx))?;
+        rx.recv_timeout(Duration::from_secs(5))??;
+        Ok(())
+    }
 }
-
 impl Drop for Worker {
     fn drop(&mut self) {
-        let _ = self.stop.send(());
+        let (replacement, _) = std::sync::mpsc::channel();
+        drop(std::mem::replace(&mut self.sender, replacement));
         if let Some(handle) = self.handle.take() {
-            let _ = handle.join();
+            handle.join().unwrap();
         }
     }
 }
 
 #[test]
-fn a_committed_worker_keeps_writing_until_its_owner_releases_it() -> TestResult {
-    let sandbox = sandbox()?;
-    let path = sandbox.0.join("site.jsonl");
-    File::create(&path)?;
-    let _worker = Worker::start(path.clone())?;
-    let deadline = std::time::Instant::now() + Duration::from_secs(5);
-    while fs::metadata(&path)
-        .map(|metadata| metadata.len())
-        .unwrap_or(0)
-        == 0
-    {
-        if std::time::Instant::now() >= deadline {
-            return Err("worker never wrote".into());
-        }
-        std::thread::sleep(Duration::from_millis(10));
+fn worker_publication_reuse_failure_and_old_request_lifetime() -> TestResult {
+    use arc_swap::ArcSwap;
+    use std::sync::{Arc, mpsc};
+    struct Snapshot {
+        worker: Arc<Worker>,
     }
-    Ok(())
-}
-
-#[test]
-fn a_rejected_candidate_never_replaces_the_previous_active_file() -> TestResult {
     let sandbox = sandbox()?;
-    let path = sandbox.0.join("site.jsonl");
-    File::create(&path)?.write_all(b"generation-1\n")?;
-    let previous = fs::metadata(&path)?;
-
-    let mut rejected = Candidate::prepare(sandbox.0.join("site.jsonl.rejected"));
-    rejected.activate()?;
-    rejected.rollback();
-
-    let current = fs::metadata(&path)?;
-    assert_eq!(fs::read(&path)?, b"generation-1\n");
-    assert_eq!(
-        (previous.len(), previous.modified().ok()),
-        (current.len(), current.modified().ok())
-    );
-    assert!(!exists(&sandbox.0.join("site.jsonl.rejected")));
+    let path = sandbox.0.join("active.jsonl");
+    let (closed_tx, closed_rx) = mpsc::channel();
+    let worker = Arc::new(Worker::start(&path, closed_tx)?);
+    worker.write(b"initial\n")?;
+    let inode = fs::metadata(&path)?.ino();
+    let active = ArcSwap::from_pointee(Snapshot {
+        worker: Arc::clone(&worker),
+    });
+    drop(worker);
+    let old_request = active.load_full();
+    let prepared = Snapshot {
+        worker: Arc::clone(&old_request.worker),
+    };
+    assert_eq!(fs::read_dir(&sandbox.0)?.count(), 1);
+    active.store(Arc::new(prepared));
+    let reused = active.load_full();
+    assert!(Arc::ptr_eq(&old_request.worker, &reused.worker));
+    assert_eq!(fs::metadata(&path)?.ino(), inode);
+    let new1 = sandbox.0.join("new1");
+    let new2 = sandbox.0.join("new2");
+    let blocked = sandbox.0.join("blocked");
+    fs::create_dir(&blocked)?;
+    let mut candidates = vec![
+        Candidate::prepare(new1.clone()),
+        Candidate::prepare(new2.clone()),
+        Candidate::prepare(blocked.clone()),
+    ];
+    let mut count = 0;
+    for candidate in &mut candidates {
+        if candidate.activate().is_err() {
+            break;
+        }
+        count += 1;
+    }
+    assert_eq!(count, 2);
+    for candidate in &mut candidates {
+        candidate.rollback();
+    }
+    assert!(!new1.exists() && !new2.exists());
+    assert!(Arc::ptr_eq(&reused, &active.load_full()));
+    assert_eq!(fs::metadata(&path)?.ino(), inode);
+    assert_eq!(fs::read(&path)?, b"initial\n");
+    let (new_closed_tx, _new_closed_rx) = mpsc::channel();
+    let new_worker = Arc::new(Worker::start(
+        &sandbox.0.join("replacement"),
+        new_closed_tx,
+    )?);
+    active.store(Arc::new(Snapshot { worker: new_worker }));
+    drop(reused);
+    old_request.worker.write(b"old request\n")?;
+    assert_eq!(fs::read(&path)?, b"initial\nold request\n");
+    assert!(closed_rx.try_recv().is_err());
+    drop(old_request);
+    closed_rx.recv_timeout(Duration::from_secs(5))?;
     Ok(())
 }

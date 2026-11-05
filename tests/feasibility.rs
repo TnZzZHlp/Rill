@@ -2,6 +2,7 @@ mod feasibility {
     pub mod configuration;
     pub mod contract;
     pub mod logging;
+    pub mod regex;
     pub mod snapshot;
     pub mod streaming;
     pub mod tls;

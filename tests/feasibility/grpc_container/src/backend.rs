@@ -7,7 +7,13 @@ pub async fn run(args: &[String]) -> Result {
         return Err("backend CERT KEY".into());
     }
     let identity = Identity::from_pem(std::fs::read(&args[0])?, std::fs::read(&args[1])?);
-    let service = Probe::default();
+    let mut service = Probe::default();
+    service.backend_id = "one";
+    let mut second = Probe::default();
+    second.backend_id = "two";
+    let other = Server::builder()
+        .add_service(second)
+        .serve_with_shutdown("0.0.0.0:50053".parse()?, shutdown());
     let plain = Server::builder()
         .add_service(service.clone())
         .serve_with_shutdown("0.0.0.0:50051".parse()?, shutdown());
@@ -16,7 +22,7 @@ pub async fn run(args: &[String]) -> Result {
         .add_service(service)
         .serve_with_shutdown("0.0.0.0:50052".parse()?, shutdown());
     println!("backend ready: h2c=50051 tls-h2=50052");
-    tokio::try_join!(plain, tls)?;
+    tokio::try_join!(plain, tls, other)?;
     Ok(())
 }
 

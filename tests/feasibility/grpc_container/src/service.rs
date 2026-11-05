@@ -25,6 +25,7 @@ pub struct Packet {
 #[derive(Clone, Default)]
 pub struct Probe {
     cancelled: Arc<AtomicUsize>,
+    pub backend_id: &'static str,
 }
 
 struct Pending {
@@ -102,6 +103,12 @@ impl Probe {
         request: Request<Packet>,
     ) -> std::result::Result<Response<Packet>, Status> {
         let packet = request.into_inner();
+        if packet.text == "backend-id" {
+            return Ok(Response::new(Packet {
+                text: self.backend_id.into(),
+                count: 0,
+            }));
+        }
         if packet.text == "error" {
             let mut error = Status::invalid_argument("probe error ü");
             error
