@@ -235,3 +235,44 @@ fn large_file_keeps_old_root_during_reload() -> Result {
     }
     Ok(())
 }
+
+#[test]
+fn chain_proxy_stream_keeps_old_snapshot_across_reload() -> Result {
+    let mut f = Fixture::new()?;
+    let listener = TcpListener::bind("127.0.0.1:0")?;
+    let backend = listener.local_addr()?;
+    let prefix = format!(
+        "server {{ http \"{}\"; control-socket \"{}\"; }}\nsite \"example.test\" {{ chain {{ rule {{ ",
+        f.address,
+        f.socket.display()
+    );
+    fs::write(
+        &f.entry,
+        format!("{prefix}proxy \"http://{backend}\"; }}; }}; }}"),
+    )?;
+    let (tx, rx) = mpsc::channel();
+    let worker = thread::spawn(move || -> Result {
+        let mut stream = accept(&listener)?;
+        head(&mut stream)?;
+        stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nold\r\n")?;
+        rx.recv_timeout(Duration::from_secs(5))?;
+        stream.write_all(b"4\r\ndone\r\n0\r\n\r\n")?;
+        Ok(())
+    });
+    f.start()?;
+    let mut client = f.connect()?;
+    client.write_all(b"GET / HTTP/1.1\r\nHost: example.test\r\n\r\n")?;
+    assert!(head(&mut client)?.starts_with("HTTP/1.1 200 "));
+    assert_eq!(chunk(&mut client)?, b"old");
+    fs::write(
+        &f.entry,
+        format!("{prefix}respond 200 text=\"new\"; }}; }}; }}"),
+    )?;
+    assert_eq!(f.reload()?.generation, Some(2));
+    let mut new_client = f.connect()?;
+    assert_eq!(Fixture::request(&mut new_client, "/")?.2, b"new");
+    tx.send(())?;
+    assert_eq!(chunk(&mut client)?, b"done");
+    worker.join().map_err(|_| "backend panicked")??;
+    Ok(())
+}

@@ -86,6 +86,7 @@ pub fn authority(request: &RequestHeader, http2: bool) -> Result<Authority, u16>
 
 #[derive(Debug)]
 pub struct Forwarding {
+    pub client_ip: IpAddr,
     pub forwarded: String,
     pub for_header: String,
     pub host: String,
@@ -157,11 +158,13 @@ pub fn forwarding(
     } else {
         local_port
     });
+    let client_ip = client;
     let client = match client {
         IpAddr::V4(address) => address.to_string(),
         IpAddr::V6(address) => format!("[{address}]"),
     };
     Ok(Forwarding {
+        client_ip,
         forwarded: format!(
             "for=\"{client}\";proto={proto};host=\"{}\"",
             authority.original

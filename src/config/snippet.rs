@@ -363,7 +363,7 @@ pub fn expand(parsed: &mut ParsedConfig) -> Result<()> {
             &mut budget,
         )?;
         site.items.clear();
-        if site.routes.is_empty() {
+        if site.routes.is_empty() && site.chain.is_none() {
             return Err(ConfigError::new(
                 "CONFIG_TYPE",
                 "site",

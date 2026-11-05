@@ -1,0 +1,35 @@
+
+running 31 tests
+test reload::control::cli_exit_codes_for_invalid_arguments_and_missing_instance ... ok
+test reload::control::replacement_file_survives_server_shutdown ... ok
+test reload::control::run_rejects_unsafe_control_socket_paths_without_removing_entries ... ok
+test reload::control::socket_bind_rejects_existing_entries_and_unsafe_parents ... ok
+test reload::control::malformed_frames_do_not_publish_and_valid_peer_can_reload ... ok
+test reload::streams::chain_proxy_stream_keeps_old_snapshot_across_reload ... ok
+test reload::streams::sse_chunks_survive_proxy_reload ... ok
+test reload::streams::websocket_survives_proxy_reload ... ok
+test reload::timeout::timed_out_prepare_keeps_admission_and_never_publishes_late ... ignored, requires isolated resolver at 127.0.0.1:53
+test reload::transactions::access_log_policy_reloads_and_removed_exporters_are_rejected ... ok
+test reload::transactions::alternating_reloads_keep_concurrent_reader_snapshots_consistent ... ok
+test reload::transactions::cache_budget_changes_require_restart ... ok
+test reload::streams::large_file_keeps_old_root_during_reload ... ok
+test reload::transactions::chain_failed_reload_and_keepalive_generation ... ok
+test reload::transactions::cache_root_reload_isolates_generations_and_failed_candidate ... ok
+test reload::transactions::changed_imported_profile_updates_proxy_timeout ... ok
+test reload::transactions::failed_reload_preserves_state_and_generation ... ok
+test reload::transactions::reload_follows_retargeted_entry_symlink ... ok
+test reload::transactions::reload_updates_keepalive_snapshot_and_cli ... ok
+test reload::transactions::removed_route_returns_404_while_other_route_remains ... ok
+test reload::transactions::concurrent_reload_generations_are_contiguous_and_snapshots_complete ... ok
+test reload::watch::watch_failed_imports_recover_without_entry_edits ... ok
+test reload::watch::watch_imported_profile_changes_real_timeout ... ok
+test reload::watch::watch_burst_concurrent_cli_converges ... ok
+test reload::watch::watch_permission_denied_retries_are_bounded_and_chmod_recovers ... ok
+test reload::watch::watch_resources_detect_registration_gap_and_failure_baseline ... ok
+test reload::watch::watch_resources_reject_consumed_symlink_target_change ... ok
+test reload::watch::watch_non_utf8_glob_recovers_and_ignores_unmatched_file ... ok
+test reload::watch::watch_resources_reports_real_inotify_queue_overflow ... ok
+test reload::watch::watch_startup_mode_and_check_do_not_allocate_inotify ... ok
+test reload::watch::watch_symlink_atomic_import_and_glob_graph ... ok
+
+test result: ok. 30 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 14.73s

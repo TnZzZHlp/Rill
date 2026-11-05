@@ -206,3 +206,89 @@ fn snippet_routes_serve_both_hosts_without_sharing_other_routes() -> TestResult 
     worker.join().map_err(|_| "backend panic")??;
     Ok(())
 }
+
+#[test]
+fn chain_rules_responses_and_existing_actions() -> TestResult {
+    let directory = Directory::new()?;
+    std::fs::write(directory.0.join("home.txt"), b"static")?;
+    let backend = TcpListener::bind("127.0.0.1:0")?;
+    let upstream = backend.local_addr()?;
+    let address = vacant()?;
+    let config = format!(
+        r#"server {{ http "{address}"; }}
+site "app.test" {{ chain {{
+ rule {{ match {{ path-glob "/branch/*"; }}; branch {{ when {{ match {{ path-regex "^/branch/yes"; }}; continue; }}; }}; }}
+ rule {{ match {{ path-glob "/branch/*"; }}; respond 200 text="continued"; }}
+ rule {{ match {{ all {{ path-glob "/ok/*"; not {{ client-cidr "192.0.2.0/24"; }}; }}; }}; respond 200 text="hello"; }}
+ rule {{ match {{ path-glob "/proxy"; }}; proxy "http://{upstream}" host="backend.test" protocol="http1"; }}
+ rule {{ match {{ path-glob "/files/*"; }}; serve-files root="{}" {{ index "home.txt"; }}; }}
+ rule {{ match {{ path-glob "/empty"; }}; respond 204; }}
+ rule {{ match {{ path-glob "/cached"; }}; respond 304; }}
+ rule {{ respond 404 text="missing"; }}
+}} }}"#,
+        directory.0.display()
+    );
+    std::fs::create_dir(directory.0.join("files"))?;
+    std::fs::write(directory.0.join("files/home.txt"), b"static")?;
+    let worker = thread::spawn(move || -> TestResult {
+        let mut stream = accept(&backend)?;
+        let request = head(&mut stream)?.to_ascii_lowercase();
+        assert!(request.contains("host: backend.test"));
+        reply(&mut stream, b"upstream", true)?;
+        Ok(())
+    });
+    let mut proxy = Proxy::start(address, &config)?;
+    assert_eq!(send(address, "app.test", "/branch/no")?.0, 404);
+    assert_eq!(send(address, "app.test", "/branch/yes")?.2, b"continued");
+    assert_eq!(send(address, "app.test", "/ok/a/b")?.2, b"hello");
+    assert_eq!(send(address, "app.test", "/proxy")?.2, b"upstream");
+    assert_eq!(send(address, "app.test", "/files/")?.2, b"static");
+    for (path, status) in [("/empty", 204), ("/cached", 304)] {
+        let (actual, headers, _) = send(address, "app.test", path)?;
+        assert_eq!(actual, status);
+        assert!(!headers.to_ascii_lowercase().contains("content-length:"));
+    }
+    let mut stream = connect(address)?;
+    stream.write_all(b"HEAD /ok/a HTTP/1.1\r\nHost: app.test\r\nConnection: close\r\n\r\n")?;
+    let headers = head(&mut stream)?.to_ascii_lowercase();
+    assert!(headers.contains("200 ok"));
+    assert!(headers.contains("content-length: 5"));
+    proxy.signal()?;
+    assert_eq!(proxy.finish()?.0, 0);
+    worker.join().map_err(|_| "backend panicked")??;
+    Ok(())
+}
+
+#[test]
+fn chain_headers_and_trusted_client_address() -> TestResult {
+    for trusted in [false, true] {
+        let address = vacant()?;
+        let network = if trusted {
+            "trusted-proxy \"127.0.0.0/8\";"
+        } else {
+            ""
+        };
+        let config = format!(
+            r#"server {{ http "{address}"; {network} }}
+site "app.test" {{ chain {{
+rule {{ match {{ all {{ method "GET"; header-equal "x-test" "second"; client-cidr "192.0.2.0/24"; }}; }}; respond 200 text="trusted"; }}
+rule {{ respond 401 text="denied"; }}
+}} }}"#
+        );
+        let mut proxy = Proxy::start(address, &config)?;
+        let mut stream = connect(address)?;
+        stream.write_all(b"GET / HTTP/1.1\r\nHost: app.test\r\nX-Test: first\r\nX-Test: second\r\nX-Forwarded-For: 192.0.2.3\r\nConnection: close\r\n\r\n")?;
+        let (status, _, body) = response(&mut stream)?;
+        assert_eq!(
+            (status, body.as_slice()),
+            if trusted {
+                (200, b"trusted".as_slice())
+            } else {
+                (401, b"denied".as_slice())
+            }
+        );
+        proxy.signal()?;
+        assert_eq!(proxy.finish()?.0, 0);
+    }
+    Ok(())
+}

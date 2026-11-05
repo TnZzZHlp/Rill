@@ -30,6 +30,8 @@ pub enum RawAction {
 #[derive(Clone, Debug)]
 pub struct RawRoute {
     pub pattern: Located<String>,
+    pub index: Option<Located<String>>,
+    pub proxy_host: Option<Located<String>>,
     pub uses: Vec<Located<String>>,
     pub parameters: Parameters,
     pub action: RawAction,
@@ -46,6 +48,7 @@ pub struct RawSite {
     pub tls: Option<Located<String>>,
     pub uses: Vec<Located<String>>,
     pub parameters: Parameters,
+    pub chain: Option<crate::http_policy::model::Chain>,
     pub routes: Vec<RawRoute>,
     pub items: Vec<RouteItem>,
     pub origin: Origin,
@@ -166,6 +169,7 @@ pub enum Action {
     Proxy(Upstream),
     Static {
         root: Located<PathBuf>,
+        index: String,
         spa: bool,
         cache_control: Option<String>,
         precompressed: bool,
@@ -176,6 +180,7 @@ pub enum Action {
 
 #[derive(Debug)]
 pub struct Route {
+    pub proxy_host: Option<String>,
     pub pattern: Located<String>,
     pub action_origin: Origin,
     pub action: Action,
@@ -186,6 +191,7 @@ pub struct Route {
 pub struct Site {
     pub domains: Vec<Located<String>>,
     pub tls: Option<Located<String>>,
+    pub chain: Option<crate::http_policy::model::Chain>,
     pub routes: Vec<Route>,
     pub origin: Origin,
 }

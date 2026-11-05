@@ -493,3 +493,28 @@ fn access_log_policy_reloads_and_removed_exporters_are_rejected() -> Result {
     assert_eq!(f.reload()?.generation, Some(3));
     Ok(())
 }
+
+#[test]
+fn chain_failed_reload_and_keepalive_generation() -> Result {
+    let mut f = Fixture::new()?;
+    let address = f.address;
+    let socket = f.socket.clone();
+    let config = |text: &str| {
+        format!(
+            "server {{ http \"{}\"; control-socket \"{}\"; }}\nsite \"example.test\" {{ chain {{ rule {{ match {{ path-regex \"^/\"; }}; respond 200 text=\"{text}\"; }}; }}; }}",
+            address,
+            socket.display()
+        )
+    };
+    fs::write(&f.entry, config("old"))?;
+    f.start()?;
+    let mut stream = f.connect()?;
+    assert_eq!(Fixture::request(&mut stream, "/")?.2, b"old");
+    fs::write(&f.entry, config("old").replace("^/", "(?=bad)"))?;
+    assert_eq!(f.reload()?.code.as_deref(), Some("POLICY_INVALID_REGEX"));
+    assert_eq!(Fixture::request(&mut stream, "/")?.2, b"old");
+    fs::write(&f.entry, config("new"))?;
+    assert_eq!(f.reload()?.generation, Some(2));
+    assert_eq!(Fixture::request(&mut stream, "/")?.2, b"new");
+    Ok(())
+}

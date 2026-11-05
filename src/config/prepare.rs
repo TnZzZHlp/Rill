@@ -48,6 +48,7 @@ pub enum CheckedRoute {
 
 #[derive(Debug)]
 pub struct CheckResources {
+    pub policy: crate::http_policy::compile::PreparedPolicy,
     pub tls: crate::tls::cert::PreparedTls,
     pub routes: Vec<Vec<CheckedRoute>>,
 }
@@ -74,6 +75,7 @@ impl ConfigurationOnly {
         configuration: &ValidatedConfig,
         dependencies: Option<&mut DependencyPlan>,
     ) -> Result<CheckResources> {
+        let policy = crate::http_policy::compile::compile(configuration)?;
         let tls = match dependencies {
             Some(plan) => crate::tls::cert::PreparedTls::prepare_tracked(configuration, plan)?,
             None => crate::tls::cert::PreparedTls::prepare(configuration)?,
@@ -96,7 +98,11 @@ impl ConfigurationOnly {
                     .collect::<Result<Vec<_>>>()
             })
             .collect::<Result<Vec<_>>>()?;
-        Ok(CheckResources { tls, routes })
+        Ok(CheckResources {
+            policy,
+            tls,
+            routes,
+        })
     }
 }
 
@@ -210,6 +216,7 @@ mod tests {
         let mut configuration = validate(normalize(parse(load(entry)?)?)?)?;
         configuration.sites[0].routes[0].action = Action::Static {
             root: Located::new(std::env::temp_dir(), Origin::file(entry)),
+            index: "index.html".to_owned(),
             spa: false,
             cache_control: None,
             precompressed: false,

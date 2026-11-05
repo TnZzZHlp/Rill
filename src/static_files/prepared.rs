@@ -14,6 +14,7 @@ use super::root::Root;
 #[derive(Debug)]
 pub struct PreparedStatic {
     pub(crate) root: Root,
+    pub(crate) index: String,
     pub(crate) cache: Option<super::cache::Binding>,
     pub(crate) spa: bool,
     pub(crate) precompressed: bool,
@@ -29,6 +30,7 @@ impl PreparedStatic {
     pub fn prepare(route: &Route, capacity: Arc<Semaphore>) -> Result<Self> {
         let Action::Static {
             root,
+            index,
             spa,
             cache_control,
             precompressed,
@@ -59,6 +61,7 @@ impl PreparedStatic {
         }
         Ok(Self {
             root: Root::prepare(root)?,
+            index: index.clone(),
             cache: None,
             spa: *spa,
             precompressed: *precompressed,

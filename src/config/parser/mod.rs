@@ -1,3 +1,4 @@
+mod chain;
 mod observability;
 mod server;
 mod site;

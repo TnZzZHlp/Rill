@@ -13,6 +13,24 @@
 - 同一作用域的标量字段只能出现一次；不能用“最后一个胜出”掩盖重复配置。只有明确允许的 `import`、`use`、监听地址、路由、`use-snippet`、域名列表和 CIDR 策略列表可重复。
 - 所有错误包括错误码、文件、节点、行列及原因。跨文件冲突同时给出两处来源；展开节点保留定义与引用链。
 
+## Caddy 能力补齐 002：规则链与固定响应
+
+本节的 002 是 Caddy 能力补齐阶段，不是前文历史配置管线的 002。站点选择 `chain` 时不能同时声明旧 `route`、`use-snippet` 或站点简写 `proxy`/`root`。链按顺序匹配；没有命中返回 404。`match` 包含一个表达式，支持 `all`、`any`、`not`、`method`、`header-equal`、`header-prefix`、`path-glob`、`path-regex` 和 `client-cidr`。路径 glob 的 `*` 可跨 `/`，`?` 匹配一个字符，反斜杠转义；客户 IP 使用可信代理策略计算，不直接信任入口转发头。`error-status` 仅用于后续阶段的错误链，目前拒绝。
+
+```kdl
+site "example.test" {
+    chain {
+        rule "health" {
+            match { path-glob "/health"; }
+            respond 200 text="ok"
+        }
+        rule { respond 404 text="missing"; }
+    }
+}
+```
+
+规则以 `respond`、固定 `proxy`、`serve-files` 或 `branch` 终止，显式 `continue` 才继续后续规则。branch 只执行首个匹配的 `when`，否则执行可选末尾 `otherwise`；没有匹配分支时终止并返回 404。`respond` 状态为 200–599，默认空文本和 `text/plain; charset=utf-8`；204/304 不允许正文，HEAD 不发送正文。固定代理当前仅支持 http1；静态动作使用现有 root 保护并支持 `index`、`spa`、`cache-control`、`precompressed`、`browse`。header、路径改写、错误链、鉴权和其他后续动作暂不支持，不会静默忽略。正则运行工作区独立限额为全进程 64 MiB；额度不足返回 503。
+
 ## 2. CLI
 
 最终包名与可执行文件名为小写 `rill`，替代原文暂定的 `proxy-server`。CLI 使用 Clap 派生解析；run、check 和 reload 均已提供。

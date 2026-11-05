@@ -65,7 +65,7 @@ fn open(
     let (file, served_path) = match route.root.open(requested) {
         Ok(file) => {
             if file.metadata()?.is_dir() {
-                let index = requested.join("index.html");
+                let index = requested.join(&route.index);
                 match route.root.open(&index) {
                     Ok(index_file) => (index_file, index),
                     Err(error) if missing(&error) && route.browse => {
@@ -90,8 +90,8 @@ fn open(
             }
         }
         Err(error) if missing(&error) && navigation && route.spa => (
-            route.root.open(Path::new("index.html"))?,
-            PathBuf::from("index.html"),
+            route.root.open(Path::new(&route.index))?,
+            PathBuf::from(&route.index),
         ),
         Err(error) => return Err(error),
     };
@@ -447,6 +447,7 @@ mod tests {
                 .map_err(io::Error::other)?
                 .ok_or("cache disabled")?;
             let route = PreparedStatic {
+                index: "index.html".to_owned(),
                 root: Root::prepare(&Located::new(dir.clone(), Origin::file(&dir)))?,
                 cache: Some(Binding {
                     pool: pool.clone(),

@@ -48,6 +48,7 @@ impl PreparedRoute {
 
 #[derive(Debug)]
 pub struct HttpResources {
+    pub policy: crate::http_policy::compile::PreparedPolicy,
     pub tls: PreparedTls,
     pub routes: Vec<Vec<PreparedRoute>>,
 }
@@ -97,6 +98,7 @@ impl HttpPreparer {
             })
             .collect::<Result<Vec<_>>>()?;
         Ok(HttpResources {
+            policy: checked.policy,
             routes,
             tls: checked.tls,
         })
@@ -135,6 +137,7 @@ fn bind_static_routes(
 
 #[derive(Debug)]
 pub struct RuntimeSnapshot {
+    pub policy: crate::http_policy::compile::PreparedPolicy,
     pub generation: u64,
     pub configuration: ValidatedConfig,
     pub router: Router,
@@ -216,6 +219,7 @@ impl RuntimeSnapshot {
             .collect();
         Self {
             generation,
+            policy: prepared.resources.policy,
             observation_routes,
             router: Router::build(&prepared.configuration),
             logger: Logger::new(&prepared.configuration.server.log_level)

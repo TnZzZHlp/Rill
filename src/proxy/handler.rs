@@ -248,7 +248,89 @@ impl ProxyHttp for Handler {
                 .await?;
             return Ok(true);
         }
-        let Some((site, route)) = ctx.snapshot.router.find(&authority.host, &path) else {
+        let selected_route = if ctx.snapshot.configuration.sites[site].chain.is_some() {
+            let peer = session
+                .client_addr()
+                .and_then(|a| a.as_inet())
+                .map(|a| a.ip())
+                .ok_or_else(|| {
+                    Error::explain(ErrorType::InternalError, "missing client address")
+                })?;
+            let local_port = session
+                .server_addr()
+                .and_then(|a| a.as_inet())
+                .map_or(80, |a| a.port());
+            let forwarded = match forwarding(
+                request,
+                &authority,
+                peer,
+                local_port,
+                secure,
+                &ctx.snapshot.configuration.server,
+            ) {
+                Ok(value) => value,
+                Err(status) => return reject(session, ctx, status).await,
+            };
+            let snapshot = ctx.snapshot.clone();
+            let chain = snapshot.configuration.sites[site]
+                .chain
+                .as_ref()
+                .ok_or_else(|| Error::explain(ErrorType::InternalError, "missing chain"))?;
+            let mut policy_context = crate::http_policy::execute::MatchContext {
+                method: &request.method,
+                path: request.uri.path(),
+                headers: &request.headers,
+                client_ip: forwarded.client_ip,
+                steps_left: 1024,
+                captures: [None; 9],
+            };
+            match crate::http_policy::execute::execute(chain, &snapshot.policy, &mut policy_context)
+            {
+                crate::http_policy::execute::Outcome::Route(route) => Some((site, route)),
+                crate::http_policy::execute::Outcome::NotFound => {
+                    return reject(session, ctx, 404).await;
+                }
+                crate::http_policy::execute::Outcome::BudgetExceeded => {
+                    ctx.snapshot.logger.event(
+                        Level::Warn,
+                        "policy_error",
+                        &[("code", "POLICY_BUDGET_EXCEEDED")],
+                    );
+                    return reject(session, ctx, 503).await;
+                }
+                crate::http_policy::execute::Outcome::Respond {
+                    status,
+                    text,
+                    content_type,
+                } => {
+                    let (response, body) = match crate::http_policy::response::prepare(
+                        status,
+                        text,
+                        content_type,
+                        request.method == http::Method::HEAD,
+                    ) {
+                        Ok(value) => value,
+                        Err(_) => return reject(session, ctx, 503).await,
+                    };
+                    ctx.begin_response()?;
+                    session
+                        .write_response_header(Box::new(response), !body)
+                        .await?;
+                    if body {
+                        session
+                            .write_response_body(
+                                Some(bytes::Bytes::copy_from_slice(text.as_bytes())),
+                                true,
+                            )
+                            .await?;
+                    }
+                    return Ok(true);
+                }
+            }
+        } else {
+            ctx.snapshot.router.find(&authority.host, &path)
+        };
+        let Some((site, route)) = selected_route else {
             return reject(session, ctx, 404).await;
         };
         if let Some(route) = ctx
@@ -367,6 +449,11 @@ impl ProxyHttp for Handler {
                 Error::explain(ErrorType::InternalError, "forwarding policy not selected")
             })?,
         )?;
+        if let Some((site, route)) = ctx.selected
+            && let Some(host) = &ctx.snapshot.configuration.sites[site].routes[route].proxy_host
+        {
+            request.insert_header("host", host.as_str())?;
+        }
         if let Some(handshake) = &ctx.websocket {
             super::websocket::request_headers(handshake, request)?;
         }

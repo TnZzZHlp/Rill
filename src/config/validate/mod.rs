@@ -53,6 +53,55 @@ fn pattern(value: &str, origin: &Origin) -> Result<String> {
     String::from_utf8(bytes).map_err(|_| invalid())
 }
 
+fn validate_chain_action(
+    action: &mut crate::http_policy::model::Action,
+    server: &super::model::Server,
+    parameters: &super::model::Parameters,
+    routes: &mut Vec<Route>,
+) -> Result<()> {
+    match action {
+        crate::http_policy::model::Action::Route { raw, index } => {
+            let action_origin = match &raw.action {
+                RawAction::Proxy(v) => v.origin.clone(),
+                RawAction::Root(v) => v.origin.clone(),
+            };
+            let route_action = match &raw.action {
+                RawAction::Proxy(proxy) => {
+                    Action::Proxy(address::upstream(&proxy.value, server, &proxy.origin)?)
+                }
+                RawAction::Root(root) => Action::Static {
+                    root: root.clone(),
+                    index: raw
+                        .index
+                        .as_ref()
+                        .map_or_else(|| "index.html".to_owned(), |value| value.value.clone()),
+                    spa: raw.spa.as_ref().is_some_and(|v| v.value),
+                    cache_control: raw.cache_control.as_ref().map(|v| v.value.clone()),
+                    precompressed: raw.precompressed.as_ref().is_some_and(|v| v.value),
+                    browse: raw.browse.as_ref().is_some_and(|v| v.value),
+                    error_pages: raw.error_pages.clone(),
+                },
+            };
+            *index = Some(routes.len());
+            routes.push(Route {
+                proxy_host: raw.proxy_host.as_ref().map(|h| h.value.clone()),
+                pattern: raw.pattern.clone(),
+                action_origin,
+                action: route_action,
+                parameters: parameters.clone(),
+            });
+        }
+        crate::http_policy::model::Action::Branch(branches) => {
+            for branch in branches {
+                validate_chain_action(&mut branch.action, server, parameters, routes)?;
+            }
+        }
+        crate::http_policy::model::Action::Continue
+        | crate::http_policy::model::Action::Respond { .. } => (),
+    }
+    Ok(())
+}
+
 pub fn validate(normalized: NormalizedConfig) -> Result<ValidatedConfig> {
     let mut server = normalized.server;
     if server.http.is_empty() && server.https.is_empty() {
@@ -196,6 +245,7 @@ pub fn validate(normalized: NormalizedConfig) -> Result<ValidatedConfig> {
                 }
                 RawAction::Root(root) => Action::Static {
                     root,
+                    index: "index.html".to_owned(),
                     spa: route.spa.is_some_and(|value| value.value),
                     cache_control: route.cache_control.map(|value| value.value),
                     precompressed: route.precompressed.is_some_and(|value| value.value),
@@ -204,6 +254,7 @@ pub fn validate(normalized: NormalizedConfig) -> Result<ValidatedConfig> {
                 },
             };
             routes.push(Route {
+                proxy_host: None,
                 pattern: route.pattern,
                 action_origin,
                 action,
@@ -211,7 +262,14 @@ pub fn validate(normalized: NormalizedConfig) -> Result<ValidatedConfig> {
             });
         }
         routes.sort_by(|left, right| left.pattern.value.cmp(&right.pattern.value));
+        let mut chain = site.chain;
+        if let Some(chain) = &mut chain {
+            for rule in &mut chain.rules {
+                validate_chain_action(&mut rule.action, &server, &site.parameters, &mut routes)?;
+            }
+        }
         sites.push(Site {
+            chain,
             domains: site_domains,
             tls: site.tls,
             routes,

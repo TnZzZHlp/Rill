@@ -1,6 +1,7 @@
 pub mod cli;
 pub mod config;
 pub mod control;
+pub mod http_policy;
 pub mod observability;
 pub mod proxy;
 pub mod routing;

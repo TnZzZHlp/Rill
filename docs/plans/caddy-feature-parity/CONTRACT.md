@@ -271,6 +271,10 @@ respond 的 Content-Length 由 UTF-8 字节数决定；HEAD 不发送体但在�
 | 静态错误页/列表 | 错误页 1 MiB；扫描 4096、展示 512、HTML 256 KiB | 既有静态错误；static_files |
 | 控制面 | 帧 64 KiB；默认 reload 30 秒；首字节后帧 5 秒 | 既有管理通信错误；control |
 
+### 5.1 PikeVM 工作区补充授权（2026-11-05）
+
+用户批准独立 PikeVM 运行工作区全进程上限 64 MiB，包含候选和旧代仍持有的运行缓存。分配前按可证明上界预留，不排队，额度不足以 `POLICY_BUDGET_EXCEEDED` 失败，使用结束释放。合法正则配置可编译成功，而请求因工作区不足失败。此额度不改变编译策略 8 MiB/64 MiB 或 DFA 2 MiB/64 MiB 限额；PikeVM 不使用 DFA 缓存。库报告的 cache 内存不包含 epsilon 栈的 capacity，不能代替上界预留。
+
 ## 6. 跨模块接口与资源生命周期
 
 以下是新增公开接口的 Rust 草图；名称、参数和所有权是实施契约，具体错误构造、异步实现和现有可见性需按模块落地。`ConfigError` 保留 `Origin` 及 related 来源；不新增第二条配置管线。

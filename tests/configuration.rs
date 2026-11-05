@@ -1231,3 +1231,146 @@ fn observability_rejects_invalid_and_removed_fields() -> TestResult {
     fs::remove_file(entry)?;
     Ok(())
 }
+
+#[test]
+fn chain_configuration_compiles_and_rejects_invalid_candidates() -> TestResult {
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let entry =
+        std::env::temp_dir().join(format!("rill-chain-{}-{unique}.kdl", std::process::id()));
+    let prefix = "server { http \"127.0.0.1:8080\"; }\nsite \"example.test\" { ";
+    let cases = [
+        (
+            "chain { rule \"x\" { match { all { method \"GET\"; any { path-glob \"/a/*\"; path-regex \"^/b\"; }; not { client-cidr \"192.0.2.0/24\"; }; }; }; branch { when { match { header-prefix \"accept\" \"text/\"; }; respond 200 text=\"ok\"; }; otherwise { respond 404; }; }; }; }",
+            None,
+        ),
+        (
+            "chain { rule { respond 200; }; }; use-snippet \"missing\";",
+            Some("POLICY_MODE_CONFLICT"),
+        ),
+        (
+            "chain { rule { match { error-status 404; }; respond 200; }; }",
+            Some("POLICY_INVALID_MATCHER"),
+        ),
+        (
+            "chain { rule { respond \"invalid\" 200; }; }",
+            Some("POLICY_INVALID_RESPONSE"),
+        ),
+        (
+            "chain { rule { respond 200 201; }; }",
+            Some("POLICY_INVALID_RESPONSE"),
+        ),
+        (
+            "chain { rule { respond 204 text=\"body\"; }; }",
+            Some("POLICY_INVALID_RESPONSE"),
+        ),
+        (
+            "chain { rule { match { path-regex \"a{1001}\"; }; respond 200; }; }",
+            Some("POLICY_INVALID_REGEX"),
+        ),
+        (
+            "chain { rule { header \"response\" { }; continue; }; }",
+            Some("CONFIG_UNSUPPORTED"),
+        ),
+    ];
+    for (site, expected) in cases {
+        fs::write(&entry, format!("{prefix}{site} }}\n"))?;
+        match (build(&entry, &ConfigurationOnly), expected) {
+            (Ok(snapshot), None) => assert_eq!(snapshot.resources.policy.regexes.len(), 2),
+            (Err(error), Some(code)) => assert_eq!(error.code, code),
+            (result, expected) => panic!("unexpected result {result:?}; expected {expected:?}"),
+        }
+    }
+    fs::remove_file(entry)?;
+    Ok(())
+}
+
+#[test]
+fn policy_regex_captures_do_not_leak_from_failed_matches() -> TestResult {
+    use rill::http_policy::execute::{MatchContext, Outcome, execute};
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let entry =
+        std::env::temp_dir().join(format!("rill-captures-{}-{unique}.kdl", std::process::id()));
+    fs::write(
+        &entry,
+        "server { http \"127.0.0.1:8080\"; }\nsite \"example.test\" { chain { rule { match { all { path-regex \"^/(.*)\"; method \"POST\"; }; }; respond 200; }; rule { match { not { path-regex \"^/other/(.*)\"; }; }; respond 401; }; }; }",
+    )?;
+    let snapshot = build(&entry, &ConfigurationOnly)?;
+    let chain = snapshot.configuration.sites[0]
+        .chain
+        .as_ref()
+        .ok_or("missing chain")?;
+    let headers = http::HeaderMap::new();
+    let mut ctx = MatchContext {
+        method: &http::Method::GET,
+        path: "/secret",
+        headers: &headers,
+        client_ip: "127.0.0.1".parse()?,
+        steps_left: 1024,
+        captures: [None; 9],
+    };
+    assert!(matches!(
+        execute(chain, &snapshot.resources.policy, &mut ctx),
+        Outcome::Respond { status: 401, .. }
+    ));
+    assert_eq!(ctx.captures, [None; 9]);
+    fs::remove_file(entry)?;
+    Ok(())
+}
+
+#[test]
+fn policy_steps_short_circuit_and_branch_are_bounded() -> TestResult {
+    use rill::http_policy::execute::{MatchContext, Outcome, execute};
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let entry =
+        std::env::temp_dir().join(format!("rill-steps-{}-{unique}.kdl", std::process::id()));
+    let prefix = "server { http \"127.0.0.1:8080\"; }\nsite \"example.test\" { chain { ";
+    let rules = "rule { continue; }; ".repeat(511);
+    fs::write(
+        &entry,
+        format!("{prefix}{rules}rule {{ respond 200; }}; }}; }}"),
+    )?;
+    let snapshot = build(&entry, &ConfigurationOnly)?;
+    let chain = snapshot.configuration.sites[0]
+        .chain
+        .as_ref()
+        .ok_or("missing chain")?;
+    let headers = http::HeaderMap::new();
+    let mut ctx = MatchContext {
+        method: &http::Method::GET,
+        path: "/value",
+        headers: &headers,
+        client_ip: "127.0.0.1".parse()?,
+        steps_left: 1024,
+        captures: [None; 9],
+    };
+    assert!(matches!(
+        execute(chain, &snapshot.resources.policy, &mut ctx),
+        Outcome::Respond { status: 200, .. }
+    ));
+    assert_eq!(ctx.steps_left, 0);
+    ctx.steps_left = 1023;
+    assert!(matches!(
+        execute(chain, &snapshot.resources.policy, &mut ctx),
+        Outcome::BudgetExceeded
+    ));
+    fs::write(
+        &entry,
+        format!(
+            "{prefix}rule {{ match {{ any {{ method \"GET\"; path-regex \"^/(.*)\"; }}; }}; branch {{ when {{ match {{ method \"GET\"; }}; respond 201; }}; when {{ match {{ method \"GET\"; }}; respond 202; }}; otherwise {{ respond 203; }}; }}; }}; }}; }}"
+        ),
+    )?;
+    let snapshot = build(&entry, &ConfigurationOnly)?;
+    let chain = snapshot.configuration.sites[0]
+        .chain
+        .as_ref()
+        .ok_or("missing chain")?;
+    ctx.steps_left = 8;
+    assert!(matches!(
+        execute(chain, &snapshot.resources.policy, &mut ctx),
+        Outcome::Respond { status: 201, .. }
+    ));
+    assert_eq!(ctx.steps_left, 1);
+    assert_eq!(ctx.captures, [None; 9]);
+    fs::remove_file(entry)?;
+    Ok(())
+}

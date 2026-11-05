@@ -21,6 +21,7 @@ struct Scope {
     error_pages: BTreeMap<u16, Located<PathBuf>>,
     tls: Option<Located<String>>,
     items: Vec<RouteItem>,
+    chain: Option<crate::http_policy::model::Chain>,
 }
 
 fn scope(node: &KdlNode, origin: &Origin, site: bool) -> Result<Scope> {
@@ -35,6 +36,7 @@ fn scope(node: &KdlNode, origin: &Origin, site: bool) -> Result<Scope> {
         error_pages: BTreeMap::new(),
         tls: None,
         items: Vec::new(),
+        chain: None,
     };
     let mut seen = BTreeSet::new();
     for child in node
@@ -44,6 +46,18 @@ fn scope(node: &KdlNode, origin: &Origin, site: bool) -> Result<Scope> {
     {
         let origin = at(child, origin);
         match child.name().value() {
+            "chain" if site => {
+                if result.chain.is_some() {
+                    return Err(ConfigError::new(
+                        "POLICY_INVALID_CHAIN",
+                        "chain",
+                        "duplicate chain",
+                        &origin,
+                    ));
+                }
+                result.chain = Some(super::chain::parse(child, &origin)?);
+                continue;
+            }
             "error-page" => {
                 shape(child, &origin, "error-page", 2..=2, false)?;
                 let status = child.entries()[0]
@@ -134,6 +148,8 @@ pub fn route(node: &KdlNode, origin: &Origin) -> Result<RawRoute> {
     })?;
     Ok(RawRoute {
         pattern,
+        index: None,
+        proxy_host: None,
         uses: scope.uses,
         parameters: scope.parameters,
         action,
@@ -150,7 +166,37 @@ pub fn parse(node: &KdlNode, origin: &Origin) -> Result<RawSite> {
     let domains = (0..node.entries().len())
         .map(|index| argument(node, index, origin, "site"))
         .collect::<Result<Vec<_>>>()?;
+    let mut chain_origin = None;
+    let mut legacy_origin = None;
+    for child in node
+        .children()
+        .into_iter()
+        .flat_map(|document| document.nodes())
+    {
+        match child.name().value() {
+            "chain" => chain_origin = Some(at(child, origin)),
+            "route" | "use-snippet" | "proxy" | "root" => legacy_origin = Some(at(child, origin)),
+            _ => (),
+        }
+    }
+    if let (Some(chain), Some(legacy)) = (chain_origin, legacy_origin) {
+        return Err(ConfigError::new(
+            "POLICY_MODE_CONFLICT",
+            "site",
+            "chain and legacy routes are mutually exclusive",
+            &chain,
+        )
+        .related(&legacy));
+    }
     let mut scope = scope(node, origin, true)?;
+    if scope.chain.is_some() && (scope.action.is_some() || !scope.items.is_empty()) {
+        return Err(ConfigError::new(
+            "POLICY_MODE_CONFLICT",
+            "site",
+            "chain and legacy routes are mutually exclusive",
+            origin,
+        ));
+    }
     if let Some(action) = scope.action {
         scope.items.push(RouteItem::Route(Box::new(RawRoute {
             pattern: Located::new(
@@ -160,6 +206,8 @@ pub fn parse(node: &KdlNode, origin: &Origin) -> Result<RawSite> {
                     RawAction::Root(value) => value.origin.clone(),
                 },
             ),
+            index: None,
+            proxy_host: None,
             uses: Vec::new(),
             parameters: Parameters::default(),
             action,
@@ -182,7 +230,7 @@ pub fn parse(node: &KdlNode, origin: &Origin) -> Result<RawSite> {
             origin,
         ));
     }
-    if scope.items.is_empty() {
+    if scope.items.is_empty() && scope.chain.is_none() {
         return Err(ConfigError::new(
             "CONFIG_TYPE",
             "site",
@@ -192,6 +240,7 @@ pub fn parse(node: &KdlNode, origin: &Origin) -> Result<RawSite> {
     }
     Ok(RawSite {
         domains,
+        chain: scope.chain,
         tls: scope.tls,
         uses: scope.uses,
         parameters: scope.parameters,
