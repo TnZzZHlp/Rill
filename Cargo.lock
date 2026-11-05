@@ -1435,6 +1435,8 @@ dependencies = [
  "async-trait",
  "bytes",
  "clap",
+ "h2",
+ "http",
  "httpdate",
  "kdl",
  "nix",
