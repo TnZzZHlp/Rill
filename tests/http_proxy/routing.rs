@@ -1026,3 +1026,170 @@ site "app.test" {{ chain {{ rule {{ basic-auth realm="private" {{ user "alice" h
     assert!(logs.matches("AUTH_CAPACITY").count() >= 2);
     Ok(())
 }
+
+#[test]
+fn h2c_chain_proxy_uses_real_h2_upstream() -> TestResult {
+    let backend = TcpListener::bind("127.0.0.1:0")?;
+    let upstream = backend.local_addr()?;
+    backend.set_nonblocking(true)?;
+    let worker = thread::spawn(move || -> TestResult {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?;
+        runtime.block_on(async move {
+            let listener = tokio::net::TcpListener::from_std(backend)?;
+            let (stream, _) =
+                tokio::time::timeout(std::time::Duration::from_secs(5), listener.accept())
+                    .await??;
+            let mut connection = h2::server::handshake(stream).await?;
+            let (request, mut response) =
+                tokio::time::timeout(std::time::Duration::from_secs(5), connection.accept())
+                    .await?
+                    .ok_or("no h2 request")??;
+            assert_eq!(
+                request.uri().authority().ok_or("no authority")?.as_str(),
+                "backend.test"
+            );
+            assert_eq!(request.uri().scheme_str(), Some("http"));
+            let head = http::Response::builder()
+                .status(200)
+                .header("content-length", "2")
+                .body(())?;
+            let mut body = response.send_response(head, false)?;
+            body.send_data(bytes::Bytes::from_static(b"ok"), true)?;
+            let _ =
+                tokio::time::timeout(std::time::Duration::from_millis(200), connection.accept())
+                    .await;
+            Ok(())
+        })
+    });
+    let address = vacant()?;
+    let configuration = format!(
+        "server {{ http \"{address}\"; }}\nsite \"app.test\" {{ chain {{ rule {{ proxy \"http://{upstream}\" protocol=\"h2c\" host=\"backend.test\"; }}; }}; }}"
+    );
+    let mut proxy = Proxy::start(address, &configuration)?;
+    let (status, _, body) = send(address, "app.test", "/hello")?;
+    assert_eq!(status, 200);
+    assert_eq!(body, b"ok");
+    proxy.signal()?;
+    assert_eq!(proxy.finish()?.0, 0);
+    worker.join().map_err(|_| "h2 backend panicked")??;
+    Ok(())
+}
+
+#[test]
+fn h2c_grpc_rejects_http1_downstream_before_business_request() -> TestResult {
+    let backend = TcpListener::bind("127.0.0.1:0")?;
+    let upstream = backend.local_addr()?;
+    backend.set_nonblocking(true)?;
+    let worker = thread::spawn(move || -> TestResult {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?;
+        runtime.block_on(async move {
+            let listener = tokio::net::TcpListener::from_std(backend)?;
+            let (stream, _) =
+                tokio::time::timeout(std::time::Duration::from_secs(5), listener.accept())
+                    .await??;
+            let mut connection = h2::server::handshake(stream).await?;
+            let request =
+                tokio::time::timeout(std::time::Duration::from_secs(1), connection.accept()).await;
+            assert!(!matches!(request, Ok(Some(Ok(_)))));
+            Ok(())
+        })
+    });
+    let address = vacant()?;
+    let configuration = format!(
+        "server {{ http \"{address}\"; }}\nsite \"app.test\" {{ chain {{ rule {{ proxy \"http://{upstream}\" protocol=\"h2c\"; }}; }}; }}"
+    );
+    let mut proxy = Proxy::start(address, &configuration)?;
+    let mut stream = connect(address)?;
+    write!(
+        stream,
+        "POST /grpc HTTP/1.1\r\nHost: app.test\r\nContent-Type: application/grpc\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+    )?;
+    assert_eq!(response(&mut stream)?.0, 502);
+    worker.join().map_err(|_| "h2 backend panicked")??;
+    proxy.signal()?;
+    assert_eq!(proxy.finish()?.0, 0);
+    Ok(())
+}
+
+#[test]
+fn upstream_request_is_not_replayed_after_backend_receives_headers() -> TestResult {
+    let backend = TcpListener::bind("127.0.0.1:0")?;
+    let upstream = backend.local_addr()?;
+    let worker = thread::spawn(move || -> TestResult {
+        let mut stream = accept(&backend)?;
+        let request = head(&mut stream)?;
+        assert!(request.starts_with("GET /no-replay "));
+        drop(stream);
+        backend.set_nonblocking(true)?;
+        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(500);
+        loop {
+            match backend.accept() {
+                Ok(_) => return Err("request was replayed on another connection".into()),
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    if std::time::Instant::now() >= deadline {
+                        break;
+                    }
+                    thread::sleep(std::time::Duration::from_millis(10));
+                }
+                Err(error) => return Err(error.into()),
+            }
+        }
+        Ok(())
+    });
+    let address = vacant()?;
+    let configuration = format!(
+        "server {{ http \"{address}\"; }}\nsite \"app.test\" {{ proxy \"http://{upstream}\"; }}"
+    );
+    let mut proxy = Proxy::start(address, &configuration)?;
+    assert_eq!(send(address, "app.test", "/no-replay")?.0, 502);
+    worker.join().map_err(|_| "backend panicked")??;
+    proxy.signal()?;
+    assert_eq!(proxy.finish()?.0, 0);
+    Ok(())
+}
+
+#[test]
+fn h2c_request_is_not_replayed_after_backend_receives_headers() -> TestResult {
+    let backend = TcpListener::bind("127.0.0.1:0")?;
+    let upstream = backend.local_addr()?;
+    backend.set_nonblocking(true)?;
+    let worker = thread::spawn(move || -> TestResult {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?;
+        runtime.block_on(async move {
+            let listener = tokio::net::TcpListener::from_std(backend)?;
+            let (stream, _) =
+                tokio::time::timeout(std::time::Duration::from_secs(5), listener.accept())
+                    .await??;
+            let mut connection = h2::server::handshake(stream).await?;
+            let (request, _) =
+                tokio::time::timeout(std::time::Duration::from_secs(5), connection.accept())
+                    .await?
+                    .ok_or("missing request")??;
+            assert_eq!(request.uri().path(), "/no-replay");
+            drop(connection);
+            assert!(
+                tokio::time::timeout(std::time::Duration::from_millis(500), listener.accept())
+                    .await
+                    .is_err(),
+                "h2 request replayed"
+            );
+            Ok(())
+        })
+    });
+    let address = vacant()?;
+    let configuration = format!(
+        "server {{ http \"{address}\"; }}\nsite \"app.test\" {{ chain {{ rule {{ proxy \"http://{upstream}\" protocol=\"h2c\"; }}; }}; }}"
+    );
+    let mut proxy = Proxy::start(address, &configuration)?;
+    assert_eq!(send(address, "app.test", "/no-replay")?.0, 502);
+    worker.join().map_err(|_| "backend panicked")??;
+    proxy.signal()?;
+    assert_eq!(proxy.finish()?.0, 0);
+    Ok(())
+}

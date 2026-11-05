@@ -82,8 +82,30 @@ fn validate_chain_action(
                     error_pages: raw.error_pages.clone(),
                 },
             };
+            if let Action::Proxy(upstream) = &route_action {
+                match raw.proxy_protocol {
+                    super::model::UpstreamProtocol::H2c if upstream.tls => {
+                        return Err(ConfigError::new(
+                            "POLICY_UPSTREAM_PROTOCOL",
+                            "protocol",
+                            "h2c requires HTTP",
+                            &action_origin,
+                        ));
+                    }
+                    super::model::UpstreamProtocol::TlsH2 if !upstream.tls => {
+                        return Err(ConfigError::new(
+                            "POLICY_UPSTREAM_PROTOCOL",
+                            "protocol",
+                            "tls-h2 requires HTTPS",
+                            &action_origin,
+                        ));
+                    }
+                    _ => {}
+                }
+            }
             *index = Some(routes.len());
             routes.push(Route {
+                proxy_protocol: raw.proxy_protocol,
                 proxy_host: raw.proxy_host.as_ref().map(|h| h.value.clone()),
                 pattern: raw.pattern.clone(),
                 action_origin,
@@ -263,6 +285,7 @@ pub fn validate(normalized: NormalizedConfig) -> Result<ValidatedConfig> {
                 },
             };
             routes.push(Route {
+                proxy_protocol: super::model::UpstreamProtocol::Http1,
                 proxy_host: None,
                 pattern: route.pattern,
                 action_origin,

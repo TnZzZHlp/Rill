@@ -25,6 +25,9 @@ pub struct Packet {
 #[derive(Clone, Default)]
 pub struct Probe {
     cancelled: Arc<AtomicUsize>,
+    upload_gate: Arc<tokio::sync::Notify>,
+    reader_gate: Arc<tokio::sync::Notify>,
+    produced: Arc<AtomicUsize>,
     pub backend_id: &'static str,
 }
 
@@ -102,7 +105,28 @@ impl Probe {
         self,
         request: Request<Packet>,
     ) -> std::result::Result<Response<Packet>, Status> {
+        let remote = request.remote_addr().map(|addr| addr.to_string());
         let packet = request.into_inner();
+        if packet.text == "connection-id" {
+            return Ok(Response::new(Packet {
+                text: remote.ok_or_else(|| Status::internal("missing peer"))?,
+                count: 0,
+            }));
+        }
+        if packet.text == "release-upload" {
+            self.upload_gate.notify_one();
+            return Ok(Response::new(packet));
+        }
+        if packet.text == "release-reader" {
+            self.reader_gate.notify_one();
+            return Ok(Response::new(packet));
+        }
+        if packet.text == "reader-progress" {
+            return Ok(Response::new(Packet {
+                text: "progress".into(),
+                count: self.produced.load(Ordering::SeqCst) as u32,
+            }));
+        }
         if packet.text == "backend-id" {
             return Ok(Response::new(Packet {
                 text: self.backend_id.into(),
@@ -138,6 +162,7 @@ impl Probe {
         request: Request<Packet>,
     ) -> std::result::Result<Response<ReceiverStream<std::result::Result<Packet, Status>>>, Status>
     {
+        let remote = request.remote_addr().map(|addr| addr.to_string());
         let packet = request.into_inner();
         if packet.count > 100 {
             return Err(Status::resource_exhausted("count exceeds 100"));
@@ -168,7 +193,16 @@ impl Probe {
             }
             pending.finished = true;
         });
-        Ok(Response::new(ReceiverStream::new(receiver)))
+        let mut response = Response::new(ReceiverStream::new(receiver));
+        if let Some(remote) = remote {
+            response.metadata_mut().insert(
+                "x-peer-address",
+                remote
+                    .parse()
+                    .map_err(|_| Status::internal("invalid peer"))?,
+            );
+        }
+        Ok(response)
     }
 
     async fn bidi(
@@ -176,6 +210,7 @@ impl Probe {
         request: Request<Streaming<Packet>>,
     ) -> std::result::Result<Response<ReceiverStream<std::result::Result<Packet, Status>>>, Status>
     {
+        let remote = request.remote_addr().map(|addr| addr.to_string());
         let mut stream = request.into_inner();
         let (sender, receiver) = mpsc::channel(1);
         tokio::spawn(async move {
@@ -190,6 +225,30 @@ impl Probe {
                 };
                 match message {
                     Ok(Some(packet)) => {
+                        if packet.text == "pause-upload" {
+                            if sender.send(Ok(packet)).await.is_err() {
+                                return;
+                            }
+                            self.upload_gate.notified().await;
+                            continue;
+                        }
+                        if packet.text == "pause-reader" {
+                            for index in 0..128 {
+                                if sender
+                                    .send(Ok(Packet {
+                                        text: "x".repeat(256 * 1024),
+                                        count: index,
+                                    }))
+                                    .await
+                                    .is_err()
+                                {
+                                    return;
+                                }
+                                self.produced.store(index as usize + 1, Ordering::SeqCst);
+                            }
+                            self.reader_gate.notified().await;
+                            continue;
+                        }
                         if sender.send(Ok(packet)).await.is_err() {
                             return;
                         }
@@ -205,7 +264,16 @@ impl Probe {
                 }
             }
         });
-        Ok(Response::new(ReceiverStream::new(receiver)))
+        let mut response = Response::new(ReceiverStream::new(receiver));
+        if let Some(remote) = remote {
+            response.metadata_mut().insert(
+                "x-peer-address",
+                remote
+                    .parse()
+                    .map_err(|_| Status::internal("invalid peer"))?,
+            );
+        }
+        Ok(response)
     }
 }
 

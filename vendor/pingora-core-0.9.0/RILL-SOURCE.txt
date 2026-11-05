@@ -1,0 +1,4 @@
+Source: crates.io pingora-core 0.9.0
+Original crate SHA-256: 7fd4d1ddc6d6dbc1a97164ce13c301980c25c35422aab87b512c4c8b5123729b
+Excluded: examples/keys (private key fixtures), Cargo.lock (not used for dependency builds).
+Rill modifications: per-peer verify context, strict TLS h2 ALPN; upstream connection birth callback in PeerOptions and TransportConnector; zstd pinned to pre-existing lockfile version; upstream test character written as a Rust Unicode escape to comply with the repository character policy (test bytes unchanged).

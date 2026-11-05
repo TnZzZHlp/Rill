@@ -47,7 +47,7 @@ rill reload --socket /run/rill/control.sock --timeout 30s
 - 成功退出码 0；配置或准备失败 1；命令参数错误 2；管理通信失败、超时或结果未知 3。服务端明确返回失败时退出码 1。
 - `reload` 等待真实结果，成功输出请求 ID 与配置代次；超时不承诺操作没有发生，不自动重试。`--timeout` 默认 30 秒，覆盖连接、发送和等待接收；仅接受正整数及 ms/s/m/h 单位，拒绝溢出。等待响应首字节不受帧 5 秒期限提前截断，首字节后帧读取限 5 秒。
 - 日志写标准错误，成功结果写标准输出，错误不得打印私钥、凭据或完整敏感配置。run 输出受 log-level 过滤的 JSON 行日志；check 保留配置位置诊断文本。
-- HTTPS 上游的身份来自配置 URL，转发 Host 仍保留客户端已验证 authority；采用系统 OpenSSL 信任路径及管理员指定的 SSL_CERT_FILE/SSL_CERT_DIR，不提供跳过验证。DNS 名校验链和主机名，IP 校验链并在发送请求前严格核对 iPAddress SAN，复用连接也必须核验。上游使用 HTTP/1，入站可使用 HTTP/1 或 HTTP/2。
+- HTTPS 上游的身份来自配置 URL，转发 Host 仍保留客户端已验证 authority；采用系统 OpenSSL 信任路径及管理员指定的 SSL_CERT_FILE/SSL_CERT_DIR，不提供跳过验证。DNS 名校验链和主机名，IP 校验链并在发送请求前严格核对 iPAddress SAN，复用连接也必须核验。旧语法上游使用 HTTP/1；chain 固定代理支持 `protocol="h2c"`（仅 HTTP URL）和 `protocol="tls-h2"`（仅 HTTPS URL），完整 gRPC 尚未完成验收。入站可使用 HTTP/1 或 HTTP/2。 上游 CA 候选冻结源文件及 hash 目录，源变化须 Reload；CA 原始材料、可计量副本和元数据计入候选 8 MiB/进程 64 MiB 策略预算，OpenSSL 内部解析、证书对象和惰性缓存不计入该预算，预算不是 RSS 上限。
 - run 在启动前解析并检查上游地址；请求触发 60 秒应用缓存刷新（并非 DNS TTL），失败不返回过期地址，失败退避 1 秒。全部候选检查、去重且不超过 64 个；任一禁止地址拒绝整次解析。单请求固定候选，最多尝试 8 个建立连接失败的地址，已建连或已发送请求后失败不重放。Reload 重新准备上游。
 - HTTP/HTTPS 监听为 IPv4/IPv6 独立绑定，IPv6 设置 IPv6-only，可同端口双栈部署；任一监听绑定失败即启动失败，不继续提供部分站点。SIGTERM/SIGINT 都停止接受并等待最多 30 秒排空；正常退出 0，超期中止并退出 1。
 - HTTP/1.x 初始请求头总期限为 60 秒，复用连接下一请求的头部总期限使用上一请求路由的 idle-timeout；总期限不会随每次读取重新计时。已解析请求头最多 64 KiB；HTTP/1.x 框架解析本身仍有约 1 MiB 硬边界。全局最多 1024 个接受容量槽位，包含等待接受的保留槽位。

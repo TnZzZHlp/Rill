@@ -142,9 +142,12 @@ fn action(
                     return Err(invalid("CONFIG_UNKNOWN", "proxy", origin));
                 }
             }
-            if protocol.as_deref().is_some_and(|p| p != "http1") {
-                return Err(invalid("CONFIG_UNSUPPORTED", "protocol", origin));
-            }
+            let protocol = match protocol.as_deref() {
+                None | Some("http1") => crate::config::model::UpstreamProtocol::Http1,
+                Some("h2c") => crate::config::model::UpstreamProtocol::H2c,
+                Some("tls-h2") => crate::config::model::UpstreamProtocol::TlsH2,
+                Some(_) => return Err(invalid("CONFIG_UNSUPPORTED", "protocol", origin)),
+            };
             if host
                 .as_ref()
                 .is_some_and(|h| h.parse::<http::uri::Authority>().is_err())
@@ -163,6 +166,7 @@ fn action(
                     index: None,
                     proxy_host: host
                         .map(|value| crate::config::source::Located::new(value, origin.clone())),
+                    proxy_protocol: protocol,
                     uses: Vec::new(),
                     parameters: Default::default(),
                     action: crate::config::model::RawAction::Proxy(target),
@@ -192,6 +196,7 @@ fn action(
                 pattern: crate::config::source::Located::new("/*".into(), origin.clone()),
                 index: None,
                 proxy_host: None,
+                proxy_protocol: Default::default(),
                 uses: Vec::new(),
                 parameters: Default::default(),
                 action: crate::config::model::RawAction::Root(crate::config::source::Located::new(

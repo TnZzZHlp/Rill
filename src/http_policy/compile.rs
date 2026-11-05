@@ -90,6 +90,73 @@ impl PreparedPolicy {
         Ok(())
     }
 }
+#[derive(Debug, Default)]
+pub(crate) struct ExternalBudget {
+    bytes: usize,
+}
+
+impl ExternalBudget {
+    pub(crate) fn bytes(&self) -> usize {
+        self.bytes
+    }
+
+    pub(crate) fn reserve_with_existing(
+        &mut self,
+        policy: &PreparedPolicy,
+        existing: usize,
+        bytes: usize,
+        origin: &Origin,
+    ) -> Result<()> {
+        let total = self
+            .bytes
+            .checked_add(existing)
+            .and_then(|n| n.checked_add(bytes))
+            .ok_or_else(|| error("POLICY_LIMIT", origin))?;
+        policy
+            .bytes
+            .checked_add(total)
+            .filter(|n| *n <= 8 * MIB)
+            .ok_or_else(|| error("POLICY_LIMIT", origin))?;
+        self.reserve(policy, bytes, origin)
+    }
+
+    pub(crate) fn reserve(
+        &mut self,
+        policy: &PreparedPolicy,
+        bytes: usize,
+        origin: &Origin,
+    ) -> Result<()> {
+        let total = self
+            .bytes
+            .checked_add(bytes)
+            .ok_or_else(|| error("POLICY_LIMIT", origin))?;
+        policy
+            .bytes
+            .checked_add(total)
+            .filter(|n| *n <= 8 * MIB)
+            .ok_or_else(|| error("POLICY_LIMIT", origin))?;
+        POLICY_BYTES
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |old| {
+                old.checked_add(bytes).filter(|n| *n <= 64 * MIB)
+            })
+            .map_err(|_| error("POLICY_LIMIT", origin))?;
+        self.bytes = total;
+        Ok(())
+    }
+}
+
+impl ExternalBudget {
+    pub(crate) fn release(&mut self, bytes: usize) {
+        self.bytes -= bytes;
+        POLICY_BYTES.fetch_sub(bytes, Ordering::AcqRel);
+    }
+}
+
+impl Drop for ExternalBudget {
+    fn drop(&mut self) {
+        POLICY_BYTES.fetch_sub(self.bytes, Ordering::AcqRel);
+    }
+}
 fn repeat_ok(ast: &Ast) -> bool {
     match ast {
         Ast::Repetition(r) => {

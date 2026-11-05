@@ -110,7 +110,7 @@ watch 使用独立于快照的 inotify FD 生命周期，最多活动和候选�
 
 - 客户端不能决定上游 URL。仅允许管理员配置的固定 HTTP/HTTPS origin；拒绝 userinfo、fragment、查询串和非根 base path，不隐式重写路径。
 - Host 只用于选择站点，不能直接成为连接目标。默认向上游发送已验证的原始 authority/Host，HTTPS 上游 SNI 和证书验证名称则来自上游 URL；两者不可混淆。HTTP/2 `:authority` 与 Host 的一致性由统一适配层处理。
-- HTTPS 连接只使用已校验 SocketAddr，信任标准系统 OpenSSL 路径，管理员进程环境的 SSL_CERT_FILE/SSL_CERT_DIR 可影响信任。DNS 名使用框架链及主机名校验，不设置替代 CN。IP 启用链验证并设置非空 sni 以避免框架禁验证，OpenSSL 对 IP 不发送 SNI；仅替换框架的错误 DNS 名检查，以 hook 严格匹配 iPAddress SAN 字节，connected_to_upstream 在新建及复用连接发送任何 HTTP 字节前核验具体 IP，缺失或不符返回 502，不入池、不重试。上游固定 HTTP/1，入站仍支持 HTTP/1 和 HTTP/2。
+- HTTPS 连接只使用已校验 SocketAddr，信任标准系统 OpenSSL 路径，管理员进程环境的 SSL_CERT_FILE/SSL_CERT_DIR 可影响信任。DNS 名使用框架链及主机名校验，不设置替代 CN。IP 启用链验证并设置非空 sni 以避免框架禁验证，OpenSSL 对 IP 不发送 SNI；仅替换框架的错误 DNS 名检查，以 hook 严格匹配 iPAddress SAN 字节，connected_to_upstream 在新建及复用连接发送任何 HTTP 字节前核验具体 IP，缺失或不符返回 502，不入池、不重试。旧语法上游使用 HTTP/1；chain 固定代理已接入 h2c 和 TLS h2，完整 gRPC 与跨协议池隔离尚未验收。 CA 预算覆盖 Rill 持有的原始材料、可计量副本及元数据，不覆盖 OpenSSL 内部解析、证书对象或惰性缓存，非 RSS 硬上限；store 以候选共享并随连接租约持有。入站仍支持 HTTP/1 和 HTTP/2。
 - 上游仅允许已批准的解析目标。默认允许配置显式指定的 loopback、RFC1918、IPv6 ULA 和合法公网单播；永远拒绝 unspecified、multicast、link-local（包括云元数据地址）、IPv4-mapped 绕过及非单播特殊地址。IPv4-mapped IPv6 先折叠为 IPv4 再检查，正常映射地址按对应 IPv4 策略判断。
 - `server` 可用重复 `upstream-allow "CIDR"` 收窄允许集合；显式提供时替换默认允许集合，不覆盖强制拒绝项。域名需检查全部候选解析地址，建立连接时只能使用通过检查的地址；重新解析也要检查，不能校验后再按域名二次连接产生 DNS 竞态。
 - URL、地址和 CA 检查在配置准备和实际地址更新时执行。内网后端属于明确需求，不一概禁用；受保护元数据服务仍禁止。

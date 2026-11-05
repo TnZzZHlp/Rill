@@ -33,6 +33,7 @@ pub struct Context {
     connection_names: Vec<String>,
     attempt: usize,
     addresses: Option<Arc<Vec<SocketAddr>>>,
+    pool_lease: Option<Arc<super::pool_policy::PoolLease>>,
     websocket: Option<super::websocket::Handshake>,
     budget: Option<watch::Sender<Phase>>,
     idle: Duration,
@@ -219,6 +220,7 @@ impl ProxyHttp for Handler {
             connection_names: Vec::new(),
             attempt: 0,
             addresses: None,
+            pool_lease: None,
             websocket: None,
             budget: None,
             idle: Duration::from_secs(60),
@@ -707,19 +709,47 @@ impl ProxyHttp for Handler {
         let (site, route) = ctx
             .selected
             .ok_or_else(|| Error::explain(ErrorType::InternalError, "route not selected"))?;
-        ctx.snapshot
+        let prepared = ctx
+            .snapshot
             .routes
             .get(site)
             .and_then(|routes| routes.get(route))
             .and_then(PreparedRoute::as_proxy)
-            .and_then(|peer| peer.peer(ctx.addresses.as_deref()?, ctx.attempt))
-            .map(Box::new)
-            .ok_or_else(|| Error::explain(ErrorType::ConnectError, "no upstream address").into_up())
+            .ok_or_else(|| {
+                Error::explain(ErrorType::ConnectError, "no upstream address").into_up()
+            })?;
+        let addresses = ctx.addresses.as_deref().ok_or_else(|| {
+            Error::explain(ErrorType::ConnectError, "no upstream address").into_up()
+        })?;
+        let mut peer = prepared.peer(addresses, ctx.attempt).ok_or_else(|| {
+            Error::explain(ErrorType::ConnectError, "no upstream address").into_up()
+        })?;
+        ctx.pool_lease = None;
+        {
+            let identity = prepared.pool_identity(addresses[ctx.attempt], &peer);
+            let lease = super::pool_policy::registry()
+                .acquire(identity)
+                .map_err(|_| {
+                    Error::explain(ErrorType::InternalError, "UPSTREAM_POOL_CAPACITY").into_up()
+                })?;
+            peer.group_key = lease.token;
+            let birth_lease = Arc::clone(&lease);
+            let connection_trust = prepared.trust.clone();
+            peer.options.upstream_connection_birth_hook = Some(Arc::new(move |digest| {
+                super::pool_policy::registry()
+                    .birth(&digest, &birth_lease, connection_trust.clone())
+                    .map_err(|_| {
+                        Error::explain(ErrorType::InternalError, "UPSTREAM_POOL_CAPACITY").into_up()
+                    })
+            }));
+            ctx.pool_lease = Some(lease);
+        }
+        Ok(Box::new(peer))
     }
 
     async fn upstream_request_filter(
         &self,
-        _: &mut Session,
+        session: &mut Session,
         request: &mut RequestHeader,
         ctx: &mut Context,
     ) -> Result<()> {
@@ -734,6 +764,50 @@ impl ProxyHttp for Handler {
             && let Some(host) = &ctx.snapshot.configuration.sites[site].routes[route].proxy_host
         {
             request.insert_header("host", host.as_str())?;
+        }
+        if let Some((site, route)) = ctx.selected
+            && let Some(prepared) = ctx
+                .snapshot
+                .routes
+                .get(site)
+                .and_then(|routes| routes.get(route))
+                .and_then(PreparedRoute::as_proxy)
+            && prepared.protocol != crate::config::model::UpstreamProtocol::Http1
+        {
+            let grpc = request
+                .headers
+                .get(http::header::CONTENT_TYPE)
+                .and_then(|value| value.to_str().ok())
+                .is_some_and(|value| {
+                    value
+                        .split(';')
+                        .next()
+                        .is_some_and(|mime| mime.trim().starts_with("application/grpc"))
+                });
+            if grpc && session.req_header().version != http::Version::HTTP_2 {
+                return Err(Error::explain(
+                    ErrorType::HTTPStatus(502),
+                    "gRPC trailers require HTTP/2 downstream",
+                )
+                .into_up());
+            }
+            let authority = request.headers.get(http::header::HOST).ok_or_else(|| {
+                Error::explain(ErrorType::InvalidHTTPHeader, "missing upstream authority")
+            })?;
+            let uri = http::uri::Builder::new()
+                .scheme(if prepared.tls { "https" } else { "http" })
+                .authority(authority.as_bytes())
+                .path_and_query(
+                    request
+                        .uri
+                        .path_and_query()
+                        .map_or("/", http::uri::PathAndQuery::as_str),
+                )
+                .build()
+                .map_err(|_| {
+                    Error::explain(ErrorType::InvalidHTTPHeader, "invalid upstream authority")
+                })?;
+            request.set_uri(uri);
         }
         if let Some(handshake) = &ctx.websocket {
             super::websocket::request_headers(handshake, request)?;
@@ -756,8 +830,20 @@ impl ProxyHttp for Handler {
         peer: &HttpPeer,
         _: RawFd,
         digest: Option<&Digest>,
-        _: &mut Context,
+        ctx: &mut Context,
     ) -> Result<()> {
+        if let Some(lease) = &ctx.pool_lease {
+            let socket = digest
+                .and_then(|d| d.socket_digest.as_ref())
+                .ok_or_else(|| {
+                    Error::explain(ErrorType::InternalError, "UPSTREAM_POLICY_MISMATCH").into_up()
+                })?;
+            super::pool_policy::registry()
+                .verify(socket, lease)
+                .map_err(|_| {
+                    Error::explain(ErrorType::InternalError, "UPSTREAM_POLICY_MISMATCH").into_up()
+                })?;
+        }
         super::upstream_tls::verify(peer, digest).map_err(|mut error| {
             error.set_retry(false);
             error
@@ -839,10 +925,11 @@ impl ProxyHttp for Handler {
         mut error: Box<Error>,
     ) -> Box<Error> {
         ctx.attempt += 1;
-        let retry = ctx
-            .addresses
-            .as_ref()
-            .is_some_and(|addresses| ctx.attempt < addresses.len().min(8));
+        let retry = error.etype() != &ErrorType::InternalError
+            && ctx
+                .addresses
+                .as_ref()
+                .is_some_and(|addresses| ctx.attempt < addresses.len().min(8));
         error.set_retry(retry);
         error
     }
@@ -951,5 +1038,124 @@ mod tests {
             watch::channel(Phase::Headers(Instant::now() + Duration::from_secs(60)));
         begin_response(Some(&budget)).unwrap();
         assert!(matches!(*receiver.borrow(), Phase::Streaming));
+    }
+}
+
+#[cfg(test)]
+mod pool_collision_tests {
+    use super::*;
+    use crate::config::prepare::build;
+    use crate::runtime::state::HttpPreparer;
+    use pingora::connectors::http::Connector;
+    use pingora::protocols::http::client::HttpSession;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn forced_group_collision_reuses_connection_but_callback_rejects_before_headers() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("listen");
+        let target = listener.local_addr().expect("address");
+        let backend = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await.expect("accept");
+            let mut connection = h2::server::handshake(stream).await.expect("handshake");
+            let (request, mut response) = connection
+                .accept()
+                .await
+                .expect("first request")
+                .expect("valid request");
+            assert_eq!(request.uri().path(), "/first");
+            response
+                .send_response(
+                    http::Response::builder()
+                        .status(200)
+                        .body(())
+                        .expect("response"),
+                    true,
+                )
+                .expect("send response");
+            assert!(
+                tokio::time::timeout(Duration::from_millis(500), connection.accept())
+                    .await
+                    .is_err(),
+                "colliding request reached backend"
+            );
+        });
+        let path = std::env::temp_dir().join(format!("rill-collision-{}.kdl", std::process::id()));
+        std::fs::write(&path, format!("server {{ http \"127.0.0.1:8080\"; }}\nsite \"app.test\" {{ chain {{ rule {{ proxy \"http://{target}\" protocol=\"h2c\"; }}; }}; }}")).expect("config");
+        let prepared = build(&path, &HttpPreparer).expect("prepare");
+        std::fs::remove_file(&path).expect("remove config");
+        let handler = Handler {
+            state: RuntimeState::new(prepared).expect("runtime"),
+        };
+        let local_listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("local listener");
+        let connecting = tokio::net::TcpStream::connect(local_listener.local_addr().expect("addr"));
+        let (client, accepted) = tokio::join!(connecting, local_listener.accept());
+        let _client = client.expect("client");
+        let raw: pingora::protocols::l4::stream::Stream = accepted.expect("accept").0.into();
+        let mut downstream = Session::new_h1(Box::new(raw));
+        let mut a = handler.new_ctx();
+        a.selected = Some((0, 0));
+        a.addresses = Some(Arc::new(vec![target]));
+        let peer_a = handler
+            .upstream_peer(&mut downstream, &mut a)
+            .await
+            .expect("peer A");
+        let connector = Connector::new(None);
+        let (session, reused) = connector
+            .get_http_session(&*peer_a)
+            .await
+            .expect("connect A");
+        assert!(!reused);
+        let HttpSession::H2(mut session) = session else {
+            panic!("h2 required")
+        };
+        handler
+            .connected_to_upstream(
+                &mut downstream,
+                false,
+                &peer_a,
+                session.fd(),
+                session.digest(),
+                &mut a,
+            )
+            .await
+            .expect("guard A");
+        let mut request = RequestHeader::build("GET", b"/first", None).expect("request");
+        request.insert_header("host", "app.test").expect("host");
+        session
+            .write_request_header(Box::new(request), true)
+            .expect("send A");
+        session.read_response_header().await.expect("response A");
+        let mut b = handler.new_ctx();
+        let prepared = b.snapshot.routes[0][0].as_proxy().expect("prepared peer");
+        let mut identity = prepared.pool_identity(target, &peer_a);
+        identity.read_timeout += Duration::from_secs(1);
+        b.pool_lease = Some(
+            super::super::pool_policy::registry()
+                .acquire(identity)
+                .expect("lease B"),
+        );
+        let mut peer_b = (*peer_a).clone();
+        peer_b.group_key = peer_a.group_key;
+        let (collided, reused) = connector.get_http_session(&peer_b).await.expect("reuse");
+        assert!(reused);
+        let HttpSession::H2(collided) = collided else {
+            panic!("h2 required")
+        };
+        let error = handler
+            .connected_to_upstream(
+                &mut downstream,
+                true,
+                &peer_b,
+                collided.fd(),
+                collided.digest(),
+                &mut b,
+            )
+            .await
+            .expect_err("must reject collision");
+        assert!(error.to_string().contains("UPSTREAM_POLICY_MISMATCH"));
+        backend.await.expect("backend");
     }
 }

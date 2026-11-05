@@ -35,20 +35,72 @@ async fn unary(client: &mut Client, value: Packet) -> std::result::Result<Packet
 }
 
 pub async fn run(args: &[String]) -> Result {
-    if args.len() != 3 {
+    if args.len() < 3 || args.len() > 4 {
         return Err("client URL CA ok|reject".into());
     }
     let mut endpoint = Endpoint::from_shared(args[0].clone())?
         .connect_timeout(Duration::from_secs(3))
-        .timeout(Duration::from_secs(8));
+        .timeout(Duration::from_secs(if args[2] == "backpressure" {
+            60
+        } else {
+            8
+        }));
     if args[0].starts_with("https:") {
-        endpoint = endpoint.tls_config(
+        endpoint = endpoint.origin("https://grpc.test".parse()?).tls_config(
             ClientTlsConfig::new()
                 .domain_name("grpc.test")
                 .ca_certificate(Certificate::from_pem(std::fs::read(&args[1])?)),
         )?;
     }
-    let mut client = Client::new(endpoint.connect().await?);
+    let channel = endpoint.connect().await?;
+    let mut client = Client::new(channel.clone());
+    if args[2] == "backpressure" {
+        let direct = args.get(3).ok_or("missing direct backend URL")?;
+        let mut control = Client::new(Endpoint::from_shared(direct.clone())?.connect().await?);
+        return backpressure(&mut client, &mut control, channel).await;
+    }
+    if args[2] == "reload" {
+        let (sender, receiver) = mpsc::channel(1);
+        client.ready().await?;
+        let response = client
+            .streaming(
+                Request::new(ReceiverStream::new(receiver)),
+                PathAndQuery::from_static("/acceptance.Probe/Bidi"),
+                tonic_prost::ProstCodec::<Packet, Packet>::default(),
+            )
+            .await?;
+        let mut stream = response.into_inner();
+        sender.send(packet("before", 1)).await?;
+        assert_eq!(stream.message().await?, Some(packet("before", 1)));
+        assert_eq!(
+            unary(&mut client, packet("backend-id", 0)).await?.text,
+            "one"
+        );
+        println!("READY old stream backend=one");
+        let mut line = String::new();
+        std::io::stdin().read_line(&mut line)?;
+        assert_eq!(line.trim(), "failed-candidate");
+        sender.send(packet("after-failure", 2)).await?;
+        assert_eq!(stream.message().await?, Some(packet("after-failure", 2)));
+        assert_eq!(
+            unary(&mut client, packet("backend-id", 0)).await?.text,
+            "one"
+        );
+        println!("READY failed candidate retained backend=one");
+        line.clear();
+        std::io::stdin().read_line(&mut line)?;
+        assert_eq!(line.trim(), "continue");
+        sender.send(packet("after", 2)).await?;
+        assert_eq!(stream.message().await?, Some(packet("after", 2)));
+        assert_eq!(
+            unary(&mut client, packet("backend-id", 0)).await?.text,
+            "two"
+        );
+        drop(sender);
+        assert_eq!(stream.message().await?, None);
+        println!("PASS old bidi survives reload; new RPC backend=two");
+        return Ok(());
+    }
     if args[2] == "poolcheck" {
         for (policy, succeeds) in [
             ("good", true),
@@ -217,17 +269,34 @@ async fn exercise(client: &mut Client, route: &str) -> Result {
             tonic_prost::ProstCodec::<Packet, Packet>::default(),
         )
         .await?;
+    let peer = response
+        .metadata()
+        .get("x-peer-address")
+        .ok_or("missing backend peer")?
+        .to_str()?
+        .to_owned();
     let mut stream = response.into_inner();
     assert_eq!(stream.message().await?, Some(packet("cancel", 0)));
+    assert_eq!(
+        unary(client, packet("connection-id", 0)).await?.text,
+        peer,
+        "sibling must share upstream TCP connection"
+    );
     drop(stream);
     wait_cancel(client, before).await?;
+    assert_eq!(
+        unary(client, packet("connection-id", 0)).await?.text,
+        peer,
+        "cancel must not close sibling TCP connection"
+    );
     assert_eq!(
         unary(client, packet("sibling", 1)).await?,
         packet("sibling", 1)
     );
-    println!("PASS {route} cancel reaches backend and sibling RPC succeeds");
+    println!("PASS {route} cancel reaches backend and same-TCP sibling RPC succeeds");
 
     let before = unary(client, packet("stats", 0)).await?.count;
+    let deadline_peer = unary(client, packet("connection-id", 0)).await?.text;
     client.ready().await?;
     let mut request = Request::new(packet("slow", 1));
     request.set_timeout(Duration::from_millis(150));
@@ -244,6 +313,11 @@ async fn exercise(client: &mut Client, route: &str) -> Result {
         "unexpected deadline code: {error}"
     );
     wait_cancel(client, before).await?;
+    assert_eq!(
+        unary(client, packet("connection-id", 0)).await?.text,
+        deadline_peer,
+        "deadline must not close connection"
+    );
     assert_eq!(
         unary(client, packet("after-deadline", 1)).await?,
         packet("after-deadline", 1)
@@ -263,4 +337,111 @@ async fn wait_cancel(client: &mut Client, before: u32) -> Result {
         }
         tokio::time::sleep(Duration::from_millis(25)).await;
     }
+}
+
+async fn backpressure(client: &mut Client, control: &mut Client, channel: Channel) -> Result {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    let (sender, receiver) = mpsc::channel(1);
+    client.ready().await?;
+    let response = client
+        .streaming(
+            Request::new(ReceiverStream::new(receiver)),
+            PathAndQuery::from_static("/acceptance.Probe/Bidi"),
+            tonic_prost::ProstCodec::<Packet, Packet>::default(),
+        )
+        .await?;
+    let peer = response
+        .metadata()
+        .get("x-peer-address")
+        .ok_or("missing peer")?
+        .to_str()?
+        .to_owned();
+    let mut stream = response.into_inner();
+    sender.send(packet("pause-upload", 0)).await?;
+    assert_eq!(stream.message().await?, Some(packet("pause-upload", 0)));
+    let progress = Arc::new(AtomicUsize::new(0));
+    let task_progress = progress.clone();
+    let upload = tokio::spawn(async move {
+        for index in 0..128 {
+            sender
+                .send(packet(&"u".repeat(256 * 1024), index))
+                .await
+                .expect("upload stream");
+            task_progress.store(index as usize + 1, Ordering::SeqCst);
+        }
+    });
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    let before = progress.load(Ordering::SeqCst);
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    let after = progress.load(Ordering::SeqCst);
+    if before == 0 || before != after || after >= 128 {
+        return Err(format!("upload did not block: {before}->{after}").into());
+    }
+    let mut upload_sibling = Client::new(channel.clone());
+    let sibling_upload =
+        tokio::spawn(async move { unary(&mut upload_sibling, packet("connection-id", 0)).await });
+    println!("STAGE upload pressure={after}; sibling launched; resuming upload");
+    unary(control, packet("release-upload", 0)).await?;
+    for index in 0..128 {
+        let value = tokio::time::timeout(Duration::from_secs(15), stream.message())
+            .await??
+            .ok_or("upload response ended")?;
+        assert_eq!(value.count, index);
+        assert_eq!(value.text.len(), 256 * 1024);
+    }
+    upload.await?;
+    assert_eq!(stream.message().await?, None);
+    assert_eq!(
+        tokio::time::timeout(Duration::from_secs(10), sibling_upload)
+            .await???
+            .text,
+        peer
+    );
+    println!("PASS upload blocked at {after}/128 then resumed; sibling same TCP");
+
+    let (sender, receiver) = mpsc::channel(1);
+    client.ready().await?;
+    let response = client
+        .streaming(
+            Request::new(ReceiverStream::new(receiver)),
+            PathAndQuery::from_static("/acceptance.Probe/Bidi"),
+            tonic_prost::ProstCodec::<Packet, Packet>::default(),
+        )
+        .await?;
+    let peer = response
+        .metadata()
+        .get("x-peer-address")
+        .ok_or("missing peer")?
+        .to_str()?
+        .to_owned();
+    let mut stream = response.into_inner();
+    sender.send(packet("pause-reader", 0)).await?;
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    let before = unary(control, packet("reader-progress", 0)).await?.count;
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    let after = unary(control, packet("reader-progress", 0)).await?.count;
+    if before == 0 || before != after || after >= 128 {
+        return Err(format!("reader did not block producer: {before}->{after}").into());
+    }
+    let mut sibling = Client::new(channel);
+    let sibling_task =
+        tokio::spawn(async move { unary(&mut sibling, packet("connection-id", 0)).await });
+    println!("STAGE reader pressure={after}; sibling launched; resuming reader");
+    for index in 0..128 {
+        let value = tokio::time::timeout(Duration::from_secs(15), stream.message())
+            .await??
+            .ok_or("reader ended")?;
+        assert_eq!(value.count, index);
+        assert_eq!(value.text.len(), 256 * 1024);
+    }
+    let sibling_peer = tokio::time::timeout(Duration::from_secs(10), sibling_task).await???;
+    assert_eq!(sibling_peer.text, peer);
+    unary(control, packet("release-reader", 0)).await?;
+    drop(sender);
+    assert_eq!(stream.message().await?, None);
+    println!("PASS reader blocked producer at {after}/128 then resumed; sibling same TCP");
+    Ok(())
 }

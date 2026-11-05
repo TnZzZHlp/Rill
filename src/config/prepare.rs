@@ -55,6 +55,7 @@ pub enum CheckedRoute {
 #[derive(Debug)]
 pub struct CheckResources {
     pub policy: crate::http_policy::compile::PreparedPolicy,
+    pub(crate) trust: Option<crate::proxy::trust::material::TrustMaterial>,
     pub tls: crate::tls::cert::PreparedTls,
     pub routes: Vec<Vec<CheckedRoute>>,
 }
@@ -81,8 +82,31 @@ impl ConfigurationOnly {
         configuration: &ValidatedConfig,
         mut dependencies: Option<&mut DependencyPlan>,
     ) -> Result<CheckResources> {
+        crate::proxy::pool_policy::registry()
+            .collect_expired()
+            .map_err(|_| {
+                ConfigError::new(
+                    "POLICY_LIMIT",
+                    "proxy",
+                    "cannot collect upstream pool resources",
+                    &configuration.server.origin,
+                )
+            })?;
         let policy =
             crate::http_policy::compile::compile(configuration, dependencies.as_deref_mut())?;
+        let has_tls_upstream = configuration
+            .sites
+            .iter()
+            .flat_map(|site| &site.routes)
+            .any(|route| matches!(&route.action, Action::Proxy(upstream) if upstream.tls));
+        let trust = if has_tls_upstream {
+            Some(crate::proxy::trust::material::TrustMaterial::prepare(
+                &policy,
+                &configuration.server.origin,
+            )?)
+        } else {
+            None
+        };
         let tls = match dependencies {
             Some(plan) => crate::tls::cert::PreparedTls::prepare_tracked(configuration, plan)?,
             None => crate::tls::cert::PreparedTls::prepare(configuration)?,
@@ -105,6 +129,7 @@ impl ConfigurationOnly {
             .collect::<Result<Vec<_>>>()?;
         Ok(CheckResources {
             policy,
+            trust,
             tls,
             routes,
         })

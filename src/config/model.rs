@@ -27,11 +27,20 @@ pub enum RawAction {
     Root(Located<PathBuf>),
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub enum UpstreamProtocol {
+    #[default]
+    Http1,
+    H2c,
+    TlsH2,
+}
+
 #[derive(Clone, Debug)]
 pub struct RawRoute {
     pub pattern: Located<String>,
     pub index: Option<Located<String>>,
     pub proxy_host: Option<Located<String>>,
+    pub proxy_protocol: UpstreamProtocol,
     pub uses: Vec<Located<String>>,
     pub parameters: Parameters,
     pub action: RawAction,
@@ -180,6 +189,7 @@ pub enum Action {
 
 #[derive(Debug)]
 pub struct Route {
+    pub proxy_protocol: UpstreamProtocol,
     pub proxy_host: Option<String>,
     pub pattern: Located<String>,
     pub action_origin: Origin,

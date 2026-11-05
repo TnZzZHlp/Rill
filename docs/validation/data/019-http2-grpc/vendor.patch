@@ -1,0 +1,41 @@
+--- original/Cargo.toml
++++ vendor/Cargo.toml
+@@ -268 +268 @@
+-version = "0"
++version = "=0.14.3"
+--- original/src/connectors/http/v2.rs
++++ vendor/src/connectors/http/v2.rs
+@@ -351,0 +352,4 @@
++        if peer.tls() && peer.get_peer_options().is_some_and(|options| matches!(options.alpn, ALPN::H2))
++            && stream.selected_alpn_proto() != Some(ALPN::H2) {
++            return Error::e_explain(H2Error, "upstream did not negotiate h2");
++        }
+--- original/src/connectors/mod.rs
++++ vendor/src/connectors/mod.rs
+@@ -246,0 +247,4 @@
++        if let Some(hook) = peer.get_peer_options().and_then(|o| o.upstream_connection_birth_hook.as_ref()) {
++            let digest = stream.get_socket_digest().ok_or_else(|| Error::explain(InternalError, "upstream connection has no socket digest"))?;
++            hook(digest)?;
++        }
+--- original/src/connectors/tls/boringssl_openssl/mod.rs
++++ vendor/src/connectors/tls/boringssl_openssl/mod.rs
+@@ -164 +164,4 @@
+-    if let Some(ca_list) = peer.get_ca() {
++    if let Some(context) = peer.get_peer_options().and_then(|options| options.upstream_verify_context.as_ref()) {
++        ssl_set_verify_cert_store(&mut ssl_conf, context.cert_store())
++            .or_err(InternalError, "failed to load verify store")?;
++    } else if let Some(ca_list) = peer.get_ca() {
+--- original/src/upstreams/peer.rs
++++ vendor/src/upstreams/peer.rs
+@@ -513,0 +514,3 @@
++    #[cfg(feature = "openssl_derived")]
++    #[derivative(Debug = "ignore")]
++    pub upstream_verify_context: Option<Arc<crate::tls::ssl::SslContext>>,
+@@ -555,0 +559,2 @@
++    #[derivative(Debug = "ignore")]
++    pub upstream_connection_birth_hook: Option<Arc<dyn Fn(Arc<crate::protocols::SocketDigest>) -> Result<()> + Send + Sync>>,
+@@ -588,0 +594,2 @@
++            #[cfg(feature = "openssl_derived")]
++            upstream_verify_context: None,
+@@ -608,0 +616 @@
++            upstream_connection_birth_hook: None,

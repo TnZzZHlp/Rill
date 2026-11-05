@@ -6,11 +6,11 @@
 - 项目根目录：当前仓库 `/root/github/Rill`
 - 计划目录：`docs/plans/caddy-feature-parity/`
 - 规划状态：已批准
-- 实施状态：001 已完成并经用户明确验收；002–004 已完成，独立复审及质量门禁通过；004 完成提交以包含本记录的 Git 提交为准；005 及之后未开始
+- 实施状态：001 已完成并经用户明确验收；002–005 已完成，独立复审及质量门禁通过；005 完成提交以包含本记录的 Git 提交为准；006 及之后未开始
 - 批准依据：用户确认 2.1–2.10 的完整功能边界、模块与十阶段拆分，随后要求排除 OTLP/追踪及所有新增 metrics 能力；2.10 仅保留日志可读身份，现有观测功能删除另行处理；用户指示生成计划。
 - 前置条件：原计划 012 完成，并单独获得实施授权。当前 Git 已有 `c5e6fa797f702eaeb3225e34693ec337b417e0e0` 完成提交；本次只读核验了记录和提交，不重新执行其验证。
 - 需求来源：[能力差距](../../gap-analysis-vs-caddy.md)、本轮结构化访谈与用户最终范围调整。
-- 001–004 已有实际检查；规则与响应见 [016](../../validation/016-caddy-rules-responses.md)，头部、路径及错误链见 [017](../../validation/017-caddy-headers-paths.md)，鉴权见 [018](../../validation/018-caddy-authentication.md)。005 及之后检查尚未执行，不代表对应功能已交付。
+- 001–005 已有实际检查；规则与响应见 [016](../../validation/016-caddy-rules-responses.md)，头部、路径及错误链见 [017](../../validation/017-caddy-headers-paths.md)，鉴权见 [018](../../validation/018-caddy-authentication.md)，生产 HTTP/2/gRPC 见 [019](../../validation/019-caddy-http2-grpc.md)。006 及之后检查尚未执行，不代表对应功能已交付。
 - 001 已产出 [契约](CONTRACT.md)、[追溯矩阵与隔离证据](../../validation/013-caddy-001-contracts-feasibility.md)。已实测：字面量分块无关、真实 h2 的 gRPC trailers 与独立 DATA 帧、流取消后兄弟流可用、WebDAV 受约束写入与锁模型、日志候选无副作用准备与回滚编排。后续[容器验收](../../validation/014-caddy-grpc-container.md)已通过隔离 Pingora 原型的 h2c/TLS h2 四类调用、响应 trailers、取消与 deadline，三轮 114 项判定通过；不代表生产 CLI 功能已实现。[015 收口](../../validation/015-caddy-contracts-feasibility-closure.md)进一步补齐正则捕获、同进程池身份与强制碰撞、DAV/日志跨代生命周期；主 suite 190 passed/1 DNS ignored，扩展容器三轮 150 项判定通过。原 h2 探针未持续轮询服务端 Connection，超时被错误归因于 Pingora；修复后两客户端各 100/100 次完成调用，协议阻断结论撤回。001-T03 与 001-AC03 技术关卡已通过，001-T04 用户明确回复“验收通过”；生产实现仍属后续阶段，不得降级需求或更换框架，不自动开始 002。
 
 ## 概述与事实边界
@@ -29,9 +29,9 @@
 - [ ] **G02：鉴权及可写 WebDAV 安全可用**
   - bcrypt/Argon2 Basic Auth、静态令牌、Class 1/2 常用方法和独占写锁可用；rclone/cadaver 互通、写事务和权限失败有实际证据。
   - 责任阶段：004、008；验证证据：004 鉴权已通过 [018](../../validation/018-caddy-authentication.md) 验证，008 WebDAV 未实施，目标保持未完成。
-- [ ] **G03：完整 HTTP/2/gRPC 上游**
+- [x] **G03：完整 HTTP/2/gRPC 上游**
   - h2c/TLS h2 与一元、客户端流、服务端流、双向流、trailers、取消和超时均真实可用，TLS 身份及连接池隔离正确。
-  - 责任阶段：005；验证证据：未执行。
+  - 责任阶段：005；验证证据：[019](../../validation/019-caddy-http2-grpc.md)，真实 Rill 四类调用、响应 trailers、同 TCP 取消隔离、严格 TLS/池守卫、背压及 CA 变更 Reload 通过；通用请求 trailers 不在冻结范围。
 - [ ] **G04：动态代理、流式替换与编码有界**
   - 公网目标策略、显式匿名、跨块字面量/正则、gzip/zstd 可用；待决内容超限中止是明确失败，不伪装完整成功。
   - 责任阶段：006、007；验证证据：未执行。
@@ -125,7 +125,7 @@ main/CLI 不承载业务规则。统一构建管线产生不可变政策，编�
 | 002 | [规则链、条件匹配与响应合成](subplans/002-rules-responses.md) | 实现新链执行器、类型化条件和 respond；保留旧路由算法。 | 001 | 已完成，独立复审及质量门禁通过 |
 | 003 | [头部、路径与错误处理](subplans/003-headers-paths.md) | 请求/响应头处理、显式前缀剥离、rewrite、try-files、错误链与受控变量。 | 002 | 已完成，独立复审及质量门禁通过 |
 | 004 | [Basic Auth 与静态令牌](subplans/004-authentication.md) | 内置 bcrypt/Argon2 Basic Auth、静态头令牌验证与鉴权策略。 | 002 | 已完成，独立复审及质量门禁通过 |
-| 005 | [HTTP/2 上游与完整 gRPC](subplans/005-http2-grpc.md) | 固定上游 h2c 与 TLS h2，一元及三类流式 gRPC、trailers 与取消传播。 | 003 | 未开始 |
+| 005 | [HTTP/2 上游与完整 gRPC](subplans/005-http2-grpc.md) | 固定上游 h2c 与 TLS h2，一元及三类流式 gRPC、trailers 与取消传播。 | 003 | 已完成，独立复审及质量门禁通过 |
 | 006 | [公网动态目标代理](subplans/006-dynamic-proxy.md) | 从显式 URL 前缀提取 HTTP/HTTPS 目标，支持明确开启的匿名模式。 | 003、004 | 未开始 |
 | 007 | [流式正文替换与在线编码](subplans/007-body-transforms.md) | 字面量及 Rust 正则跨块替换、捕获替换与顺序规则；gzip/zstd 在线压缩及已有 sidecar 协调。 | 005、006 | 未开始 |
 | 008 | [受约束可写 WebDAV](subplans/008-webdav.md) | RFC 4918 Class 1/2 常用方法、独占写锁、属性存储、受约束写操作；rclone/cadaver 兼容。 | 003、004 | 未开始 |
@@ -140,7 +140,7 @@ main/CLI 不承载业务规则。统一构建管线产生不可变政策，编�
 
 ## 验证策略
 
-001–004 已执行下列质量门禁，记录见各阶段验证证据；后续阶段仍须重新执行：
+001–005 已执行下列质量门禁，记录见各阶段验证证据；后续阶段仍须重新执行：
 
 ```sh
 cargo fmt --all --check

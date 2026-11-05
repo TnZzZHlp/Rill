@@ -514,3 +514,78 @@ fn http2_incomplete_preface_closes_after_deadline() -> TestResult {
     assert_eq!(proxy.finish()?.0, 0);
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn grpc_message_split_across_h2_data_frames_round_trips() -> TestResult {
+    let directory = Directory::new()?;
+    let certificate = Certificate::issue(&["app.test"], None, false, (-60, 3600))?;
+    certificate.save(&directory.0, "default", &[])?;
+    let backend = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+    let upstream = backend.local_addr()?;
+    let worker = tokio::spawn(async move {
+        let (stream, _) = backend.accept().await?;
+        let mut connection = h2::server::handshake(stream).await?;
+        let (request, mut response) = connection.accept().await.ok_or("missing request")??;
+        let driver = tokio::spawn(async move { while connection.accept().await.is_some() {} });
+        let mut body = request.into_body();
+        let mut received = Vec::new();
+        let mut chunks = 0;
+        while let Some(chunk) = body.data().await {
+            chunks += 1;
+            let chunk = chunk?;
+            received.extend_from_slice(&chunk);
+            body.flow_control().release_capacity(chunk.len())?;
+        }
+        assert_eq!(received, [0, 0, 0, 0, 3, 8, 150, 1]);
+        assert!(chunks >= 2, "backend did not observe separate DATA frames");
+        let header = http::Response::builder()
+            .status(200)
+            .header("content-type", "application/grpc")
+            .body(())?;
+        let mut send = response.send_response(header, false)?;
+        send.send_data(bytes::Bytes::from_static(&[0, 0]), false)?;
+        send.send_data(bytes::Bytes::from_static(&[0, 0, 3, 8, 150, 1]), false)?;
+        let mut trailers = http::HeaderMap::new();
+        trailers.insert("grpc-status", "0".parse()?);
+        send.send_trailers(trailers)?;
+        tokio::time::sleep(Duration::from_millis(250)).await;
+        driver.abort();
+        Ok::<_, Box<dyn std::error::Error + Send + Sync>>(())
+    });
+    let address = vacant()?;
+    let config = format!(
+        "server {{ https \"{address}\"; }}\ntls \"default\" {{ cert \"{}\"; key \"{}\"; }}\nsite \"app.test\" {{ tls \"default\"; chain {{ rule {{ proxy \"http://{upstream}\" protocol=\"h2c\"; }}; }}; }}",
+        directory.0.join("default.pem").display(),
+        directory.0.join("default.key").display()
+    );
+    let mut proxy = Proxy::start(address, &config)?;
+    let connector = Connector::new(None);
+    let mut peer = HttpPeer::new(address, true, "app.test".into());
+    peer.options.ca = Some(Arc::new(vec![certificate.cert.clone()].into_boxed_slice()));
+    peer.options.alpn = ALPN::H2;
+    let (session, _) = connector.get_http_session(&peer).await?;
+    let HttpSession::H2(mut session) = session else {
+        return Err("HTTP/2 not negotiated".into());
+    };
+    let mut request = RequestHeader::build("POST", b"/probe", None)?;
+    request.set_uri("https://app.test/probe".parse()?);
+    request.insert_header("content-type", "application/grpc")?;
+    session.write_request_header(Box::new(request), false)?;
+    session
+        .write_request_body(bytes::Bytes::from_static(&[0, 0]), false)
+        .await?;
+    tokio::time::sleep(Duration::from_millis(20)).await;
+    session
+        .write_request_body(bytes::Bytes::from_static(&[0, 0, 3, 8, 150, 1]), true)
+        .await?;
+    session.read_response_header().await?;
+    let mut response = Vec::new();
+    while let Some(chunk) = session.read_response_body().await? {
+        response.extend_from_slice(&chunk);
+    }
+    assert_eq!(response, [0, 0, 0, 0, 3, 8, 150, 1]);
+    worker.await??;
+    proxy.signal()?;
+    assert_eq!(proxy.finish()?.0, 0);
+    Ok(())
+}

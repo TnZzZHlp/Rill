@@ -1,0 +1,82 @@
+$ podman image inspect 394ffa2d2ac8f5c9f45148f22bad3587429bceb19c93b88e8595f1e3f7892853 --format {{.Id}}
+$ cargo build --locked --offline --manifest-path /root/github/Rill/tests/feasibility/grpc_container/Cargo.toml
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.15s
+artifacts=/var/tmp/rill-grpc-acceptance-9p_qm5ha
+$ openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=Rill acceptance ca -addext basicConstraints=critical,CA:TRUE -keyout /var/tmp/rill-grpc-acceptance-9p_qm5ha/ca.key -out /var/tmp/rill-grpc-acceptance-9p_qm5ha/certs/ca.pem
+$ openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=Rill acceptance other-ca -addext basicConstraints=critical,CA:TRUE -keyout /var/tmp/rill-grpc-acceptance-9p_qm5ha/other-ca.key -out /var/tmp/rill-grpc-acceptance-9p_qm5ha/certs/other-ca.pem
+$ openssl req -newkey rsa:2048 -nodes -subj /CN=grpc.test -keyout /var/tmp/rill-grpc-acceptance-9p_qm5ha/certs/server.key -out /var/tmp/rill-grpc-acceptance-9p_qm5ha/server.csr
+$ openssl req -newkey rsa:2048 -nodes -subj /CN=grpc.test -keyout /var/tmp/rill-grpc-acceptance-9p_qm5ha/certs/server2.key -out /var/tmp/rill-grpc-acceptance-9p_qm5ha/server2.csr
+$ openssl x509 -req -in /var/tmp/rill-grpc-acceptance-9p_qm5ha/server.csr -days 1 -CA /var/tmp/rill-grpc-acceptance-9p_qm5ha/certs/ca.pem -CAkey /var/tmp/rill-grpc-acceptance-9p_qm5ha/ca.key -CAcreateserial -extfile /var/tmp/rill-grpc-acceptance-9p_qm5ha/server.ext -out /var/tmp/rill-grpc-acceptance-9p_qm5ha/certs/server.pem
+$ openssl x509 -req -in /var/tmp/rill-grpc-acceptance-9p_qm5ha/server2.csr -days 1 -CA /var/tmp/rill-grpc-acceptance-9p_qm5ha/certs/other-ca.pem -CAkey /var/tmp/rill-grpc-acceptance-9p_qm5ha/other-ca.key -CAcreateserial -extfile /var/tmp/rill-grpc-acceptance-9p_qm5ha/server.ext -out /var/tmp/rill-grpc-acceptance-9p_qm5ha/certs/server2.pem
+$ podman network create --opt isolate=true rill-grpc-acceptance-9p_qm5ha
+$ podman create --pull=never --name rill-grpc-acceptance-9p_qm5ha --network rill-grpc-acceptance-9p_qm5ha --read-only --cap-drop=all --security-opt=no-new-privileges --user 65534:65534 --memory 256m --cpus 1 --pids-limit 64 --stop-signal SIGINT -p 127.0.0.1::50051 -p 127.0.0.1::50052 -p 127.0.0.1::50053 -p 127.0.0.1::50054 -v /root/.cache/mbx/targets/v1/a95707062f630169d590b4bcd4db587ca3fa9e89569fe0c04d9b7555f428d24a/debug/rill-grpc-acceptance:/acceptance:ro -v /var/tmp/rill-grpc-acceptance-9p_qm5ha/certs:/certs:ro --entrypoint /acceptance 394ffa2d2ac8f5c9f45148f22bad3587429bceb19c93b88e8595f1e3f7892853 backend /certs/server.pem /certs/server.key /certs/server2.pem /certs/server2.key
+$ podman start 3db098ce935ed00f6a207e7521e499f51ba68238a6d2862f13667ecdf097edcb
+3db098ce935ed00f6a207e7521e499f51ba68238a6d2862f13667ecdf097edcb
+$ podman port 3db098ce935ed00f6a207e7521e499f51ba68238a6d2862f13667ecdf097edcb 50051/tcp
+$ podman port 3db098ce935ed00f6a207e7521e499f51ba68238a6d2862f13667ecdf097edcb 50052/tcp
+$ podman port 3db098ce935ed00f6a207e7521e499f51ba68238a6d2862f13667ecdf097edcb 50053/tcp
+$ podman port 3db098ce935ed00f6a207e7521e499f51ba68238a6d2862f13667ecdf097edcb 50054/tcp
+$ /root/github/Rill/target/debug/rill-grpc-acceptance client https://127.0.0.1:46315 /var/tmp/rill-grpc-acceptance-9p_qm5ha/certs/ca.pem ok
+PASS https://127.0.0.1:46315 unary
+PASS https://127.0.0.1:46315 512KiB flow-control
+PASS https://127.0.0.1:46315 client-stream
+PASS https://127.0.0.1:46315 server-stream and success trailers
+PASS https://127.0.0.1:46315 grpc-status=15 and grpc-message after DATA
+PASS https://127.0.0.1:46315 bidi responses before request EOF
+PASS https://127.0.0.1:46315 trailers-only grpc-status=3 and grpc-message
+PASS https://127.0.0.1:46315 cancel reaches backend and same-TCP sibling RPC succeeds
+PASS https://127.0.0.1:46315 deadline cancels backend and sibling RPC succeeds
+$ /root/github/Rill/target/debug/rill-grpc-acceptance client https://127.0.0.1:46315 /var/tmp/rill-grpc-acceptance-9p_qm5ha/certs/ca.pem backpressure http://127.0.0.1:46253
+STAGE upload pressure=7; sibling launched; resuming upload
+PASS upload blocked at 7/128 then resumed; sibling same TCP
+STAGE reader pressure=34; sibling launched; resuming reader
+PASS reader blocked producer at 34/128 then resumed; sibling same TCP
+PASS invalid candidate rejected
+PASS failed candidate retained old stream and backend
+$ /root/github/Rill/target/release/rill reload --socket /var/tmp/rill-grpc-acceptance-9p_qm5ha/control-h2c/rill.sock
+id=425262-1793896055582695349-0 generation=2
+PASS old bidi survives reload; new RPC backend=two
+$ /root/github/Rill/target/debug/rill-grpc-acceptance client https://127.0.0.1:59599 /var/tmp/rill-grpc-acceptance-9p_qm5ha/certs/ca.pem ok
+PASS https://127.0.0.1:59599 unary
+PASS https://127.0.0.1:59599 512KiB flow-control
+PASS https://127.0.0.1:59599 client-stream
+PASS https://127.0.0.1:59599 server-stream and success trailers
+PASS https://127.0.0.1:59599 grpc-status=15 and grpc-message after DATA
+PASS https://127.0.0.1:59599 bidi responses before request EOF
+PASS https://127.0.0.1:59599 trailers-only grpc-status=3 and grpc-message
+PASS https://127.0.0.1:59599 cancel reaches backend and same-TCP sibling RPC succeeds
+PASS https://127.0.0.1:59599 deadline cancels backend and sibling RPC succeeds
+$ /root/github/Rill/target/debug/rill-grpc-acceptance client https://127.0.0.1:59599 /var/tmp/rill-grpc-acceptance-9p_qm5ha/certs/ca.pem backpressure http://127.0.0.1:46253
+STAGE upload pressure=7; sibling launched; resuming upload
+PASS upload blocked at 7/128 then resumed; sibling same TCP
+STAGE reader pressure=34; sibling launched; resuming reader
+PASS reader blocked producer at 34/128 then resumed; sibling same TCP
+PASS invalid candidate rejected
+PASS failed candidate retained old stream and backend
+$ /root/github/Rill/target/release/rill reload --socket /var/tmp/rill-grpc-acceptance-9p_qm5ha/control-tls-h2/rill.sock
+id=425481-1793896061650316655-0 generation=2
+PASS old bidi survives reload; new RPC backend=two
+$ podman rm --force --ignore 3db098ce935ed00f6a207e7521e499f51ba68238a6d2862f13667ecdf097edcb
+3db098ce935ed00f6a207e7521e499f51ba68238a6d2862f13667ecdf097edcb
+$ podman network rm rill-grpc-acceptance-9p_qm5ha
+rill-grpc-acceptance-9p_qm5ha
+{
+  "image": "394ffa2d2ac8f5c9f45148f22bad3587429bceb19c93b88e8595f1e3f7892853",
+  "scenarios": [
+    "rill-h2c",
+    "rill-backpressure-h2c",
+    "rill-reload-h2c-old-stream",
+    "rill-tls-h2",
+    "rill-backpressure-tls-h2",
+    "rill-reload-tls-h2-old-stream"
+  ],
+  "cleanup": true,
+  "ports": {
+    "h2c": 46253,
+    "tls-h2": 44033,
+    "h2c-two": 36807,
+    "tls-h2-two": 42569
+  },
+  "passed": true,
+  "cleanup_errors": []
+}

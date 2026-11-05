@@ -81,6 +81,16 @@ impl HttpPreparer {
             Some(plan) => ConfigurationOnly.prepare_tracked(configuration, plan)?,
             None => ConfigurationOnly.prepare(configuration)?,
         };
+        let trust = checked
+            .trust
+            .map(|material| {
+                crate::proxy::trust::store::TrustStore::prepare(
+                    material,
+                    &checked.policy,
+                    &configuration.server.origin,
+                )
+            })
+            .transpose()?;
         let routes = checked
             .routes
             .into_iter()
@@ -90,8 +100,10 @@ impl HttpPreparer {
                     .into_iter()
                     .zip(&site.routes)
                     .map(|(checked, route)| match checked {
-                        CheckedRoute::Proxy => PreparedPeer::prepare(route, &configuration.server)
-                            .map(|peer| PreparedRoute::Proxy(Box::new(peer))),
+                        CheckedRoute::Proxy => {
+                            PreparedPeer::prepare(route, &configuration.server, trust.clone())
+                                .map(|peer| PreparedRoute::Proxy(Box::new(peer)))
+                        }
                         CheckedRoute::Static(prepared) => Ok(PreparedRoute::Static(prepared)),
                     })
                     .collect::<Result<Vec<_>>>()
