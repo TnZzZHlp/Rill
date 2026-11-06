@@ -27,7 +27,7 @@ pub enum PathErrorClass {
 pub enum Outcome {
     Respond {
         status: u16,
-        text: String,
+        text: std::sync::Arc<str>,
         content_type: String,
     },
     Route(usize),
@@ -165,6 +165,22 @@ fn action(
     step(ctx)?;
     match a {
         Action::BasicAuth(_) | Action::StaticToken(_) => unreachable!(),
+        Action::BodyReplace(replace) => {
+            ctx.state
+                .as_deref_mut()
+                .ok_or(())?
+                .register_replace(replace)
+                .map_err(|_| ())?;
+            Ok(None)
+        }
+        Action::Encode(encode) => {
+            ctx.state
+                .as_deref_mut()
+                .ok_or(())?
+                .register_encode(encode)
+                .map_err(|_| ())?;
+            Ok(None)
+        }
         Action::Header(header) => {
             ctx.state
                 .as_deref_mut()

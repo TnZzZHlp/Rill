@@ -1,0 +1,215 @@
+--- upstream/pingora-proxy-0.9.0/src/lib.rs
++++ vendor/pingora-proxy-0.9.0/src/lib.rs
+@@ -80,0 +81,7 @@
++/// One output at a time; the caller writes a chunk before asking for another.
++pub enum ResponseBodyOutput {
++    Chunk(Bytes),
++    InputDone,
++    Finished,
++}
++
+@@ -88,0 +96 @@
++mod proxy_body_stream;
+--- upstream/pingora-proxy-0.9.0/src/proxy_trait.rs
++++ vendor/pingora-proxy-0.9.0/src/proxy_trait.rs
+@@ -482,0 +483,34 @@
++    }
++
++    /// Opt in to asynchronous pull/drain instead of the synchronous body filter.
++    fn response_body_streaming(&self, _session: &Session, _ctx: &Self::CTX) -> bool {
++        false
++    }
++
++    /// Submit without waiting for consumption; drain output before submitting again.
++    fn response_body_push(
++        &self,
++        _session: &mut Session,
++        _body: Option<Bytes>,
++        _end: bool,
++        _ctx: &mut Self::CTX,
++    ) -> Result<()> {
++        Error::e_explain(
++            InternalError,
++            "streaming response body push not implemented",
++        )
++    }
++
++    /// A Chunk is at most 64 KiB. Finished is the only successful EOS signal.
++    async fn response_body_next(
++        &self,
++        _session: &mut Session,
++        _ctx: &mut Self::CTX,
++    ) -> Result<crate::ResponseBodyOutput>
++    where
++        Self::CTX: Send + Sync,
++    {
++        Error::e_explain(
++            InternalError,
++            "streaming response body next not implemented",
++        )
+--- upstream/pingora-proxy-0.9.0/src/proxy_h1.rs
++++ vendor/pingora-proxy-0.9.0/src/proxy_h1.rs
+@@ -436 +436,3 @@
+-        let response_done = session.write_response_tasks(filtered_tasks).await?;
++        let response_done = self
++            .write_response_tasks_streaming(session, filtered_tasks, ctx)
++            .await?;
+@@ -691 +693 @@
+-                        match session.write_response_tasks(vec![task]).await {
++                        match self.write_response_tasks_streaming(session, vec![task], ctx).await {
+@@ -974,8 +976,9 @@
+-                if let Some(duration) = self
+-                    .inner
+-                    .response_body_filter(session, &mut data, end, ctx)?
+-                {
+-                    trace!("delaying downstream response for {:?}", duration);
+-                    time::sleep(duration).await;
+-                }
+-
++                if !self.inner.response_body_streaming(session, ctx) {
++                    if let Some(duration) = self
++                        .inner
++                        .response_body_filter(session, &mut data, end, ctx)?
++                    {
++                        trace!("delaying downstream response for {:?}", duration);
++                        time::sleep(duration).await;
++                    }
++                }
+--- upstream/pingora-proxy-0.9.0/src/proxy_h2.rs
++++ vendor/pingora-proxy-0.9.0/src/proxy_h2.rs
+@@ -482 +482,3 @@
+-        let response_done = session.write_response_tasks(filtered_tasks).await?;
++        let response_done = self
++            .write_response_tasks_streaming(session, filtered_tasks, ctx)
++            .await?;
+@@ -720 +722 @@
+-                        match session.write_response_tasks(vec![task]).await {
++                        match self.write_response_tasks_streaming(session, vec![task], ctx).await {
+@@ -979,6 +981,8 @@
+-                if let Some(duration) = self
+-                    .inner
+-                    .response_body_filter(session, &mut data, eos, ctx)?
+-                {
+-                    trace!("delaying downstream response for {duration:?}");
+-                    time::sleep(duration).await;
++                if !self.inner.response_body_streaming(session, ctx) {
++                    if let Some(duration) = self
++                        .inner
++                        .response_body_filter(session, &mut data, eos, ctx)?
++                    {
++                        trace!("delaying downstream response for {duration:?}");
++                        time::sleep(duration).await;
++                    }
+--- upstream/pingora-proxy-0.9.0/src/proxy_cache.rs
++++ vendor/pingora-proxy-0.9.0/src/proxy_cache.rs
+@@ -469,0 +470,15 @@
++                        if self.inner.response_body_streaming(session, ctx) {
++                            match self
++                                .write_response_tasks_streaming(
++                                    session,
++                                    vec![HttpTask::Body(body, end)],
++                                    ctx,
++                                )
++                                .await
++                            {
++                                Ok(true) => break,
++                                Ok(false) => continue,
++                                Err(e) => return (false, Some(e)),
++                            }
++                        }
++
+--- /dev/null
++++ vendor/pingora-proxy-0.9.0/src/proxy_body_stream.rs
+@@ -0,0 +1,92 @@
++// Copyright 2026 Cloudflare, Inc.
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy at http://www.apache.org/licenses/LICENSE-2.0
++
++use super::*;
++
++impl<SV, C> HttpProxy<SV, C>
++where
++    C: custom::Connector,
++{
++    async fn drain_response_body(
++        &self,
++        session: &mut Session,
++        ctx: &mut SV::CTX,
++        finish: bool,
++    ) -> Result<bool>
++    where
++        SV: ProxyHttp + Send + Sync,
++        SV::CTX: Send + Sync,
++    {
++        loop {
++            match self.inner.response_body_next(session, ctx).await? {
++                ResponseBodyOutput::Chunk(data) => {
++                    if data.len() > 64 * 1024 {
++                        return Error::e_explain(InternalError, "streaming response chunk limit");
++                    }
++                    session.write_response_body(Some(data), false).await?;
++                }
++                ResponseBodyOutput::InputDone => return Ok(false),
++                ResponseBodyOutput::Finished => {
++                    if finish {
++                        session.write_response_body(None, true).await?;
++                    }
++                    return Ok(true);
++                }
++            }
++        }
++    }
++
++    pub(crate) async fn write_response_tasks_streaming(
++        &self,
++        session: &mut Session,
++        tasks: Vec<HttpTask>,
++        ctx: &mut SV::CTX,
++    ) -> Result<bool>
++    where
++        SV: ProxyHttp + Send + Sync,
++        SV::CTX: Send + Sync,
++    {
++        if !self.inner.response_body_streaming(session, ctx) {
++            return session.write_response_tasks(tasks).await;
++        }
++        let mut done = false;
++        for task in tasks {
++            if !self.inner.response_body_streaming(session, ctx) {
++                done |= session.write_response_tasks(vec![task]).await?;
++                continue;
++            }
++            match task {
++                HttpTask::Header(header, eos) => {
++                    session
++                        .write_response_tasks(vec![HttpTask::Header(header, false)])
++                        .await?;
++                    if eos {
++                        self.inner.response_body_push(session, None, true, ctx)?;
++                        done |= self.drain_response_body(session, ctx, true).await?;
++                    }
++                }
++                HttpTask::Body(body, eos) => {
++                    self.inner.response_body_push(session, body, eos, ctx)?;
++                    done |= self.drain_response_body(session, ctx, true).await?;
++                }
++                HttpTask::Done => {
++                    self.inner.response_body_push(session, None, true, ctx)?;
++                    done |= self.drain_response_body(session, ctx, true).await?;
++                }
++                HttpTask::Trailer(trailers) => {
++                    self.inner.response_body_push(session, None, true, ctx)?;
++                    done |= self.drain_response_body(session, ctx, false).await?;
++                    session
++                        .write_response_tasks(vec![HttpTask::Trailer(trailers)])
++                        .await?;
++                }
++                other => {
++                    done |= session.write_response_tasks(vec![other]).await?;
++                }
++            }
++        }
++        Ok(done)
++    }
++}

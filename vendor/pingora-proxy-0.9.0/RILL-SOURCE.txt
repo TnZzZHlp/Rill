@@ -1,0 +1,11 @@
+Upstream: pingora-proxy 0.9.0 (crates.io, locally cached source)
+Archive SHA-256: 2467265ad39b56230b56149f1c03ca510f46c4bf4a25d6d4b7345e0f06cc46e7
+License: Apache-2.0; upstream LICENSE and source notices retained.
+
+Rill patch: opt-in asynchronous response-body pull/drain hooks.
+Changed upstream files: src/lib.rs, src/proxy_trait.rs, src/proxy_h1.rs,
+src/proxy_h2.rs, src/proxy_cache.rs.
+Added: src/proxy_body_stream.rs.
+Default synchronous response_body_filter and Duration behavior is preserved.
+No upstream package/dependency version changes. No independent Cargo.lock.
+See docs/validation/021-caddy-body-transforms.md for ownership and validation.

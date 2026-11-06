@@ -177,7 +177,7 @@ webdav root="/srv/dav" storage-id="documents"
 
 ### 3.10 替换及编码
 
-`body-replace mime="text/html"` 包含按序的 `literal "old" "new"` 或 `regex "pattern" "replacement"`；正则替换支持 `$1` 至 `$9` 及 `$$`；不存在的捕获展开为空。其他 `$` 形式、命名捕获替换及两位编号以 `POLICY_INVALID_REPLACEMENT` 拒绝，避免 `$1name` 的词法歧义，捕获后的字面文字必须以非字母数字/下划线分隔。`encode mime="text/html" { gzip level=3; zstd level=3; }` 启用协商，两者至少一个。均为非终止响应过滤声明；body-replace 可在同一链中多次声明，encode 在主链与错误链合计最多声明一次，超出以 `POLICY_LIMIT` 拒绝；仅累积实际执行路径上、终止前已执行的声明，按执行声明顺序收集。它们作用于最终终止动作的响应，包括 serve-files、proxy、respond 和错误链响应；进入错误链后保留此前已执行的声明，再追加错误链实际执行的声明，错误链未执行的声明不生效。所有 body-replace 内 literal/regex 合计每响应最多 16 条，跨声明及错误链累计；编译时对可能路径超限拒绝 `POLICY_LIMIT`，运行时仍执行同一上限。所有替换按收集顺序运行，再应用唯一已执行的 encode 协商。MIME 必须显式列出，可重复 mime 属性以外的节点 `mime "type"` 扩展；不支持通配。流式策略及例外见第 4 节。无界正则经 regex-syntax HIR 的 maximum_len=None 判定后使用保守 EOF 回退：逐块累积尚不可判定的输入，累计待决到 1 MiB 即拒绝后续字节，不使用固定重叠窗口；到 EOF 后在完整待决序列上执行同一次 Rust 左最先匹配及捕获展开，输出按不大于 64 KiB 的片段交接且累计上限 64 MiB。该回退可能完全不能提前输出，是 D06 已接受的边界，不允许为保证成功而无限聚合或落盘。字面量使用模式长度决定的待决前缀；有界正则必须保留其实际最大匹配长度与边界断言所需上下文，不能把字面量窗口当成任意正则的正确性依据。
+`body-replace mime="text/html"` 包含按序的 `literal "old" "new"` 或 `regex "pattern" "replacement"`；正则替换支持 `$1` 至 `$9` 及 `$$`；不存在的捕获展开为空。其他 `$` 形式、命名捕获替换及两位编号以 `POLICY_INVALID_REPLACEMENT` 拒绝，避免 `$1name` 的词法歧义，捕获后的字面文字必须以非字母数字/下划线分隔。`encode mime="text/html" { gzip level=3; zstd level=3; }` 启用协商，两者至少一个。均为非终止响应过滤声明；body-replace 可在同一链中多次声明，encode 在主链与错误链合计最多声明一次，超出以 `POLICY_LIMIT` 拒绝；仅累积实际执行路径上、终止前已执行的声明，按执行声明顺序收集。它们作用于最终终止动作的响应，包括 serve-files、proxy、respond 和错误链响应；进入错误链后保留此前已执行的声明，再追加错误链实际执行的声明，错误链未执行的声明不生效。所有 body-replace 内 literal/regex 合计每响应最多 16 条，跨声明及错误链累计；编译时对可能路径超限拒绝 `POLICY_LIMIT`，运行时仍执行同一上限。所有替换按收集顺序运行，再应用唯一已执行的 encode 协商。MIME 必须显式列出，可重复 mime 属性以外的节点 `mime "type"` 扩展；不支持通配。流式策略及例外见第 4 节。无界正则经 regex-syntax HIR 的 maximum_len=None 判定后使用保守 EOF 回退：逐块累积尚不可判定的输入；每请求全部 pending、替换、中间、交接存储及工作信用共享 1 MiB，无界 pending 可用量须扣除同时存活的工作缓冲，不保证单条规则或 pending 独享 1 MiB。所有无界 stage 共用一次分配且按真实 capacity 全额计费的连续 arena，region 按实际使用划分、紧凑复用，不采用逐块整段双 allocation 扩容，也不使用固定重叠窗口；到 EOF 后在完整待决序列上执行同一次 Rust 左最先匹配及捕获展开，输出按不大于 64 KiB 的片段交接且累计上限 64 MiB。该回退可能完全不能提前输出，是 D06 已接受的边界，不允许为保证成功而无限聚合或落盘。字面量使用模式长度决定的待决前缀；有界正则必须保留其实际最大匹配长度与边界断言所需上下文，不能把字面量窗口当成任意正则的正确性依据。
 
 接受：
 ```kdl
@@ -188,6 +188,8 @@ continue
 拒绝 `body-replace mime="text/html" { regex "(?=a)" "b"; }`：`POLICY_INVALID_REGEX`。
 
 编码接受：`encode mime="text/html" { gzip level=3; }`。拒绝 `encode mime="text/html" { gzip level=9; }`：`POLICY_LIMIT`（level 只接受 3）。拒绝空声明 `encode mime="text/html" { }`：`POLICY_INVALID_ENCODE`（必须至少一个编码器）。
+
+2026-11-06 用户补充确认：正文替换按 Rust `regex::bytes` 语义处理原始字节，默认 Unicode 规则遵循该库，允许显式关闭 Unicode 的字节正则；非法 UTF-8 不作有损解码或额外拒绝。literal 模式为配置中的 UTF-8 字节串；空模式在完整逻辑输入的每个字节边界匹配一次（包括开头和 EOF），不因输入分块重复，也不按 Unicode 字符边界调整。实际经过替换或在线编码的表示删除所有源 ETag（包括弱 ETag）、Last-Modified、Content-MD5 和原 Content-Length，不得用源验证器直接返回变换表示的 304。未变换、Range、no-transform、未匹配 MIME 及仅沿用静态 sidecar 保留原有缓存协商，但代理条件请求有以下明确例外：实际路径已登记正文替换或在线编码，且请求侧尚不能确定旁路的 GET/HEAD，在唯一一次上游请求副本中移除 If-None-Match 和 If-Modified-Since；最终 MIME 未命中、SSE 或响应 no-transform 时仍原样旁路正文，但该次响应可以从 304 变为 200。已确定的 Range/其他旁路及未登记变换保留既有条件语义；不得移除 If-Match、If-Unmodified-Since 等业务前置条件或 Range 路径的 If-Range，不得重放请求。静态资源按已确定的真实表示处理，不套用此上游例外。
 
 ### 3.11 文件日志与身份
 
@@ -242,7 +244,7 @@ respond 的 Content-Length 由 UTF-8 字节数决定；HEAD 不发送体但在�
 | 每 glob 字节 | 1024 | `POLICY_LIMIT`；http_policy |
 | rewrite 重入 | 每请求 4 次 | `POLICY_BUDGET_EXCEEDED`；http_policy |
 | 替换规则 | 每响应 16 条 | `POLICY_LIMIT`；body_transform |
-| 待决和替换缓冲 | 每请求合计 1 MiB，全进程 64 MiB | `BODY_BUDGET_EXCEEDED`；body_transform |
+| 正文变换全部存储及工作信用 | 每请求合计 1 MiB，全进程 64 MiB；pending 可用量扣除同时存活工作缓冲 | `BODY_BUDGET_EXCEEDED`；body_transform |
 | 解码总输出、膨胀 | 每响应 64 MiB、至多输入的 100 倍加 64 KiB | `BODY_BUDGET_EXCEEDED`；body_transform |
 | 替换输出、CPU 与等待预算 | 每响应 64 MiB，CPU 完成预算 2 秒、执行等待 2 秒 | `BODY_BUDGET_EXCEEDED`；body_transform；CPU 在匹配/展开安全检查点累计，单次库调用不可抢占；超时不发布迟到结果，仍运行任务继续占用许可 |
 | 变换并发 | 64 响应 | `BODY_CAPACITY`；body_transform |
@@ -276,6 +278,12 @@ respond 的 Content-Length 由 UTF-8 字节数决定；HEAD 不发送体但在�
 | snippet 展开 | 深度 64、路由 4096、步骤 16384、payload 8 MiB | 既有配置错误；config |
 | 静态错误页/列表 | 错误页 1 MiB；扫描 4096、展示 512、HTML 256 KiB | 既有静态错误；static_files |
 | 控制面 | 帧 64 KiB；默认 reload 30 秒；首字节后帧 5 秒 | 既有管理通信错误；control |
+
+2026-11-06 用户补充确认：正文每请求 1 MiB、进程 64 MiB 限额覆盖 Rill 自己持有的全部待决、替换、中间和交接缓冲，按实际分配 capacity 计量，包括输出的 Bytes 克隆仍持有的内存；不包括 gzip/zstd 库内部上下文及工作区，因此不是 codec 内部内存或进程 RSS 的字节硬上限。gzip 窗口 32 KiB，zstd 窗口 1 MiB，解码器设置 windowLogMax=20，禁止外部字典及多线程配置。64 响应许可覆盖 codec 生命周期；取消或超时后实际任务尚未结束时仍持有许可及缓冲额度。
+
+007 独立复审后的用户最新确认“保留共享总额建议”：上述 1 MiB/64 MiB 仍是共享硬限；不保证 pending 或每条规则独享 1 MiB。原逐块全量双 allocation 导致约半 MiB 过早失败的实现不获追认，必须消除。共享 arena 的未用区域仍是实际 allocation，不能按 region 缩短伪造退券；工作信用在同一 RAII 额度内预留/分拆，未消费信用也影响准入，实物不双计。输入、decoded、所有 stage、bounded pending/KMP 表、静态源额外持留及全部输出 owner 均扣实际容量。普通输入信用按 64 KiB、decoded/stage 按 16 KiB、最低输出信用按 3×16 KiB 计算，但不是历史 H2 owner 上限，更多存活 owner 必须另占真实剩余额度或失败，不增等待。源大于输入信用则明确拒绝，不能隐藏底层；输入 EOS 后实际释放 source/decoder/decoded 和未用输入信用，再传播 EOF。PikeVM 在 region 完整逻辑 slice 上匹配，pull fragment 用相对 offset，复制到带券 stage Buffer 后才推进下级/紧凑；上级所有捕获片段完成后才释放 region。详见 021 本次实现与分块边界证据；此确认不等于此前实现已经满足契约。
+
+2026-11-06 实施边界确认：上述存储预算不含原 HTTP 框架接收/解析/flow-control、framing/HPACK、TLS 与内核 IO 存储；不得将此说成整条 HTTP 或 RSS 硬限。proxy 当前框架 Bytes 必须在同步提交内先预留自有实际容量、复制后立即 drop，不能跨等待、worker 或 ctx 额外保留未知底层，不能拆片隐藏共享大 allocation。Rill 输出原 allocation 仍由 from_owner 许可覆盖任何框架 clone，直至真正释放；既有 h2 0.4.20 framed_write.rs:240–258 向原 encoder.buf 的小 DATA/前缀 framing 拷贝属于框架内部存储，不允许据此新增未计量 Rill 队列或提高窗口。respond 直接从候选文本一次复制；变换文件读取先分配预算 Buffer；旧 listing/cache producer 在确定变换后的额外持留分别按真实 Vec.capacity/Box 全容量收费，源/input 同时存活时同时计费，释放源实际存储/额外引用后才释放对应券。见 021 的源与输出生命周期证据。
 
 ### 5.1 PikeVM 工作区补充授权（2026-11-05）
 

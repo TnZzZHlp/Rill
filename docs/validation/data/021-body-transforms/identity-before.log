@@ -1,0 +1,21 @@
+
+running 1 test
+body_transform::http::proxy_replaces_case_insensitive_identity_content_encoding --- FAILED
+
+failures:
+
+---- body_transform::http::proxy_replaces_case_insensitive_identity_content_encoding stdout ----
+
+thread 'body_transform::http::proxy_replaces_case_insensitive_identity_content_encoding' (1998334) panicked at tests/body_transform/http.rs:170:5:
+assertion `left == right` failed
+  left: [111, 108, 100]
+ right: [110, 101, 119]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    body_transform::http::proxy_replaces_case_insensitive_identity_content_encoding
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 18 filtered out; finished in 0.06s
+
+error: test failed, to rerun pass `--test body_transform`

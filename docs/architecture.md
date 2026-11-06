@@ -132,6 +132,16 @@ watch 使用独立于快照的 inotify FD 生命周期，最多活动和候选�
 - 每次请求安全打开并核验 dev/ino、size、mtime/ctime 纳秒、mode、uid、gid；缓存命中也 fstat 比较版本，加载前后 fstat 变化返回 503。这不是恶意原位写入的事务快照。
 - 进程级正文缓存预算包括 loading、ready 和淘汰后仍被响应持有的正文，响应使用切片 owner 而非复制；Reload 共享该固定预算。`RuntimeState::static_cache_stats` 是只读库 API，不是 HTTP 或 CLI 端点，使用量不是 RSS。预压缩、错误页及有界目录浏览的配置和响应细节见配置文档。
 
+### 正文变换的所有权边界（能力补齐 007）
+
+`body_transform` 拥有严格 MIME 选择、流式匹配/codec、共享预算及输出生命周期；`http_policy` 只在实际到达动作时登记并冻结实例，`proxy`/`static_files` 负责原 metadata、源表示和背压交接。候选先编译完整正则，运行时使用明确 PikeVM Cache 与既有 workspace 配额；不重新读取活动快照。
+
+每请求 1 MiB、进程 64 MiB 只约束 Rill 自有及额外持留的变换 allocation capacity。预留后才分配；所有无界 stage 共享一次连续 arena，未用区域也全额收费，不逐块重分配整段 pending。region 紧凑仅复用同一 allocation，capture/cursor 保留相对逻辑 offset，pull 片段先复制到带券 stage 块、结束借用后才推进下级；上级全部匹配片段完成后才释放其 region 和传播 EOF。工作信用与实物同券分拆、不双计：普通输入 64 KiB、decoded/stage 各 16 KiB、最低输出 3×16 KiB，另扣 bounded pending/KMP 表、额外源持留及更多历史 owner。arena 可用量是这些存活费用之后的余量，不保证 pending 或每条规则独享 1 MiB。输入超信用明确失败；EOS 实际 drop source/decoder/decoded 和未用输入信用后才做 EOF 级联。此共享口径于 007 独立复审后获用户确认，不追认此前逐块双 allocation 的约半 MiB 过早失败。输出 `Bytes::from_owner` 持券及快照直到最后 clone 真释放，不按 write 返回或 payload 长度归零放券。64 响应许可覆盖真实 blocking worker、codec 及取消后仍在运行的计算。活动执行安全点累计两秒，输入/输出 channel 等待暂停计时；执行等待两秒到期取消交接，不发布迟到结果，不能抢占单次库调用。
+
+原框架接收/HTTP 解析/flow-control、framing、HPACK、TLS 和内核缓冲不在此预算内。proxy 在同步 push 内预留并复制当前源块、立即 drop 框架 Bytes，之后才提交，不跨 await 持未知底层。respond 直接从候选不可变文本复制一次；变换文件读取先持预算 Buffer；listing/cache 从既有 005 有界 producer 交接时额外按源实际容量持券，源/input 重叠同时计费。codec 内部上下文与工作区也不计字节额度（固定 gzip 32 KiB/zstd 1 MiB window，decoder max log20），因此不是 HTTP 整体或进程 RSS 硬限。
+
+同版 Pingora proxy 增加默认关闭的异步 push/next drain hook，不改 HttpTask 或 UpgradedBody；一次提交一个输入，逐输出 await 写入再继续拉取，默认同步过滤/延时路径不变。下游模块未启压缩，不新增深拷贝。h2 0.4.20 `codec/framed_write.rs:240–258` 会把小 DATA/前缀复制到既有 encoder.buf（16 KiB 默认初始容量，chain threshold 256/1024），属于上述既有 framing 存储；不将其增长或 HPACK 宣称为 007 硬限。其 `Next::Data`/`last_data_frame` 仍持原 owner 时，Rill allocation 继续计费。完整证明范围与实测见 [021](validation/021-caddy-body-transforms.md)。
+
 ## 7. 本地控制协议
 
 - 使用 AF_UNIX 流 Socket，默认 `/run/rill/control.sock`；父目录 0700、Socket 0600，归服务 UID。拒绝不安全目录或链接，不误删其他实例 Socket。部署由 systemd RuntimeDirectory 或等效方式准备目录。

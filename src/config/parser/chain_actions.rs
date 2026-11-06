@@ -48,7 +48,7 @@ fn respond(node: &KdlNode, origin: &Origin) -> Result<Action> {
     }
     Ok(Action::Respond {
         status,
-        text,
+        text: text.into(),
         content_type,
     })
 }
@@ -70,6 +70,8 @@ pub(super) fn sequence<'a>(
         terminated = match &act {
             Action::BasicAuth(_)
             | Action::StaticToken(_)
+            | Action::BodyReplace(_)
+            | Action::Encode(_)
             | Action::Header(_)
             | Action::Rewrite(_)
             | Action::StripPrefix(_)
@@ -300,9 +302,8 @@ fn action(
         "rewrite" | "strip-prefix" | "try-files" => super::chain_paths::parse(node, origin),
         "basic-auth" | "static-token" => super::chain_auth::parse(node, origin),
         "dynamic-proxy" => super::chain_dynamic::parse(node, origin),
-        "webdav" | "body-replace" | "encode" => {
-            Err(invalid("CONFIG_UNSUPPORTED", "action", origin))
-        }
+        "body-replace" | "encode" => super::chain_body::parse(node, origin),
+        "webdav" => Err(invalid("CONFIG_UNSUPPORTED", "action", origin)),
         _ => Err(unknown(node, origin)),
     }
 }

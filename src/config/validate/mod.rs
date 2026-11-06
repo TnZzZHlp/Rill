@@ -122,6 +122,8 @@ fn validate_chain_action(
         }
         crate::http_policy::model::Action::BasicAuth(_)
         | crate::http_policy::model::Action::StaticToken(_)
+        | crate::http_policy::model::Action::BodyReplace(_)
+        | crate::http_policy::model::Action::Encode(_)
         | crate::http_policy::model::Action::Header(_)
         | crate::http_policy::model::Action::Rewrite(_)
         | crate::http_policy::model::Action::StripPrefix(_)

@@ -1,0 +1,104 @@
+$ podman image inspect 394ffa2d2ac8f5c9f45148f22bad3587429bceb19c93b88e8595f1e3f7892853 --format {{.Id}}
+$ cargo build --locked --offline --manifest-path /root/github/Rill/tests/feasibility/grpc_container/Cargo.toml
+   Compiling futures-util v0.3.34
+   Compiling hyper v1.12.0
+   Compiling rustls-webpki v0.103.16
+   Compiling axum-core v0.5.6
+   Compiling futures-executor v0.3.34
+   Compiling tower v0.5.3
+   Compiling hyper-util v0.1.21
+   Compiling rustls v0.23.46
+   Compiling futures v0.3.34
+   Compiling axum v0.8.9
+   Compiling pingora-pool v0.9.0
+   Compiling hyper-timeout v0.5.2
+   Compiling pingora-core v0.9.0
+   Compiling tokio-rustls v0.26.6
+   Compiling tonic v0.14.9
+   Compiling pingora-cache v0.9.0
+   Compiling tonic-prost v0.14.9
+   Compiling pingora-proxy v0.9.0
+   Compiling pingora v0.9.0
+   Compiling rill-grpc-acceptance v0.1.0 (/root/github/Rill/tests/feasibility/grpc_container)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.76s
+mbx[cache]: 20 hits, 0 misses; 0 B downloaded, 0 B uploaded, 0 B stored locally
+mbx[savings]: 32444 cache hits and counting. rustc thinks it has been busy.
+artifacts=/var/tmp/rill-grpc-acceptance-hiujwnja
+$ openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=Rill acceptance ca -addext basicConstraints=critical,CA:TRUE -keyout /var/tmp/rill-grpc-acceptance-hiujwnja/ca.key -out /var/tmp/rill-grpc-acceptance-hiujwnja/certs/ca.pem
+$ openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=Rill acceptance other-ca -addext basicConstraints=critical,CA:TRUE -keyout /var/tmp/rill-grpc-acceptance-hiujwnja/other-ca.key -out /var/tmp/rill-grpc-acceptance-hiujwnja/certs/other-ca.pem
+$ openssl req -newkey rsa:2048 -nodes -subj /CN=grpc.test -keyout /var/tmp/rill-grpc-acceptance-hiujwnja/certs/server.key -out /var/tmp/rill-grpc-acceptance-hiujwnja/server.csr
+$ openssl req -newkey rsa:2048 -nodes -subj /CN=grpc.test -keyout /var/tmp/rill-grpc-acceptance-hiujwnja/certs/server2.key -out /var/tmp/rill-grpc-acceptance-hiujwnja/server2.csr
+$ openssl x509 -req -in /var/tmp/rill-grpc-acceptance-hiujwnja/server.csr -days 1 -CA /var/tmp/rill-grpc-acceptance-hiujwnja/certs/ca.pem -CAkey /var/tmp/rill-grpc-acceptance-hiujwnja/ca.key -CAcreateserial -extfile /var/tmp/rill-grpc-acceptance-hiujwnja/server.ext -out /var/tmp/rill-grpc-acceptance-hiujwnja/certs/server.pem
+$ openssl x509 -req -in /var/tmp/rill-grpc-acceptance-hiujwnja/server2.csr -days 1 -CA /var/tmp/rill-grpc-acceptance-hiujwnja/certs/other-ca.pem -CAkey /var/tmp/rill-grpc-acceptance-hiujwnja/other-ca.key -CAcreateserial -extfile /var/tmp/rill-grpc-acceptance-hiujwnja/server.ext -out /var/tmp/rill-grpc-acceptance-hiujwnja/certs/server2.pem
+$ podman network create --opt isolate=true rill-grpc-acceptance-hiujwnja
+$ podman create --pull=never --name rill-grpc-acceptance-hiujwnja --network rill-grpc-acceptance-hiujwnja --read-only --cap-drop=all --security-opt=no-new-privileges --user 65534:65534 --memory 256m --cpus 1 --pids-limit 64 --stop-signal SIGINT -p 127.0.0.1::50051 -p 127.0.0.1::50052 -p 127.0.0.1::50053 -p 127.0.0.1::50054 -v /root/.cache/mbx/targets/v1/a95707062f630169d590b4bcd4db587ca3fa9e89569fe0c04d9b7555f428d24a/debug/rill-grpc-acceptance:/acceptance:ro -v /var/tmp/rill-grpc-acceptance-hiujwnja/certs:/certs:ro --entrypoint /acceptance 394ffa2d2ac8f5c9f45148f22bad3587429bceb19c93b88e8595f1e3f7892853 backend /certs/server.pem /certs/server.key /certs/server2.pem /certs/server2.key
+$ podman start 0dfdcef2b64141d9c900c2958feeb69e180c543682fa12327501c96f23eed468
+0dfdcef2b64141d9c900c2958feeb69e180c543682fa12327501c96f23eed468
+$ podman port 0dfdcef2b64141d9c900c2958feeb69e180c543682fa12327501c96f23eed468 50051/tcp
+$ podman port 0dfdcef2b64141d9c900c2958feeb69e180c543682fa12327501c96f23eed468 50052/tcp
+$ podman port 0dfdcef2b64141d9c900c2958feeb69e180c543682fa12327501c96f23eed468 50053/tcp
+$ podman port 0dfdcef2b64141d9c900c2958feeb69e180c543682fa12327501c96f23eed468 50054/tcp
+$ /root/github/Rill/target/debug/rill-grpc-acceptance client https://127.0.0.1:35755 /var/tmp/rill-grpc-acceptance-hiujwnja/certs/ca.pem ok
+PASS https://127.0.0.1:35755 unary
+PASS https://127.0.0.1:35755 512KiB flow-control
+PASS https://127.0.0.1:35755 client-stream
+PASS https://127.0.0.1:35755 server-stream and success trailers
+PASS https://127.0.0.1:35755 grpc-status=15 and grpc-message after DATA
+PASS https://127.0.0.1:35755 bidi responses before request EOF
+PASS https://127.0.0.1:35755 trailers-only grpc-status=3 and grpc-message
+PASS https://127.0.0.1:35755 cancel reaches backend and same-TCP sibling RPC succeeds
+PASS https://127.0.0.1:35755 deadline cancels backend and sibling RPC succeeds
+$ /root/github/Rill/target/debug/rill-grpc-acceptance client https://127.0.0.1:35755 /var/tmp/rill-grpc-acceptance-hiujwnja/certs/ca.pem backpressure http://127.0.0.1:46431
+STAGE upload pressure=7; sibling launched; resuming upload
+PASS upload blocked at 7/128 then resumed; sibling same TCP
+STAGE reader pressure=34; sibling launched; resuming reader
+PASS reader blocked producer at 34/128 then resumed; sibling same TCP
+PASS invalid candidate rejected
+PASS failed candidate retained old stream and backend
+$ /root/github/Rill/target/release/rill reload --socket /var/tmp/rill-grpc-acceptance-hiujwnja/control-h2c/rill.sock
+id=2451381-1793957321194827145-0 generation=2
+PASS old bidi survives reload; new RPC backend=two
+$ /root/github/Rill/target/debug/rill-grpc-acceptance client https://127.0.0.1:41229 /var/tmp/rill-grpc-acceptance-hiujwnja/certs/ca.pem ok
+PASS https://127.0.0.1:41229 unary
+PASS https://127.0.0.1:41229 512KiB flow-control
+PASS https://127.0.0.1:41229 client-stream
+PASS https://127.0.0.1:41229 server-stream and success trailers
+PASS https://127.0.0.1:41229 grpc-status=15 and grpc-message after DATA
+PASS https://127.0.0.1:41229 bidi responses before request EOF
+PASS https://127.0.0.1:41229 trailers-only grpc-status=3 and grpc-message
+PASS https://127.0.0.1:41229 cancel reaches backend and same-TCP sibling RPC succeeds
+PASS https://127.0.0.1:41229 deadline cancels backend and sibling RPC succeeds
+$ /root/github/Rill/target/debug/rill-grpc-acceptance client https://127.0.0.1:41229 /var/tmp/rill-grpc-acceptance-hiujwnja/certs/ca.pem backpressure http://127.0.0.1:46431
+STAGE upload pressure=7; sibling launched; resuming upload
+PASS upload blocked at 7/128 then resumed; sibling same TCP
+STAGE reader pressure=34; sibling launched; resuming reader
+PASS reader blocked producer at 34/128 then resumed; sibling same TCP
+PASS invalid candidate rejected
+PASS failed candidate retained old stream and backend
+$ /root/github/Rill/target/release/rill reload --socket /var/tmp/rill-grpc-acceptance-hiujwnja/control-tls-h2/rill.sock
+id=2451892-1793957327496254606-0 generation=2
+PASS old bidi survives reload; new RPC backend=two
+$ podman rm --force --ignore 0dfdcef2b64141d9c900c2958feeb69e180c543682fa12327501c96f23eed468
+0dfdcef2b64141d9c900c2958feeb69e180c543682fa12327501c96f23eed468
+$ podman network rm rill-grpc-acceptance-hiujwnja
+rill-grpc-acceptance-hiujwnja
+{
+  "image": "394ffa2d2ac8f5c9f45148f22bad3587429bceb19c93b88e8595f1e3f7892853",
+  "scenarios": [
+    "rill-h2c",
+    "rill-backpressure-h2c",
+    "rill-reload-h2c-old-stream",
+    "rill-tls-h2",
+    "rill-backpressure-tls-h2",
+    "rill-reload-tls-h2-old-stream"
+  ],
+  "cleanup": true,
+  "ports": {
+    "h2c": 46431,
+    "tls-h2": 40083,
+    "h2c-two": 46291,
+    "tls-h2-two": 43477
+  },
+  "passed": true,
+  "cleanup_errors": []
+}

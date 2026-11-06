@@ -17,8 +17,13 @@ struct CaptureGroup {
     values: [Option<String>; 9],
     bytes: usize,
 }
+enum FilterPolicy {
+    Header(Arc<HeaderPolicy>),
+    Replace(Arc<crate::body_transform::model::Replace>),
+    Encode(Arc<crate::body_transform::model::Encode>),
+}
 struct ResponseFilter {
-    policy: Arc<HeaderPolicy>,
+    policy: FilterPolicy,
     captures: Option<Arc<CaptureGroup>>,
 }
 
@@ -163,12 +168,115 @@ impl RequestPolicyState {
                 }
                 self.filters.try_reserve_exact(1).map_err(|_| PolicyError)?;
                 self.filters.push(ResponseFilter {
-                    policy: policy.clone(),
+                    policy: FilterPolicy::Header(policy.clone()),
                     captures: self.captures.clone(),
                 });
                 Ok(())
             }
         }
+    }
+    fn register_body(&mut self, policy: FilterPolicy) -> Result<(), PolicyError> {
+        let rules = self
+            .filters
+            .iter()
+            .map(|filter| match &filter.policy {
+                FilterPolicy::Replace(r) => r.rules.len(),
+                _ => 0,
+            })
+            .sum::<usize>();
+        if self.filters.len() >= FILTER_LIMIT
+            || (self.filters.len() + 1) * std::mem::size_of::<ResponseFilter>() > METADATA_LIMIT
+        {
+            return Err(PolicyError);
+        }
+        match &policy {
+            FilterPolicy::Replace(r) if rules + r.rules.len() > 16 => return Err(PolicyError),
+            FilterPolicy::Encode(_)
+                if self
+                    .filters
+                    .iter()
+                    .any(|f| matches!(f.policy, FilterPolicy::Encode(_))) =>
+            {
+                return Err(PolicyError);
+            }
+            _ => (),
+        }
+        self.filters.try_reserve_exact(1).map_err(|_| PolicyError)?;
+        self.filters.push(ResponseFilter {
+            policy,
+            captures: self.captures.clone(),
+        });
+        Ok(())
+    }
+    pub fn register_replace(
+        &mut self,
+        policy: &Arc<crate::body_transform::model::Replace>,
+    ) -> Result<(), PolicyError> {
+        self.register_body(FilterPolicy::Replace(policy.clone()))
+    }
+    pub fn register_encode(
+        &mut self,
+        policy: &Arc<crate::body_transform::model::Encode>,
+    ) -> Result<(), PolicyError> {
+        self.register_body(FilterPolicy::Encode(policy.clone()))
+    }
+    pub fn has_body_transform(&self) -> bool {
+        self.filters
+            .iter()
+            .any(|f| !matches!(f.policy, FilterPolicy::Header(_)))
+    }
+    pub fn body_declarations(
+        &self,
+    ) -> (
+        Vec<Arc<crate::body_transform::model::Replace>>,
+        Option<Arc<crate::body_transform::model::Encode>>,
+    ) {
+        let replacements = self
+            .filters
+            .iter()
+            .filter_map(|f| {
+                if let FilterPolicy::Replace(r) = &f.policy {
+                    Some(r.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        let encode = self.filters.iter().find_map(|f| {
+            if let FilterPolicy::Encode(e) = &f.policy {
+                Some(e.clone())
+            } else {
+                None
+            }
+        });
+        (replacements, encode)
+    }
+    pub fn body_rules(
+        &self,
+        mime: Option<&str>,
+    ) -> Vec<Arc<crate::body_transform::model::Replace>> {
+        self.filters
+            .iter()
+            .filter_map(|filter| match &filter.policy {
+                FilterPolicy::Replace(r)
+                    if crate::body_transform::model::matches(&r.mimes, mime) =>
+                {
+                    Some(r.clone())
+                }
+                _ => None,
+            })
+            .collect()
+    }
+    pub fn body_encode(
+        &self,
+        mime: Option<&str>,
+    ) -> Option<Arc<crate::body_transform::model::Encode>> {
+        self.filters.iter().find_map(|filter| match &filter.policy {
+            FilterPolicy::Encode(e) if crate::body_transform::model::matches(&e.mimes, mime) => {
+                Some(e.clone())
+            }
+            _ => None,
+        })
     }
     pub fn apply_response(
         &self,
@@ -194,9 +302,10 @@ impl RequestPolicyState {
         super::headers::check(&response.headers).map_err(|_| PolicyError)?;
         let mut headers = response.headers.clone();
         for filter in &self.filters {
-            if filter.policy.applies(status, mime) {
-                filter
-                    .policy
+            if let FilterPolicy::Header(policy) = &filter.policy
+                && policy.applies(status, mime)
+            {
+                policy
                     .apply(
                         &mut headers,
                         &self.context(filter.captures.as_ref()),

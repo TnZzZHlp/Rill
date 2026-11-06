@@ -40,6 +40,8 @@ pub struct DynamicProxy {
 }
 #[derive(Clone, Debug)]
 pub enum Action {
+    BodyReplace(std::sync::Arc<crate::body_transform::model::Replace>),
+    Encode(std::sync::Arc<crate::body_transform::model::Encode>),
     Header(std::sync::Arc<super::headers::HeaderPolicy>),
     BasicAuth(crate::auth::model::Basic),
     StaticToken(crate::auth::model::Token),
@@ -58,7 +60,7 @@ pub enum Action {
     },
     Respond {
         status: u16,
-        text: String,
+        text: std::sync::Arc<str>,
         content_type: String,
     },
     Branch(Vec<Branch>),

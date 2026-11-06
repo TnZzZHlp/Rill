@@ -33,6 +33,7 @@ enum Body {
     File(Box<Opened>, u64, u64),
     Listing(Vec<u8>),
     Cached(Bytes, Box<Opened>),
+    Retained(Bytes, Option<Box<Opened>>),
 }
 
 fn failure(reason: &'static str) -> Box<Error> {
@@ -61,9 +62,10 @@ fn open(
     navigation: bool,
     permit: OwnedSemaphorePermit,
     candidates: &[Encoding],
-    error_page: bool,
-    strict: bool,
+    mode: (bool, bool),
+    transform: Option<&crate::body_transform::headers::StaticOptions>,
 ) -> io::Result<Option<Resource>> {
+    let (error_page, strict) = mode;
     let (file, served_path) = match route.root.open(requested) {
         Ok(file) => {
             if file.metadata()?.is_dir() {
@@ -78,7 +80,9 @@ fn open(
                             && (!strict || error.raw_os_error() == Some(Errno::ENOENT as i32))
                             && route.browse =>
                     {
-                        if !candidates.contains(&Encoding::Identity) {
+                        if !candidates.contains(&Encoding::Identity)
+                            && !transform.is_some_and(|t| t.identity("text/html"))
+                        {
                             return Ok(None);
                         }
                         let bytes =
@@ -119,7 +123,16 @@ fn open(
             Errno::ENOENT as i32
         }));
     }
-    for &encoding in candidates {
+    let mime = response::mime_type(&served_path);
+    let mut candidates = candidates.to_vec();
+    if transform.is_some_and(|t| t.replace(mime)) {
+        candidates = vec![Encoding::Identity];
+    } else if transform.is_some_and(|t| t.identity(mime))
+        && !candidates.contains(&Encoding::Identity)
+    {
+        candidates.push(Encoding::Identity);
+    }
+    for encoding in candidates {
         if encoding == Encoding::Identity {
             return Ok(Some(Resource::File(Opened {
                 file,
@@ -237,9 +250,14 @@ async fn custom_error(
     header: ResponseHeader,
     is_head: bool,
     identity_allowed: bool,
+    request: &RequestHeader,
+    policy: Option<&crate::http_policy::state::RequestPolicyState>,
 ) -> Result<(ResponseHeader, Option<Body>)> {
     let status = header.status.as_u16();
-    if !identity_allowed || !route.error_pages.contains_key(&status) {
+    if (!identity_allowed
+        && !policy.is_some_and(crate::http_policy::state::RequestPolicyState::has_body_transform))
+        || !route.error_pages.contains_key(&status)
+    {
         return Ok((header, None));
     }
     let permit = route
@@ -261,6 +279,17 @@ async fn custom_error(
     let Some((page, permit)) = opened else {
         return Ok((header, None));
     };
+    if !identity_allowed {
+        let mut probe = ResponseHeader::build(status, None)?;
+        probe.insert_header("content-type", response::mime_type(&page.mime_path))?;
+        if !crate::body_transform::headers::select(request, &probe, policy, true)
+            .ok()
+            .flatten()
+            .is_some_and(|s| s.active())
+        {
+            return Ok((header, None));
+        }
+    }
     let mut result = error_header(status)?;
     if let Some(value) = header.headers.get("content-range") {
         result.insert_header("content-range", value.clone())?;
@@ -304,12 +333,55 @@ pub struct PreparedResponse {
     pub local_error: Option<LocalError>,
 }
 
+impl PreparedResponse {
+    pub(crate) fn retain_source(
+        &mut self,
+        budget: &Arc<crate::body_transform::budget::ResponseBudget>,
+    ) -> Result<()> {
+        let capacity = match &self.body {
+            Some(Body::Listing(bytes)) => bytes.capacity(),
+            Some(Body::Cached(_, opened)) => {
+                usize::try_from(opened.metadata.len()).map_err(|_| {
+                    crate::body_transform::pipeline::proxy_error(
+                        crate::body_transform::limits::Failure::Budget,
+                    )
+                })?
+            }
+            _ => return Ok(()),
+        };
+        let permit = budget.reserve(capacity).ok_or_else(|| {
+            crate::body_transform::pipeline::proxy_error(
+                crate::body_transform::limits::Failure::Budget,
+            )
+        })?;
+        self.body = match self.body.take() {
+            Some(Body::Listing(bytes)) => Some(Body::Retained(permit.retain_source(bytes), None)),
+            Some(Body::Cached(bytes, opened)) => {
+                Some(Body::Retained(permit.retain_source(bytes), Some(opened)))
+            }
+            _ => return Err(failure("invalid static source handoff")),
+        };
+        Ok(())
+    }
+}
+
 pub async fn prepare(
     route: Arc<PreparedStatic>,
     request: &RequestHeader,
     requested: &str,
     defer_errors: bool,
     error_page: bool,
+) -> Result<PreparedResponse> {
+    prepare_with_policy(route, request, requested, defer_errors, error_page, None).await
+}
+
+pub async fn prepare_with_policy(
+    route: Arc<PreparedStatic>,
+    request: &RequestHeader,
+    requested: &str,
+    defer_errors: bool,
+    error_page: bool,
+    policy: Option<&crate::http_policy::state::RequestPolicyState>,
 ) -> Result<PreparedResponse> {
     let mut local_error = None;
     let is_head = request.method.as_str() == "HEAD";
@@ -329,6 +401,11 @@ pub async fn prepare(
                 .acquire_owned()
                 .await
                 .map_err(|_| failure("static capacity closed"))?;
+            let transform = crate::body_transform::headers::StaticOptions::new(
+                request,
+                policy,
+                route.cache_control.as_deref(),
+            );
             let opener = route.clone();
             let opened = tokio::task::spawn_blocking(move || {
                 open(
@@ -337,8 +414,8 @@ pub async fn prepare(
                     navigation,
                     permit,
                     &candidates,
-                    error_page,
-                    defer_errors || error_page,
+                    (error_page, defer_errors || error_page),
+                    transform.as_ref(),
                 )
             })
             .await
@@ -365,7 +442,15 @@ pub async fn prepare(
                     (header, None)
                 }
                 Ok(Some(Resource::Listing(bytes))) => {
-                    let values = request.headers.get_all("if-none-match");
+                    let mut conditions_request = request.clone();
+                    suppress_static_validators(
+                        &mut conditions_request,
+                        policy,
+                        "text/html; charset=utf-8",
+                        Encoding::Identity,
+                        None,
+                    )?;
+                    let values = conditions_request.headers.get_all("if-none-match");
                     let mut conditions = values.iter();
                     let not_modified = conditions
                         .next()
@@ -388,8 +473,16 @@ pub async fn prepare(
                     (header, body)
                 }
                 Ok(Some(Resource::File(opened))) => {
+                    let mut conditions_request = request.clone();
+                    suppress_static_validators(
+                        &mut conditions_request,
+                        policy,
+                        response::mime_type(&opened.path),
+                        opened.encoding,
+                        route.cache_control.as_deref(),
+                    )?;
                     let plan = response::plan(
-                        request,
+                        &conditions_request,
                         &opened.metadata,
                         &opened.path,
                         route.cache_control.as_deref(),
@@ -431,7 +524,7 @@ pub async fn prepare(
         ) {
         let mut header = header;
         header.insert_header("vary", "Accept-Encoding")?;
-        custom_error(&route, header, is_head, identity_allowed).await?
+        custom_error(&route, header, is_head, identity_allowed, request, policy).await?
     } else {
         (header, body)
     };
@@ -440,6 +533,33 @@ pub async fn prepare(
         body,
         local_error,
     })
+}
+
+fn suppress_static_validators(
+    request: &mut RequestHeader,
+    policy: Option<&crate::http_policy::state::RequestPolicyState>,
+    mime: &str,
+    encoding: Encoding,
+    cache_control: Option<&str>,
+) -> Result<()> {
+    let mut probe = ResponseHeader::build(200, None)?;
+    probe.insert_header("content-type", mime)?;
+    if let Some(cache_control) = cache_control {
+        probe.insert_header("cache-control", cache_control)?;
+    }
+    match encoding {
+        Encoding::Gzip => probe.insert_header("content-encoding", "gzip")?,
+        Encoding::Brotli => probe.insert_header("content-encoding", "br")?,
+        Encoding::Identity => (),
+    }
+    if match crate::body_transform::headers::select(request, &probe, policy, true) {
+        Ok(selection) => selection.is_some_and(|s| s.active()),
+        Err(_) => true,
+    } {
+        request.remove_header("if-none-match");
+        request.remove_header("if-modified-since");
+    }
+    Ok(())
 }
 
 pub async fn serve<F>(
@@ -459,28 +579,60 @@ pub async fn send<F>(session: &mut Session, prepared: PreparedResponse, on_heade
 where
     F: FnOnce(&mut ResponseHeader) -> Result<()> + Send,
 {
+    send_transformed(
+        session,
+        prepared,
+        crate::body_transform::response::Transform::default(),
+        on_headers,
+    )
+    .await
+}
+
+pub(crate) async fn send_transformed<F>(
+    session: &mut Session,
+    prepared: PreparedResponse,
+    mut transform: crate::body_transform::response::Transform,
+    on_headers: F,
+) -> Result<()>
+where
+    F: FnOnce(&mut ResponseHeader) -> Result<()> + Send,
+{
     let PreparedResponse {
         mut header, body, ..
     } = prepared;
     on_headers(&mut header)?;
     session
-        .write_response_header(Box::new(header), body.is_none())
+        .write_response_header(Box::new(header), body.is_none() && !transform.enabled())
         .await?;
     match body {
-        Some(Body::Listing(bytes)) => {
-            session
-                .write_response_body(Some(bytes.into()), true)
-                .await?
-        }
-        Some(Body::Cached(bytes, _opened)) => {
-            session.write_response_body(Some(bytes), true).await?
-        }
+        Some(Body::Listing(bytes)) => transform.write(session, Some(bytes.into()), true).await?,
+        Some(Body::Cached(bytes, _opened)) => transform.write(session, Some(bytes), true).await?,
+        Some(Body::Retained(bytes, _opened)) => transform.write(session, Some(bytes), true).await?,
         Some(Body::File(mut opened, offset, mut remaining)) => {
             let mut first = true;
             while remaining != 0 {
                 let amount = remaining.min(64 * 1024) as usize;
                 let seek = first.then_some(offset);
                 first = false;
+                if let Some(mut buffer) = transform.input_buffer(amount)? {
+                    let (returned, buffer) =
+                        tokio::task::spawn_blocking(move || -> io::Result<_> {
+                            if let Some(offset) = seek {
+                                opened.file.seek(SeekFrom::Start(offset))?;
+                            }
+                            opened.file.read_exact(buffer.data_mut())?;
+                            Ok((opened, buffer))
+                        })
+                        .await
+                        .map_err(|_| failure("static read task failed"))?
+                        .map_err(|_| failure("static file read failed"))?;
+                    opened = returned;
+                    remaining -= buffer.data().len() as u64;
+                    transform
+                        .write_buffer(session, buffer, remaining == 0)
+                        .await?;
+                    continue;
+                }
                 let (returned, bytes) = tokio::task::spawn_blocking(move || -> io::Result<_> {
                     if let Some(offset) = seek {
                         opened.file.seek(SeekFrom::Start(offset))?;
@@ -494,11 +646,12 @@ where
                 .map_err(|_| failure("static file read failed"))?;
                 opened = returned;
                 remaining -= bytes.len() as u64;
-                session
-                    .write_response_body(Some(bytes.into()), remaining == 0)
+                transform
+                    .write(session, Some(bytes.into()), remaining == 0)
                     .await?;
             }
         }
+        None if transform.enabled() => transform.write(session, None, true).await?,
         None => {}
     }
     Ok(())
@@ -556,8 +709,8 @@ mod tests {
                 false,
                 capacity.clone().try_acquire_owned()?,
                 &[Encoding::Identity],
-                false,
-                false,
+                (false, false),
+                None,
             )?
             else {
                 return Err("first open did not return a file".into());
@@ -574,8 +727,8 @@ mod tests {
                 false,
                 capacity.try_acquire_owned()?,
                 &[Encoding::Identity],
-                false,
-                false,
+                (false, false),
+                None,
             )?
             else {
                 return Err("second open did not return a file".into());

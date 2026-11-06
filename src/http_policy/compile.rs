@@ -24,6 +24,7 @@ pub struct PreparedPolicy {
 }
 #[derive(Debug)]
 pub struct CompiledRegex {
+    pub maximum_len: Option<usize>,
     pub vm: PikeVM,
 }
 
@@ -80,7 +81,7 @@ fn error(code: &'static str, origin: &Origin) -> ConfigError {
     )
 }
 impl PreparedPolicy {
-    fn reserve(&mut self, bytes: usize, origin: &Origin) -> Result<()> {
+    pub(crate) fn reserve(&mut self, bytes: usize, origin: &Origin) -> Result<()> {
         let total = self
             .bytes
             .checked_add(bytes)
@@ -162,7 +163,7 @@ impl Drop for ExternalBudget {
         POLICY_BYTES.fetch_sub(self.bytes, Ordering::AcqRel);
     }
 }
-fn repeat_ok(ast: &Ast) -> bool {
+pub(crate) fn repeat_ok(ast: &Ast) -> bool {
     match ast {
         Ast::Repetition(r) => {
             let ok = match r.op.kind {
@@ -202,11 +203,12 @@ fn glob(pattern: &str, origin: &Origin) -> Result<String> {
     out.push_str(")\\z");
     Ok(out)
 }
-fn compile_regex(
+pub(crate) fn compile_regex(
     p: &mut PreparedPolicy,
     pattern: &str,
     origin: &Origin,
     check_repeat: bool,
+    bytes: bool,
 ) -> Result<()> {
     if check_repeat && pattern.len() > 4096 {
         return Err(error("POLICY_INVALID_REGEX", origin));
@@ -236,8 +238,20 @@ fn compile_regex(
         .and_then(|bytes| bytes.checked_add(wrapper))
         .ok_or_else(|| error("POLICY_LIMIT", origin))?;
     let mut permit = CompilePermit::acquire(admission, origin)?;
+    let maximum_len = regex_syntax::ParserBuilder::new()
+        .utf8(!bytes)
+        .build()
+        .parse(pattern)
+        .map_err(|_| error("POLICY_INVALID_REGEX", origin))?
+        .properties()
+        .maximum_len();
     let vm = PikeVM::builder()
-        .thompson(thompson::Config::new().nfa_size_limit(Some(2 * MIB)))
+        .syntax(regex_automata::util::syntax::Config::new().utf8(!bytes))
+        .thompson(
+            thompson::Config::new()
+                .utf8(!bytes)
+                .nfa_size_limit(Some(2 * MIB)),
+        )
         .build(pattern)
         .map_err(|_| error("POLICY_INVALID_REGEX", origin))?;
     let nfa_bytes = vm.get_nfa().memory_usage();
@@ -247,10 +261,10 @@ fn compile_regex(
     permit.retain(p, nfa_bytes.saturating_add(wrapper), origin)?;
     p.indices
         .insert((origin.source.path.clone(), origin.offset), p.regexes.len());
-    p.regexes.push(CompiledRegex { vm });
+    p.regexes.push(CompiledRegex { vm, maximum_len });
     Ok(())
 }
-fn origin_bytes(origin: &Origin) -> usize {
+pub(crate) fn origin_bytes(origin: &Origin) -> usize {
     origin
         .references
         .capacity()
@@ -277,11 +291,11 @@ fn visit_matcher(p: &mut PreparedPolicy, m: &Matcher) -> Result<()> {
         MatcherKind::Not(m) => visit_matcher(p, m)?,
         MatcherKind::PathRegex(s) => {
             p.reserve(s.capacity(), &m.origin)?;
-            compile_regex(p, s, &m.origin, true)?;
+            compile_regex(p, s, &m.origin, true, false)?;
         }
         MatcherKind::PathGlob(s) => {
             p.reserve(s.capacity(), &m.origin)?;
-            compile_regex(p, &glob(s, &m.origin)?, &m.origin, false)?;
+            compile_regex(p, &glob(s, &m.origin)?, &m.origin, false, false)?;
         }
         MatcherKind::HeaderEqual(a, b) | MatcherKind::HeaderPrefix(a, b) => {
             p.reserve(a.capacity() + b.capacity(), &m.origin)?
@@ -293,6 +307,11 @@ fn visit_matcher(p: &mut PreparedPolicy, m: &Matcher) -> Result<()> {
 }
 fn visit_action(p: &mut PreparedPolicy, a: &Action, origin: &Origin) -> Result<()> {
     match a {
+        Action::BodyReplace(replace) => crate::body_transform::compile::replace(p, replace)?,
+        Action::Encode(encode) => p.reserve(
+            crate::body_transform::compile::encode_bytes(encode),
+            &encode.origin,
+        )?,
         Action::DynamicProxy(dynamic) => {
             p.reserve(
                 dynamic
@@ -444,7 +463,10 @@ fn visit_action(p: &mut PreparedPolicy, a: &Action, origin: &Origin) -> Result<(
         }
         Action::Respond {
             text, content_type, ..
-        } => p.reserve(text.capacity() + content_type.capacity(), origin)?,
+        } => p.reserve(
+            text.len() + 2 * std::mem::size_of::<usize>() + content_type.capacity(),
+            origin,
+        )?,
         Action::Branch(bs) => {
             p.reserve(
                 bs.capacity()
@@ -632,6 +654,7 @@ pub fn compile(
     let mut sites = 0;
     for (site_index, site) in config.sites.iter().enumerate() {
         if let Some(chain) = &site.chain {
+            crate::body_transform::compile::validate(chain)?;
             validate_dynamic_auth(&chain.rules)?;
             if let Some(errors) = &chain.errors {
                 validate_dynamic_auth(errors)?;
@@ -759,7 +782,7 @@ mod tests {
         for index in 0..5 {
             let mut origin = origin.clone();
             origin.offset = index;
-            compile_regex(&mut policy, "^/x$", &origin, true)?;
+            compile_regex(&mut policy, "^/x$", &origin, true, false)?;
         }
         assert_eq!(policy.regexes.len(), 5);
         assert!(policy.bytes < 8 * MIB);

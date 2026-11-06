@@ -26,6 +26,7 @@ pub struct Handler {
 pub struct Context {
     snapshot: Arc<RuntimeSnapshot>,
     policy: Option<crate::http_policy::state::RequestPolicyState>,
+    transform: crate::body_transform::response::Transform,
     error_status: Option<u16>,
     error_headers: Option<http::HeaderMap>,
     selected: Option<(usize, usize)>,
@@ -224,6 +225,12 @@ async fn policy_respond(
         Ok(value) => value,
         Err(_) => return reject(session, ctx, 503).await,
     };
+    let transform = crate::body_transform::response::Prepared::select(
+        session.req_header(),
+        &response,
+        ctx.policy.as_ref(),
+        false,
+    );
     preserve_error_headers(ctx, &mut response)?;
     if let Some(policy) = &ctx.policy
         && policy.apply_response(&mut response, &[]).is_err()
@@ -231,14 +238,27 @@ async fn policy_respond(
         return reject(session, ctx, 503).await;
     }
     preserve_error_headers(ctx, &mut response)?;
+    let mut transform = match transform.finish(ctx.snapshot.clone(), &mut response).await {
+        Ok(transform) => transform,
+        Err(_) => return reject(session, ctx, 503).await,
+    };
+    if ctx.error_status == Some(503) && response.status.as_u16() != 503 {
+        return reject(session, ctx, 503).await;
+    }
+    let body = body || (transform.enabled() && session.req_header().method != http::Method::HEAD);
     ctx.begin_response()?;
     session
         .write_response_header(Box::new(response), !body)
         .await?;
     if body {
-        session
-            .write_response_body(Some(bytes::Bytes::copy_from_slice(text.as_bytes())), true)
-            .await?;
+        if text.is_empty() {
+            transform.write(session, None, true).await?;
+        }
+        for (index, chunk) in text.as_bytes().chunks(64 * 1024).enumerate() {
+            transform
+                .write_slice(session, chunk, (index + 1) * 64 * 1024 >= text.len())
+                .await?;
+        }
     }
     Ok(true)
 }
@@ -294,6 +314,7 @@ impl ProxyHttp for Handler {
         Context {
             snapshot,
             policy: None,
+            transform: crate::body_transform::response::Transform::default(),
             error_status: None,
             error_headers: None,
             selected: None,
@@ -600,12 +621,13 @@ impl ProxyHttp for Handler {
                     static_request.remove_header(header);
                 }
             }
-            let mut response = crate::static_files::prepare(
+            let mut response = crate::static_files::prepare_with_policy(
                 static_route,
                 &static_request,
                 &path,
                 has_errors && !error_page,
                 error_page,
+                ctx.policy.as_ref(),
             )
             .await?;
             if !error_page
@@ -702,13 +724,35 @@ impl ProxyHttp for Handler {
                     return reject(session, ctx, if original == 503 { 503 } else { status }).await;
                 }
             }
-            crate::static_files::send(session, response, |header| {
-                if let Some(policy) = &ctx.policy {
-                    policy.apply_response(header, &[]).map_err(|_| {
+            let transform = crate::body_transform::response::Prepared::select(
+                session.req_header(),
+                &response.header,
+                ctx.policy.as_ref(),
+                true,
+            );
+            if let Some(policy) = &ctx.policy {
+                policy
+                    .apply_response(&mut response.header, &[])
+                    .map_err(|_| {
                         Error::explain(ErrorType::HTTPStatus(503), "policy header limit")
                     })?;
-                }
-                preserve_error_headers(ctx, header)?;
+            }
+            preserve_error_headers(ctx, &mut response.header)?;
+            let body_budget = if transform.transforms_body() {
+                let budget =
+                    crate::body_transform::pipeline::Pipeline::acquire(ctx.snapshot.clone())?;
+                response.retain_source(&budget)?;
+                Some(budget)
+            } else {
+                None
+            };
+            let transform = transform
+                .finish_budgeted(ctx.snapshot.clone(), &mut response.header, body_budget)
+                .await?;
+            if ctx.error_status == Some(503) && response.header.status.as_u16() != 503 {
+                return reject(session, ctx, 503).await;
+            }
+            crate::static_files::send_transformed(session, response, transform, |_| {
                 ctx.begin_response()
             })
             .await?;
@@ -875,6 +919,7 @@ impl ProxyHttp for Handler {
         request: &mut RequestHeader,
         ctx: &mut Context,
     ) -> Result<()> {
+        crate::body_transform::headers::suppress_upstream_validators(request, ctx.policy.as_ref());
         super::headers::request(
             request,
             &ctx.connection_names,
@@ -981,7 +1026,7 @@ impl ProxyHttp for Handler {
 
     async fn response_filter(
         &self,
-        _: &mut Session,
+        session: &mut Session,
         response: &mut ResponseHeader,
         ctx: &mut Context,
     ) -> Result<()> {
@@ -1000,6 +1045,12 @@ impl ProxyHttp for Handler {
             }
             preserve_error_headers(ctx, response)?;
         }
+        let transform = crate::body_transform::response::Prepared::select(
+            session.req_header(),
+            response,
+            ctx.policy.as_ref(),
+            false,
+        );
         let original_status = response.status.as_u16();
         let original_mime = response
             .headers
@@ -1034,6 +1085,16 @@ impl ProxyHttp for Handler {
         if let Some(ready) = &ctx.dynamic {
             super::dynamic::headers::response(response, ready)?;
         }
+        ctx.transform = transform.finish(ctx.snapshot.clone(), response).await?;
+        if ctx.error_status == Some(503) && response.status.as_u16() != 503 {
+            return Err(Error::explain(
+                ErrorType::HTTPStatus(503),
+                "invalid transformed error response",
+            ));
+        }
+        if ctx.transform.enabled() {
+            session.set_proxy_tasks_enabled(false);
+        }
         if (response.status.as_u16() == 101 || response.status.as_u16() >= 200)
             && let Some(budget) = &ctx.budget
         {
@@ -1047,6 +1108,48 @@ impl ProxyHttp for Handler {
             budget.send_replace(Phase::Streaming);
         }
         Ok(())
+    }
+
+    async fn response_trailer_filter(
+        &self,
+        _: &mut Session,
+        trailers: &mut http::HeaderMap,
+        ctx: &mut Context,
+    ) -> Result<Option<bytes::Bytes>> {
+        if ctx.transform.enabled() {
+            for name in [
+                "etag",
+                "last-modified",
+                "content-md5",
+                "content-length",
+                "content-encoding",
+            ] {
+                trailers.remove(name);
+            }
+        }
+        Ok(None)
+    }
+
+    fn response_body_streaming(&self, _: &Session, ctx: &Context) -> bool {
+        ctx.transform.enabled()
+    }
+
+    fn response_body_push(
+        &self,
+        _: &mut Session,
+        body: Option<bytes::Bytes>,
+        eof: bool,
+        ctx: &mut Context,
+    ) -> Result<()> {
+        ctx.transform.push(body, eof)
+    }
+
+    async fn response_body_next(
+        &self,
+        _: &mut Session,
+        ctx: &mut Context,
+    ) -> Result<pingora::proxy::ResponseBodyOutput> {
+        ctx.transform.next().await
     }
 
     fn fail_to_connect(

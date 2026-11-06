@@ -113,6 +113,42 @@ fn ranked_raw<'a>(headers: impl IntoIterator<Item = &'a [u8]>, enabled: bool) ->
         .collect()
 }
 
+pub(crate) fn coding_quality(request: &pingora::http::RequestHeader, coding: &str) -> u16 {
+    let mut explicit = None::<u16>;
+    let mut wildcard = None::<u16>;
+    let mut nonempty = false;
+    for header in request.headers.get_all("accept-encoding") {
+        if !header.as_bytes().iter().all(|b| matches!(b, b' ' | b'\t')) {
+            nonempty = true;
+        }
+        for part in header.as_bytes().split(|&b| b == b',') {
+            let name = part.split(|&b| b == b';').next().unwrap_or_default();
+            let name = std::str::from_utf8(name)
+                .unwrap_or("")
+                .trim_matches([' ', '\t']);
+            let q = std::str::from_utf8(part).map_or(0, |s| item(s).1);
+            let slot = if name.eq_ignore_ascii_case(coding) {
+                &mut explicit
+            } else if name == "*" {
+                &mut wildcard
+            } else {
+                continue;
+            };
+            *slot = Some(slot.map_or(q, |old| old.min(q)));
+        }
+    }
+    if !nonempty {
+        return if coding == "identity" { 1000 } else { 0 };
+    }
+    explicit.unwrap_or_else(|| {
+        if coding == "identity" {
+            if wildcard == Some(0) { 0 } else { 1000 }
+        } else {
+            wildcard.unwrap_or(0)
+        }
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::{

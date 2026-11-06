@@ -35,6 +35,26 @@ site "example.test" {
 
 规则以 `respond`、固定 `proxy`、`serve-files` 或 `branch` 终止，显式 `continue` 才继续后续规则。branch 只执行首个匹配的 `when`，否则执行可选末尾 `otherwise`；没有匹配分支时终止并返回 404。`respond` 状态为 200–599，默认空文本和 `text/plain; charset=utf-8`；204/304 不允许正文，HEAD 不发送正文。固定代理当前仅支持 http1；静态动作使用现有 root 保护并支持 `index`、`spa`、`cache-control`、`precompressed`、`browse`。`header` 支持请求和响应头动作；`rewrite`、`strip-prefix` 和 `try-files` 按链顺序更新当前路径并保留原查询，`reenter` 从链首重新匹配且最多四次。`try-files` 仅对受约束 root 下的普通文件命中，只有缺失才继续下一候选。链尾可声明一次 `handle-errors`：仅本地缺失、方法不支持及本地临时不可用可进入；安全拒绝、容量耗尽、上游响应/传输错误和已提交响应不进入。错误链共享步骤及重入预算，只进入一次；`respond` 不允许 2xx/3xx，错误文件保留原状态且不按 Range/条件请求返回 206/304。Basic 和静态令牌鉴权见下文；其余后续动作暂不支持，不会静默忽略。`{upstream-authority}` 使用经验证的连接目标规范 authority，始终包含端口，IPv6 使用方括号；不使用 DNS 候选地址或 `proxy` 的 `host` 覆盖值。动作执行时尚未确定上游则使用该变量明确失败并返回 503，不填空、不猜目标、不重放规则；延后响应头动作可在代理目标确定后使用，respond/static 无上游时同样失败。正则运行工作区独立限额为全进程 64 MiB；额度不足返回 503。
 
+## Caddy 正文替换与在线编码（007 待独立验收）
+
+链中可登记非终止响应过滤声明，之后仍须终止动作或显式 continue/reenter：
+
+```kdl
+body-replace mime="text/html" {
+    mime "application/json"
+    literal "old" "new"
+    regex "(cat)" "$1!"
+}
+encode mime="text/html" { gzip level=3; zstd level=3; }
+respond 200 text="old cat" content-type="text/html"
+```
+
+MIME 必须显式枚举，不接受通配；encode 至少启用一个编码器，仅 level=3。只累积实际执行声明，branch/reenter/handle-errors 保留执行顺序；主链与错误链合计最多一个 encode，每响应所有替换规则最多 16 条。正则按 Rust regex::bytes 处理原字节，不有损解码；替换仅 `$1`–`$9`、`$$`，缺失组为空，`$10`/`$1name` 等歧义拒绝。空 literal 在每个逻辑字节边界含首尾插入一次，与分块无关。
+
+解码 gzip/zstd 后顺序替换，再协商在线编码；Range、no-transform、SSE、gRPC、WebSocket、未知源编码旁路。判断使用原始响应 metadata，不被通用头动作改 MIME 欺骗。静态替换命中读取 identity，only-encode 继续优先既有 sidecar，不二次压缩。实际变换删除全部源 ETag、Last-Modified、Content-MD5 和原长度，合并 Vary；HEAD 无正文，变换长度未知时不设 Content-Length，204/304 不发送正文。代理已登记变换且请求侧不能确定旁路的 GET/HEAD，只在唯一上游副本移除 If-None-Match/If-Modified-Since；最终旁路可能由 304 变 200，但不移除业务前置条件、Range/If-Range，不重放请求。静态则在源条件判定前按实际表示处理。
+
+共享存储限每请求 1 MiB/进程 64 MiB、64 个真实变换任务；含全部 pending、替换、中间、交接及输出 clone 的真实容量；pending 实际可用量须扣同时存活工作缓冲，不保证每条规则或 pending 独享 1 MiB。无界 stage 共用一次收费连续 arena，避免逐块全量重分配；工作信用也在同一额度内（普通输入 64 KiB、decoded/stage 各 16 KiB、最低输出 3×16 KiB），源超过输入信用明确失败。更多存活输出 owner 和静态源额外持留继续扣真实额度，不能按写返回提前释放。此口径于 007 复审后获用户确认；不是接受此前约半 MiB 的扩容浪费。不含 codec 上下文与既有 HTTP/TLS IO 存储，不是 RSS 硬限。解码、累计替换输出最多 64 MiB，解码膨胀最多 100 倍加 64 KiB；活动执行与等待各限两秒，阻塞下游不计执行时间。无界正则可能直到 EOF 才输出，过大正文会失败，不承诺所有大正文可变换。头前资源失败 503；头后失败中止连接/对应 H2 流并记录 error，不发第二响应或成功 EOF。旧 error-page DSL 不与 chain 混用；错误响应可通过已有 handle-errors 的 respond/serve-files 变换。
+
 ## 2. CLI
 
 最终包名与可执行文件名为小写 `rill`，替代原文暂定的 `proxy-server`。CLI 使用 Clap 派生解析；run、check 和 reload 均已提供。
