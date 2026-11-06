@@ -94,11 +94,12 @@ impl ConfigurationOnly {
             })?;
         let policy =
             crate::http_policy::compile::compile(configuration, dependencies.as_deref_mut())?;
-        let has_tls_upstream = configuration
-            .sites
-            .iter()
-            .flat_map(|site| &site.routes)
-            .any(|route| matches!(&route.action, Action::Proxy(upstream) if upstream.tls));
+        let has_tls_upstream = policy.dynamic_count > 0
+            || configuration
+                .sites
+                .iter()
+                .flat_map(|site| &site.routes)
+                .any(|route| matches!(&route.action, Action::Proxy(upstream) if upstream.tls));
         let trust = if has_tls_upstream {
             Some(crate::proxy::trust::material::TrustMaterial::prepare(
                 &policy,

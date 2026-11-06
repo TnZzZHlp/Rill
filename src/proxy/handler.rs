@@ -29,6 +29,7 @@ pub struct Context {
     error_status: Option<u16>,
     error_headers: Option<http::HeaderMap>,
     selected: Option<(usize, usize)>,
+    dynamic: Option<super::dynamic::bridge::Ready>,
     forwarding: Option<Forwarding>,
     connection_names: Vec<String>,
     attempt: usize,
@@ -86,9 +87,89 @@ async fn reject(session: &mut Session, ctx: &mut Context, status: u16) -> Result
             status
         }
     };
+    let status = if ctx.error_status == Some(503) {
+        503
+    } else {
+        status
+    };
     session.set_keepalive(None);
     session.respond_error(status).await?;
     Ok(true)
+}
+
+async fn reject_dynamic(session: &mut Session, ctx: &mut Context, status: u16) -> Result<bool> {
+    let status = if ctx.error_status == Some(503) {
+        503
+    } else {
+        status
+    };
+    reject(session, ctx, status).await
+}
+
+async fn start_dynamic(
+    session: &mut Session,
+    ctx: &mut Context,
+    site: usize,
+    index: usize,
+    names: &[String],
+) -> Result<bool> {
+    let Some(dynamic) = ctx.snapshot.policy.dynamic_actions.get(index) else {
+        return reject_dynamic(session, ctx, 503).await;
+    };
+    let Ok(raw) = std::str::from_utf8(session.req_header().raw_path()) else {
+        return reject_dynamic(session, ctx, 400).await;
+    };
+    let mut deadline = Instant::now() + Duration::from_secs(300);
+    match ctx.budget.as_ref().map(|budget| *budget.borrow()) {
+        Some(Phase::Ingress(existing)) if Instant::now() >= existing => {
+            return reject_dynamic(session, ctx, 408).await;
+        }
+        Some(Phase::Headers(existing)) => deadline = deadline.min(existing),
+        _ => (),
+    }
+    if let Some(budget) = &ctx.budget {
+        budget.send_replace(Phase::Headers(deadline));
+    }
+    let result = match tokio::time::timeout_at(
+        deadline,
+        super::dynamic::bridge::prepare(raw, dynamic, &ctx.snapshot, site),
+    )
+    .await
+    {
+        Ok(result) => result,
+        Err(_) => return reject_dynamic(session, ctx, 504).await,
+    };
+    let ready = match result {
+        Ok(ready) => ready,
+        Err(status) => {
+            let code = match status {
+                400 => "DYNAMIC_TARGET_INVALID",
+                403 => "DYNAMIC_DENIED",
+                502 => "DYNAMIC_DNS_FAILED",
+                _ => "DYNAMIC_CAPACITY",
+            };
+            ctx.snapshot
+                .logger
+                .event(Level::Warn, "policy_error", &[("code", code)]);
+            return reject_dynamic(session, ctx, status).await;
+        }
+    };
+    if session.req_header().method == http::Method::CONNECT {
+        return reject_dynamic(session, ctx, 400).await;
+    }
+    let handshake =
+        match super::websocket::request(session.req_header(), session.is_http2(), names, true) {
+            Ok(value) => value,
+            Err(status) => return reject_dynamic(session, ctx, status).await,
+        };
+    ctx.websocket = handshake;
+    ctx.connection_names = names.to_vec();
+    ctx.addresses = Some(Arc::new(ready.addresses.clone()));
+    ctx.dynamic = Some(ready);
+    session.set_read_timeout(Some(Duration::from_secs(60)));
+    session.set_write_timeout(Some(Duration::from_secs(60)));
+    session.set_total_drain_timeout(Some(Duration::from_secs(60)));
+    Ok(false)
 }
 
 async fn authentication_failed(
@@ -216,6 +297,7 @@ impl ProxyHttp for Handler {
             error_status: None,
             error_headers: None,
             selected: None,
+            dynamic: None,
             forwarding: None,
             connection_names: Vec::new(),
             attempt: 0,
@@ -410,6 +492,10 @@ impl ProxyHttp for Handler {
                     return reject(session, ctx, 503).await;
                 }
                 crate::http_policy::execute::Outcome::Route(route) => Some((site, route)),
+                crate::http_policy::execute::Outcome::Dynamic(index) => {
+                    return start_dynamic(session, ctx, site, index, &names).await;
+                }
+
                 crate::http_policy::execute::Outcome::PathFailure { code, status, .. } => {
                     ctx.snapshot
                         .logger
@@ -574,6 +660,9 @@ impl ProxyHttp for Handler {
                         crate::http_policy::execute::Outcome::Authorize(_) => {
                             return reject(session, ctx, 503).await;
                         }
+                        crate::http_policy::execute::Outcome::Dynamic(index) => {
+                            return start_dynamic(session, ctx, site, index, &names).await;
+                        }
                         crate::http_policy::execute::Outcome::Route(next) => {
                             route = next;
                             continue;
@@ -706,6 +795,39 @@ impl ProxyHttp for Handler {
     }
 
     async fn upstream_peer(&self, _: &mut Session, ctx: &mut Context) -> Result<Box<HttpPeer>> {
+        if let Some(ready) = &ctx.dynamic {
+            let listeners = ctx
+                .snapshot
+                .configuration
+                .server
+                .http
+                .iter()
+                .chain(&ctx.snapshot.configuration.server.https)
+                .map(|address| address.value)
+                .collect();
+            super::dynamic::dns::revalidate(ready.addresses.clone(), listeners)
+                .await
+                .map_err(|failure| {
+                    let status = if matches!(failure, super::dynamic::dns::Failure::Denied) {
+                        403
+                    } else {
+                        503
+                    };
+                    Error::explain(
+                        ErrorType::HTTPStatus(status),
+                        "DYNAMIC_ADDRESS_REVALIDATION_FAILED",
+                    )
+                    .into_up()
+                })?;
+            let address = *ready
+                .addresses
+                .get(ctx.attempt)
+                .ok_or_else(|| Error::explain(ErrorType::ConnectError, "DYNAMIC_DNS_FAILED"))?;
+            let (peer, lease) =
+                super::dynamic::peer::make(ready, address, ctx.snapshot._dynamic_trust.clone())?;
+            ctx.pool_lease = Some(lease);
+            return Ok(Box::new(peer));
+        }
         let (site, route) = ctx
             .selected
             .ok_or_else(|| Error::explain(ErrorType::InternalError, "route not selected"))?;
@@ -815,6 +937,13 @@ impl ProxyHttp for Handler {
         for name in ["traceparent", "tracestate", "baggage"] {
             request.remove_header(name);
         }
+        if let Some(ready) = &ctx.dynamic {
+            super::dynamic::headers::request(
+                request,
+                ready,
+                &ctx.snapshot.policy.auth_headers[ready.site],
+            )?;
+        }
         if ctx.policy.is_some() {
             crate::http_policy::headers::check(&request.headers).map_err(|_| {
                 Error::explain(ErrorType::HTTPStatus(503), "policy request header limit")
@@ -902,6 +1031,9 @@ impl ProxyHttp for Handler {
                 .map_err(|_| Error::explain(ErrorType::HTTPStatus(503), "policy header failure"))?;
         }
         preserve_error_headers(ctx, response)?;
+        if let Some(ready) = &ctx.dynamic {
+            super::dynamic::headers::response(response, ready)?;
+        }
         if (response.status.as_u16() == 101 || response.status.as_u16() >= 200)
             && let Some(budget) = &ctx.budget
         {
@@ -1025,6 +1157,56 @@ impl ProxyHttp for Handler {
 mod tests {
     use super::*;
 
+    #[tokio::test]
+    async fn dynamic_error_chain_preserves_unavailable_for_invalid_and_denied_targets() {
+        use crate::config::prepare::build;
+        use crate::runtime::state::HttpPreparer;
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let path =
+            std::env::temp_dir().join(format!("rill-dynamic-error-{}.kdl", std::process::id()));
+        std::fs::write(&path, "server { http \"127.0.0.1:8080\"; }\nsite \"app.test\" { chain { rule { respond 404; }; handle-errors { rule { dynamic-proxy prefix=\"/fetch/\" anonymous=#true; }; }; }; }").unwrap();
+        let prepared = build(&path, &HttpPreparer).unwrap();
+        std::fs::remove_file(path).unwrap();
+        let handler = Handler {
+            state: RuntimeState::new(prepared).unwrap(),
+        };
+        for (target, original, expected, expired) in [
+            ("/fetch/not-a-url", Some(503), 503, false),
+            ("/fetch/http%3A%2F%2F127.0.0.1%2F", Some(503), 503, false),
+            ("/fetch/not-a-url", None, 400, false),
+            ("/fetch/http%3A%2F%2F127.0.0.1%2F", None, 403, false),
+            ("/fetch/not-a-url", Some(503), 503, true),
+        ] {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let mut client = tokio::net::TcpStream::connect(listener.local_addr().unwrap())
+                .await
+                .unwrap();
+            let (server, _) = listener.accept().await.unwrap();
+            client
+                .write_all(format!("GET {target} HTTP/1.1\r\nHost: app.test\r\n\r\n").as_bytes())
+                .await
+                .unwrap();
+            let raw: pingora::protocols::l4::stream::Stream = server.into();
+            let mut session = Session::new_h1(Box::new(raw));
+            assert!(session.as_downstream_mut().read_request().await.unwrap());
+            let mut ctx = handler.new_ctx();
+            ctx.error_status = original;
+            if expired {
+                ctx.budget =
+                    Some(watch::channel(Phase::Headers(Instant::now() - Duration::from_secs(1))).0);
+            }
+            assert!(
+                start_dynamic(&mut session, &mut ctx, 0, 0, &[])
+                    .await
+                    .unwrap()
+            );
+            let mut response = [0; 1024];
+            let count = client.read(&mut response).await.unwrap();
+            let head = std::str::from_utf8(&response[..count]).unwrap();
+            assert!(head.starts_with(&format!("HTTP/1.1 {expected} ")), "{head}");
+        }
+    }
+
     #[test]
     fn begin_response_rejects_expired_headers_before_writing() {
         let (budget, _) = watch::channel(Phase::Headers(Instant::now() - Duration::from_secs(1)));
@@ -1131,7 +1313,9 @@ mod pool_collision_tests {
         let mut b = handler.new_ctx();
         let prepared = b.snapshot.routes[0][0].as_proxy().expect("prepared peer");
         let mut identity = prepared.pool_identity(target, &peer_a);
-        identity.read_timeout += Duration::from_secs(1);
+        identity.dynamic = true;
+        identity.protocol = crate::config::model::UpstreamProtocol::Http1;
+        identity.tls_name = Some("dynamic.example".to_owned());
         b.pool_lease = Some(
             super::super::pool_policy::registry()
                 .acquire(identity)

@@ -1,0 +1,48 @@
+diff --git a/vendor/pingora-core-0.9.0/src/connectors/mod.rs b/vendor/pingora-core-0.9.0/src/connectors/mod.rs
+index 4d07f95..24fcd76 100644
+--- a/vendor/pingora-core-0.9.0/src/connectors/mod.rs
++++ b/vendor/pingora-core-0.9.0/src/connectors/mod.rs
+@@ -219,0 +220,5 @@ impl TransportConnector {
++        let reservation = peer
++            .get_peer_options()
++            .and_then(|options| options.upstream_connection_reservation_hook.as_ref())
++            .map(|hook| hook())
++            .transpose()?;
+@@ -226 +231 @@ impl TransportConnector {
+-        let stream = if let Some(rt) = rt {
++        let (stream, reservation) = if let Some(rt) = rt {
+@@ -232 +237 @@ impl TransportConnector {
+-                do_connect(
++                let stream = do_connect(
+@@ -239 +244,2 @@ impl TransportConnector {
+-                .await
++                .await?;
++                Ok::<_, Box<Error>>((stream, reservation))
+@@ -244 +250,4 @@ impl TransportConnector {
+-            do_connect(peer, bind_to, alpn_override, &self.tls_ctx.ctx, None).await?
++            (
++                do_connect(peer, bind_to, alpn_override, &self.tls_ctx.ctx, None).await?,
++                reservation,
++            )
+@@ -250,0 +260,6 @@ impl TransportConnector {
++        if let Some(reservation) = reservation {
++            let digest = stream.get_socket_digest().ok_or_else(|| {
++                Error::explain(InternalError, "upstream connection has no socket digest")
++            })?;
++            reservation.attach(digest)?;
++        }
+diff --git a/vendor/pingora-core-0.9.0/src/upstreams/peer.rs b/vendor/pingora-core-0.9.0/src/upstreams/peer.rs
+index 8eb56a9..9f65b53 100644
+--- a/vendor/pingora-core-0.9.0/src/upstreams/peer.rs
++++ b/vendor/pingora-core-0.9.0/src/upstreams/peer.rs
+@@ -492,0 +493,4 @@ pub enum H1UpgradePolicy {
++pub trait UpstreamConnectionReservation: Send + Sync {
++    fn attach(self: Box<Self>, digest: Arc<crate::protocols::SocketDigest>) -> Result<()>;
++}
++
+@@ -560,0 +565,3 @@ pub struct PeerOptions {
++    #[derivative(Debug = "ignore")]
++    pub upstream_connection_reservation_hook:
++        Option<Arc<dyn Fn() -> Result<Box<dyn UpstreamConnectionReservation>> + Send + Sync>>,
+@@ -616,0 +624 @@ impl PeerOptions {
++            upstream_connection_reservation_hook: None,

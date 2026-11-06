@@ -31,6 +31,7 @@ pub enum Outcome {
         content_type: String,
     },
     Route(usize),
+    Dynamic(usize),
     NotFound,
     NoMatch,
     BudgetExceeded,
@@ -174,6 +175,20 @@ fn action(
         }
         Action::Rewrite(_) | Action::StripPrefix(_) | Action::TryFiles { .. } => {
             super::path_actions::execute(a, ctx, policy)
+        }
+        Action::DynamicProxy(dynamic) => {
+            if !dynamic.anonymous && !ctx.state.as_ref().is_some_and(|s| s.authenticated()) {
+                return Ok(Some(ActionFlow::Terminal(Outcome::PathFailure {
+                    class: PathErrorClass::InvalidInput,
+                    code: "DYNAMIC_AUTH_REQUIRED",
+                    status: 403,
+                })));
+            }
+            let index = *policy
+                .dynamic_indices
+                .get(&(dynamic.origin.source.path.clone(), dynamic.origin.offset))
+                .ok_or(())?;
+            Ok(Some(ActionFlow::Terminal(Outcome::Dynamic(index))))
         }
         Action::Continue => Ok(Some(ActionFlow::Continue)),
         Action::Reenter => Ok(Some(ActionFlow::Reenter)),

@@ -1193,3 +1193,25 @@ fn h2c_request_is_not_replayed_after_backend_receives_headers() -> TestResult {
     assert_eq!(proxy.finish()?.0, 0);
     Ok(())
 }
+
+#[test]
+fn dynamic_proxy_denies_private_target_before_connecting() -> TestResult {
+    let backend = TcpListener::bind("127.0.0.1:0")?;
+    backend.set_nonblocking(true)?;
+    let port = backend.local_addr()?.port();
+    let address = vacant()?;
+    let config = format!(
+        "server {{ http \"{address}\"; }}\nsite \"app.test\" {{ chain {{ rule {{ dynamic-proxy prefix=\"/fetch/\" anonymous=#true {{ allow-port {port}; }}; }}; }}; }}"
+    );
+    let mut proxy = Proxy::start(address, &config)?;
+    let path = format!("/fetch/http%3A%2F%2F127.0.0.1%3A{port}%2F");
+    let (status, _, _) = send(address, "app.test", &path)?;
+    assert_eq!(status, 403);
+    assert_eq!(
+        backend.accept().unwrap_err().kind(),
+        std::io::ErrorKind::WouldBlock
+    );
+    proxy.signal()?;
+    proxy.finish()?;
+    Ok(())
+}

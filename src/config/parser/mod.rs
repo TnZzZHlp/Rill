@@ -1,6 +1,7 @@
 mod chain;
 mod chain_actions;
 mod chain_auth;
+mod chain_dynamic;
 mod chain_headers;
 mod chain_paths;
 mod observability;

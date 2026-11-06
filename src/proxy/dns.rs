@@ -10,6 +10,12 @@ use crate::config::{ConfigError, Result, check_ip};
 
 static RESOLVERS: OnceLock<Arc<Semaphore>> = OnceLock::new();
 
+pub(super) fn resolver_capacity() -> Arc<Semaphore> {
+    RESOLVERS
+        .get_or_init(|| Arc::new(Semaphore::new(16)))
+        .clone()
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct ResolutionFailed;
 
@@ -88,9 +94,7 @@ impl Dns {
         if self.literal || state.0.elapsed() < lifetime {
             return state.1.clone();
         }
-        let permit = RESOLVERS
-            .get_or_init(|| Arc::new(Semaphore::new(16)))
-            .clone()
+        let permit = resolver_capacity()
             .acquire_owned()
             .await
             .map_err(|_| ResolutionFailed)?;

@@ -1,0 +1,43 @@
+----------------------------------------
+Exception occurred during processing of request from ('8.8.8.8', 35130)
+Traceback (most recent call last):
+  File "/usr/lib/python3.13/socketserver.py", line 697, in process_request_thread
+    self.finish_request(request, client_address)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.13/socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.13/socketserver.py", line 766, in __init__
+    self.handle()
+    ~~~~~~~~~~~^^
+  File "/usr/lib/python3.13/http/server.py", line 438, in handle
+    self.handle_one_request()
+    ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.13/http/server.py", line 404, in handle_one_request
+    self.raw_requestline = self.rfile.readline(65537)
+                           ~~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/usr/lib/python3.13/socket.py", line 719, in readinto
+    return self._sock.recv_into(b)
+           ~~~~~~~~~~~~~~~~~~~~^^^
+  File "/usr/lib/python3.13/ssl.py", line 1304, in recv_into
+    return self.read(nbytes, buffer)
+           ~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.13/ssl.py", line 1138, in read
+    return self._sslobj.read(len, buffer)
+           ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+BrokenPipeError: [Errno 32] Broken pipe
+----------------------------------------
+PASS post-DNS local-interface recheck and Location fragment roundtrip
+PASS dynamic HTTP forwarding, header isolation, relative Location and wildcard self denial
+PASS token authentication and credential isolation
+PASS Basic HTTP/HTTPS challenge, duplicate rejection and final header isolation
+PASS dynamic HTTPS DNS and hostname verification
+PASS HTTPS bad CA and hostname mismatch before business request
+PASS handshake pre-reservations, cancellation and release after real socket closure
+PASS mixed DNS, 65-candidate capacity and public-to-private rebinding denial
+PASS same origin connection reuse and cross-origin isolation
+PASS eight observed idle sockets, reuse, changed CA across reload, death recovery
+PASS failed and successful reload preserve eight old requests, ninth denied, idle reuse
+PASS SSE and WebSocket across reload and held active capacity
+PASS 128 active requests and immediate capacity denial
+PASS no replay after upstream receives business request

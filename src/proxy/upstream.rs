@@ -101,6 +101,7 @@ impl PreparedPeer {
         peer: &HttpPeer,
     ) -> super::pool_policy::PoolIdentity {
         super::pool_policy::PoolIdentity {
+            dynamic: false,
             protocol: self.protocol,
             target,
             tls: self.tls,

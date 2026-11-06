@@ -13,6 +13,10 @@
 - 同一作用域的标量字段只能出现一次；不能用“最后一个胜出”掩盖重复配置。只有明确允许的 `import`、`use`、监听地址、路由、`use-snippet`、域名列表和 CIDR 策略列表可重复。
 - 所有错误包括错误码、文件、节点、行列及原因。跨文件冲突同时给出两处来源；展开节点保留定义与引用链。
 
+## Caddy 动态代理（006 验收进行中）
+
+`dynamic-proxy prefix="/fetch/" anonymous=#true { allow-port 8080; }` 是终止动作；默认仅允许 80/443，额外端口须显式列出。默认 `anonymous=#false`，要求执行路径已成功完成 Basic 或 static-token 鉴权；`#true` 明确接受开放代理及滥用风险。prefix 后当前 URI 的原始 path-and-query 作为整体解码一次，目标仅限 HTTP/HTTPS，拒绝凭据、特殊地址及自身入口。动态请求每次重新解析并检查全部候选后固定 SocketAddr，不跟随重定向，不在发送业务请求后重放。入口认证、Cookie 和转发身份头不会发往目标，响应 Set-Cookie 删除；同源 Location 编码到 prefix 内。每 origin 的 8 条存活物理连接包括握手、空闲池和跨代连接；全进程活动请求上限 128。动态功能尚在独立验收，不代表 006 已完成。
+
 ## Caddy 能力补齐 002：规则链与固定响应
 
 本节的 002 是 Caddy 能力补齐阶段，不是前文历史配置管线的 002。站点选择 `chain` 时不能同时声明旧 `route`、`use-snippet` 或站点简写 `proxy`/`root`。链按顺序匹配；没有命中返回 404。`match` 包含一个表达式，支持 `all`、`any`、`not`、`method`、`header-equal`、`header-prefix`、`path-glob`、`path-regex` 和 `client-cidr`。路径 glob 的 `*` 可跨 `/`，`?` 匹配一个字符，反斜杠转义；客户 IP 使用可信代理策略计算，不直接信任入口转发头。`error-status` 只允许在 `handle-errors` 中使用，接受 400–599 整数；不代表所有状态都可进入错误链。

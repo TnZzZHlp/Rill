@@ -32,6 +32,13 @@ pub enum MatcherKind {
     ErrorStatus(u16),
 }
 #[derive(Clone, Debug)]
+pub struct DynamicProxy {
+    pub prefix: String,
+    pub anonymous: bool,
+    pub ports: Vec<u16>,
+    pub origin: Origin,
+}
+#[derive(Clone, Debug)]
 pub enum Action {
     Header(std::sync::Arc<super::headers::HeaderPolicy>),
     BasicAuth(crate::auth::model::Basic),
@@ -42,6 +49,7 @@ pub enum Action {
         root: crate::config::source::Located<std::path::PathBuf>,
         candidates: Vec<super::path::PathTemplate>,
     },
+    DynamicProxy(DynamicProxy),
     Continue,
     Reenter,
     Route {

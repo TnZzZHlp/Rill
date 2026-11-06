@@ -217,36 +217,51 @@ impl TransportConnector {
     ///
     /// No connection is reused.
     pub async fn new_stream<P: Peer + Send + Sync + 'static>(&self, peer: &P) -> Result<Stream> {
+        let reservation = peer
+            .get_peer_options()
+            .and_then(|options| options.upstream_connection_reservation_hook.as_ref())
+            .map(|hook| hook())
+            .transpose()?;
         let rt = self
             .offload
             .as_ref()
             .map(|o| o.get_runtime(peer.reuse_hash()));
         let bind_to = l4::bind_to_random(peer, &self.bind_to_v4, &self.bind_to_v6);
         let alpn_override = self.preferred_http_version.get(peer);
-        let stream = if let Some(rt) = rt {
+        let (stream, reservation) = if let Some(rt) = rt {
             let peer = peer.clone();
             let tls_ctx = self.tls_ctx.clone();
             let offload_start = Instant::now();
             rt.spawn(async move {
                 let offload_wait = offload_start.elapsed();
-                do_connect(
+                let stream = do_connect(
                     &peer,
                     bind_to,
                     alpn_override,
                     &tls_ctx.ctx,
                     Some(offload_wait),
                 )
-                .await
+                .await?;
+                Ok::<_, Box<Error>>((stream, reservation))
             })
             .await
             .or_err(InternalError, "offload runtime failure")??
         } else {
-            do_connect(peer, bind_to, alpn_override, &self.tls_ctx.ctx, None).await?
+            (
+                do_connect(peer, bind_to, alpn_override, &self.tls_ctx.ctx, None).await?,
+                reservation,
+            )
         };
 
         if let Some(hook) = peer.get_peer_options().and_then(|o| o.upstream_connection_birth_hook.as_ref()) {
             let digest = stream.get_socket_digest().ok_or_else(|| Error::explain(InternalError, "upstream connection has no socket digest"))?;
             hook(digest)?;
+        }
+        if let Some(reservation) = reservation {
+            let digest = stream.get_socket_digest().ok_or_else(|| {
+                Error::explain(InternalError, "upstream connection has no socket digest")
+            })?;
+            reservation.attach(digest)?;
         }
         Ok(stream)
     }

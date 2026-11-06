@@ -8,6 +8,7 @@ use pingora::protocols::SocketDigest;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub(crate) struct PoolIdentity {
+    pub dynamic: bool,
     pub protocol: UpstreamProtocol,
     pub target: SocketAddr,
     pub tls: bool,
@@ -152,6 +153,7 @@ mod tests {
 
     fn identity(port: u16) -> PoolIdentity {
         PoolIdentity {
+            dynamic: false,
             protocol: UpstreamProtocol::H2c,
             target: SocketAddr::from(([127, 0, 0, 1], port)),
             tls: false,

@@ -1700,6 +1700,83 @@ fn authentication_preparation_rejects_bad_inputs_and_tracks_token() -> TestResul
 }
 
 #[test]
+fn dynamic_proxy_requires_auth_on_every_reachable_path() -> TestResult {
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let entry =
+        std::env::temp_dir().join(format!("rill-dynamic-{}-{unique}.kdl", std::process::id()));
+    let hash = bcrypt::hash("dummy", 10)?;
+    let auth = format!("basic-auth realm=\"private\" {{ user \"alice\" hash=\"{hash}\"; }}");
+    let cases = [
+        ("rule { dynamic-proxy prefix=\"/fetch/\"; };".to_owned(), Some("DYNAMIC_AUTH_REQUIRED")),
+        ("rule { dynamic-proxy prefix=\"/fetch/\" anonymous=#true; };".to_owned(), None),
+        (format!("rule {{ {auth}; dynamic-proxy prefix=\"/fetch/\"; }};"), None),
+        (format!("rule {{ branch {{ when {{ match {{ method \"GET\"; }}; {auth}; continue; }}; otherwise {{ continue; }}; }}; }}; rule {{ dynamic-proxy prefix=\"/fetch/\"; }};"), Some("DYNAMIC_AUTH_REQUIRED")),
+        ("rule { header \"request\" { set \"X-Auth\" \"true\"; }; dynamic-proxy prefix=\"/fetch/\"; };".to_owned(), Some("DYNAMIC_AUTH_REQUIRED")),
+        ("rule { match { method \"GET\"; }; reenter; }; rule { dynamic-proxy prefix=\"/fetch/\"; };".to_owned(), Some("DYNAMIC_AUTH_REQUIRED")),
+        ("rule { respond 404; }; handle-errors { rule { dynamic-proxy prefix=\"/fetch/\"; }; };".to_owned(), Some("DYNAMIC_AUTH_REQUIRED")),
+        ("rule { dynamic-proxy prefix=\"/fetch/\" anonymous=#true host=\"bad\"; };".to_owned(), Some("CONFIG_UNKNOWN")),
+        ("rule { dynamic-proxy prefix=\"/fetch/\" anonymous=#true { allow-port 8080; allow-port 8080; }; };".to_owned(), Some("CONFIG_DUPLICATE")),
+    ];
+    for (body, expected) in cases {
+        fs::write(
+            &entry,
+            format!(
+                "server {{ http \"127.0.0.1:8080\"; }}\nsite \"example.test\" {{ chain {{ {body} }}; }}"
+            ),
+        )?;
+        match (build(&entry, &ConfigurationOnly), expected) {
+            (Ok(_), None) => (),
+            (Err(error), Some(code)) => assert_eq!(error.code, code, "{body}"),
+            (result, expected) => {
+                panic!("unexpected result {result:?}; expected {expected:?}; {body}")
+            }
+        }
+    }
+    fs::write(
+        &entry,
+        format!(
+            "server {{ http \"127.0.0.1:8080\"; }}\nsite \"example.test\" {{ chain {{ rule {{ {auth}; dynamic-proxy prefix=\"/fetch/\"; }}; }}; }}"
+        ),
+    )?;
+    let snapshot = build(&entry, &ConfigurationOnly)?;
+    let mut chain = snapshot.configuration.sites[0]
+        .chain
+        .clone()
+        .ok_or("missing chain")?;
+    chain.rules[0].actions.remove(0);
+    let mut headers = http::HeaderMap::new();
+    headers.insert("x-auth", http::HeaderValue::from_static("true"));
+    let client_ip = "127.0.0.1".parse()?;
+    let mut state = rill::http_policy::state::RequestPolicyState::new(
+        client_ip,
+        "example.test".into(),
+        "/fetch/".into(),
+        vec![],
+    );
+    let mut ctx = rill::http_policy::execute::MatchContext {
+        method: &http::Method::GET,
+        path: "/fetch/".into(),
+        headers: &mut headers,
+        state: Some(&mut state),
+        client_ip,
+        steps_left: 1024,
+        reentries: 0,
+        error_status: None,
+        captures: [None; 9],
+    };
+    assert!(matches!(
+        rill::http_policy::execute::execute(&chain, &snapshot.resources.policy, &mut ctx),
+        rill::http_policy::execute::Outcome::PathFailure {
+            code: "DYNAMIC_AUTH_REQUIRED",
+            status: 403,
+            ..
+        }
+    ));
+    fs::remove_file(entry)?;
+    Ok(())
+}
+
+#[test]
 fn authentication_hash_formats_and_fifo_fail_closed() -> TestResult {
     use std::os::unix::fs::PermissionsExt;
     let bcrypt = bcrypt::hash("dummy", 10)?;

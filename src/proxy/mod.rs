@@ -1,5 +1,6 @@
 pub mod app;
 mod dns;
+pub mod dynamic;
 mod handler;
 mod headers;
 mod policy;

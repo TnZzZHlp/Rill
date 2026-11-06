@@ -48,6 +48,7 @@ impl PreparedRoute {
 
 #[derive(Debug)]
 pub struct HttpResources {
+    pub(crate) _dynamic_trust: Option<Arc<crate::proxy::trust::store::TrustStore>>,
     pub policy: crate::http_policy::compile::PreparedPolicy,
     pub tls: PreparedTls,
     pub routes: Vec<Vec<PreparedRoute>>,
@@ -110,6 +111,11 @@ impl HttpPreparer {
             })
             .collect::<Result<Vec<_>>>()?;
         Ok(HttpResources {
+            _dynamic_trust: if checked.policy.dynamic_count > 0 {
+                trust
+            } else {
+                None
+            },
             policy: checked.policy,
             routes,
             tls: checked.tls,
@@ -149,6 +155,7 @@ fn bind_static_routes(
 
 #[derive(Debug)]
 pub struct RuntimeSnapshot {
+    pub(crate) _dynamic_trust: Option<Arc<crate::proxy::trust::store::TrustStore>>,
     pub policy: crate::http_policy::compile::PreparedPolicy,
     pub generation: u64,
     pub configuration: ValidatedConfig,
@@ -231,6 +238,7 @@ impl RuntimeSnapshot {
             .collect();
         Self {
             generation,
+            _dynamic_trust: prepared.resources._dynamic_trust,
             policy: prepared.resources.policy,
             observation_routes,
             router: Router::build(&prepared.configuration),

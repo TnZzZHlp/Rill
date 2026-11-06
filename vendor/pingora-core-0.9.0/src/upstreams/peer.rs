@@ -490,6 +490,10 @@ pub enum H1UpgradePolicy {
     Deny,
 }
 
+pub trait UpstreamConnectionReservation: Send + Sync {
+    fn attach(self: Box<Self>, digest: Arc<crate::protocols::SocketDigest>) -> Result<()>;
+}
+
 /// The preferences to connect to a remote server
 ///
 /// See [`Peer`] for the meaning of the fields
@@ -558,6 +562,9 @@ pub struct PeerOptions {
     pub tracer: Option<Tracer>,
     #[derivative(Debug = "ignore")]
     pub upstream_connection_birth_hook: Option<Arc<dyn Fn(Arc<crate::protocols::SocketDigest>) -> Result<()> + Send + Sync>>,
+    #[derivative(Debug = "ignore")]
+    pub upstream_connection_reservation_hook:
+        Option<Arc<dyn Fn() -> Result<Box<dyn UpstreamConnectionReservation>> + Send + Sync>>,
     /// A custom L4 connector to use to establish new L4 connections
     pub custom_l4: Option<Arc<dyn L4Connect + Send + Sync>>,
     #[derivative(Debug = "ignore")]
@@ -614,6 +621,7 @@ impl PeerOptions {
             tcp_fast_open: false,
             tracer: None,
             upstream_connection_birth_hook: None,
+            upstream_connection_reservation_hook: None,
             custom_l4: None,
             upstream_tcp_sock_tweak_hook: None,
             proxy_digest_user_data_hook: None,

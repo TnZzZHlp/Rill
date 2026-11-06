@@ -11,6 +11,9 @@ static POLICY_BYTES: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(Debug)]
 pub struct PreparedPolicy {
+    pub dynamic_actions: Vec<super::model::DynamicProxy>,
+    pub dynamic_count: usize,
+    pub dynamic_indices: BTreeMap<(PathBuf, usize), usize>,
     pub regexes: Vec<CompiledRegex>,
     pub indices: BTreeMap<(PathBuf, usize), usize>,
     pub roots: BTreeMap<(PathBuf, usize), crate::static_files::root::Root>,
@@ -26,6 +29,8 @@ pub struct CompiledRegex {
 
 impl Drop for PreparedPolicy {
     fn drop(&mut self) {
+        drop(std::mem::take(&mut self.dynamic_actions));
+        drop(std::mem::take(&mut self.dynamic_indices));
         drop(std::mem::take(&mut self.regexes));
         drop(std::mem::take(&mut self.indices));
         drop(std::mem::take(&mut self.roots));
@@ -288,6 +293,50 @@ fn visit_matcher(p: &mut PreparedPolicy, m: &Matcher) -> Result<()> {
 }
 fn visit_action(p: &mut PreparedPolicy, a: &Action, origin: &Origin) -> Result<()> {
     match a {
+        Action::DynamicProxy(dynamic) => {
+            p.reserve(
+                dynamic
+                    .prefix
+                    .capacity()
+                    .saturating_add(
+                        dynamic
+                            .ports
+                            .capacity()
+                            .saturating_mul(std::mem::size_of::<u16>()),
+                    )
+                    .saturating_add(origin_bytes(&dynamic.origin)),
+                &dynamic.origin,
+            )?;
+            p.reserve(
+                dynamic
+                    .origin
+                    .source
+                    .path
+                    .as_os_str()
+                    .len()
+                    .saturating_add(128),
+                &dynamic.origin,
+            )?;
+            p.dynamic_indices.insert(
+                (dynamic.origin.source.path.clone(), dynamic.origin.offset),
+                p.dynamic_count,
+            );
+            p.reserve(
+                std::mem::size_of::<super::model::DynamicProxy>()
+                    .saturating_add(dynamic.prefix.len())
+                    .saturating_add(
+                        dynamic
+                            .ports
+                            .len()
+                            .saturating_mul(std::mem::size_of::<u16>()),
+                    )
+                    .saturating_add(origin_bytes(&dynamic.origin))
+                    .saturating_add(128),
+                &dynamic.origin,
+            )?;
+            p.dynamic_actions.push(dynamic.clone());
+            p.dynamic_count += 1;
+        }
         Action::BasicAuth(basic) => {
             let bytes = basic
                 .realm
@@ -515,11 +564,53 @@ fn prepare_auth(
     }
     Ok(())
 }
+fn unauthenticated_continue(actions: &[Action], mut reachable: bool) -> Result<bool> {
+    for action in actions {
+        match action {
+            Action::BasicAuth(_) | Action::StaticToken(_) => reachable = false,
+            Action::DynamicProxy(dynamic) => {
+                if reachable && !dynamic.anonymous {
+                    return Err(ConfigError::new(
+                        "DYNAMIC_AUTH_REQUIRED",
+                        "dynamic-proxy",
+                        "dynamic proxy requires prior authentication",
+                        &dynamic.origin,
+                    ));
+                }
+                return Ok(false);
+            }
+            Action::Continue => return Ok(reachable),
+            Action::Reenter | Action::Route { .. } | Action::Respond { .. } => return Ok(false),
+            Action::Branch(branches) => {
+                let mut continuation = false;
+                for branch in branches {
+                    continuation |= unauthenticated_continue(&branch.actions, reachable)?;
+                }
+                return Ok(continuation);
+            }
+            _ => (),
+        }
+    }
+    Ok(false)
+}
+
+fn validate_dynamic_auth(rules: &[super::model::Rule]) -> Result<()> {
+    let mut reachable = true;
+    for rule in rules {
+        let continuation = unauthenticated_continue(&rule.actions, reachable)?;
+        reachable = continuation || (reachable && rule.matcher.is_some());
+    }
+    Ok(())
+}
+
 pub fn compile(
     config: &ValidatedConfig,
     mut dependencies: Option<&mut crate::config::dependencies::DependencyPlan>,
 ) -> Result<PreparedPolicy> {
     let mut p = PreparedPolicy {
+        dynamic_actions: Vec::new(),
+        dynamic_count: 0,
+        dynamic_indices: BTreeMap::new(),
         regexes: Vec::new(),
         indices: BTreeMap::new(),
         roots: BTreeMap::new(),
@@ -541,6 +632,10 @@ pub fn compile(
     let mut sites = 0;
     for (site_index, site) in config.sites.iter().enumerate() {
         if let Some(chain) = &site.chain {
+            validate_dynamic_auth(&chain.rules)?;
+            if let Some(errors) = &chain.errors {
+                validate_dynamic_auth(errors)?;
+            }
             prepare_auth(&mut p, site_index, chain, dependencies.as_deref_mut())?;
             p.filesystem_sites[site_index] = chain
                 .rules
@@ -649,6 +744,9 @@ mod tests {
     fn regex_build_admission_uses_final_candidate_size() -> Result<()> {
         let origin = Origin::file(std::path::Path::new("policy.kdl"));
         let mut policy = PreparedPolicy {
+            dynamic_actions: Vec::new(),
+            dynamic_count: 0,
+            dynamic_indices: BTreeMap::new(),
             regexes: Vec::new(),
             indices: BTreeMap::new(),
             roots: BTreeMap::new(),

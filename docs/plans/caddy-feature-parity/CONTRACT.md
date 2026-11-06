@@ -170,6 +170,8 @@ webdav root="/srv/dav" storage-id="documents"
 
 `dynamic-proxy prefix="/fetch/" anonymous=#false { allow-port 80; allow-port 443; }` 为终止动作。prefix 后是一次 URL 解码的完整 http/https URL；默认仅端口 80/443，额外端口只由 allow-port 显式加入。anonymous 默认 false，必须事先鉴权；true 显式接受开放代理滥用风险。拒绝 userinfo、非公网、特殊地址、自身入口及任一混合 DNS 禁止候选；每轮解析全部检查后固定连接 IP，不二次解析、不自动跟随 Location、不重放。移除入口 Authorization、Proxy-Authorization、Cookie；默认删除响应 Set-Cookie，并将指向同一目标的 Location 改写为此前缀内 URL，其他 Location 原样返回且不跟随。
 
+2026-11-06 用户确认：当前 URI 的 prefix 后原始 path-and-query 整体只解码一次，不另行拼接或合并查询；相对 Location 先按目标 URL 解析，同 origin（scheme、规范 host、有效端口）才编码完整 URL 并加 prefix，其他原样返回且不跟随。每 origin 最多 8 条存活物理连接，包含握手中、空闲池及跨 Reload 旧代，复用不额外计数，弱引用失效后回收，满额拒绝。批准仅在隔离网络和 mount namespace 中以 loopback 模拟公网地址、私有 DNS 配置及临时 HTTP/HTTPS/DNS 服务验证，不允许访问真实公网或云元数据。
+
 接受 `dynamic-proxy prefix="/fetch/" anonymous=#true`。
 拒绝无前置鉴权的 `dynamic-proxy prefix="/fetch/"`：`DYNAMIC_AUTH_REQUIRED`。
 
@@ -508,7 +510,7 @@ pub struct ConnectionIdentity; // 活连接出生身份，不可仅为 RawFd
 - [x] 接受正文限额：每请求缓冲 1 MiB、全进程 64 MiB；解码 64 MiB、100 倍加 64 KiB；输出 64 MiB、CPU 完成预算及执行等待各 2 秒（不可抢占单次库调用，超时任务保留额度）、并发 64；gzip level 3/window 32 KiB、zstd level 3/window 1 MiB。
 - [x] 接受鉴权限额：bcrypt cost 10–14；Argon2id v19、8192–65536 KiB、迭代 1–3、并行度 1–2；4 个任务、2 秒、不排队；令牌文件与 Basic 输入各 4096 字节。
 - [x] 接受 DAV 限额：锁每存储 1024、全进程 4096、3600 秒；属性每资源 64 项/64 KiB，XML 1 MiB/深度 32；遍历 4096 项/深度 16；临时 PUT 每文件 256 MiB、全进程 1 GiB、并发 16、300 秒。
-- [x] 接受动态出口限额：URL 4096 字节、1 跳、不跟随重定向；活动请求 128、DNS 候选 64、连接尝试 8。
+- [x] 接受动态出口限额：URL 4096 字节、1 跳、不跟随重定向；活动请求 128、DNS 候选 64、每 origin 存活物理连接 8（含握手与空闲连接；2026-11-06 澄清）。
 - [x] 接受日志限额：队列每站点 1024、全进程 16384、每条 16 KiB；站点/sink/worker 各 64、FD 总计 256，均含候选和旧代；文件 10 MiB、轮转保留 5 个/7 天，每站点 6 文件/60 MiB、全进程 384 文件/3840 MiB，关闭等待 5 秒。
 - [x] 接受第 5 节其余既有限额：DNS 60 秒/失败退避 1 秒/64 候选/8 尝试；代理期限 5/60/300/60 秒；入口 60 秒/64 KiB/1024 槽；TLS/H2 10 秒/10 秒/100 流/64 KiB/60 秒；静态缓存 0 默认/256 MiB 最大/64 KiB 对象/1024 项及静态 IO 128 槽；加载 1 MiB 每文件/8 MiB 总量/512 文件/导入深度 64/KDL 深度 32；snippet 深度 64/4096 路由/16384 步/8 MiB；错误页 1 MiB、列表扫描 4096/展示 512/HTML 256 KiB；控制帧 64 KiB/首字节后 5 秒/reload 默认 30 秒。Pingora h2 可行性证据见 014/015。
 - [x] 接受第 6 节接口、单快照发布、DAV 跨代锁及日志候选事务边界。
