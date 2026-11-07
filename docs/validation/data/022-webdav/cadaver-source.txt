@@ -1,0 +1,8 @@
+Package: cadaver
+Version: 0.26+dfsg-2
+Filename: pool/main/c/cadaver/cadaver_0.26+dfsg-2_amd64.deb
+SHA256: 8b6178a89d7a105dc252a42f5cc912a0364ceb1126375a46a952facc17a8ae65
+Package: libneon27t64-gnutls
+Version: 0.34.2-1
+Filename: pool/main/n/neon27/libneon27t64-gnutls_0.34.2-1_amd64.deb
+SHA256: 69fad0910573fc94442f1a85af51a6526aa548045a1520e2fe91a7a22435c30d

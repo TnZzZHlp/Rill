@@ -32,6 +32,7 @@ pub enum Outcome {
     },
     Route(usize),
     Dynamic(usize),
+    WebDav(usize),
     NotFound,
     NoMatch,
     BudgetExceeded,
@@ -191,6 +192,20 @@ fn action(
         }
         Action::Rewrite(_) | Action::StripPrefix(_) | Action::TryFiles { .. } => {
             super::path_actions::execute(a, ctx, policy)
+        }
+        Action::WebDav(dav) => {
+            if !ctx.state.as_ref().is_some_and(|s| s.authenticated()) {
+                return Ok(Some(ActionFlow::Terminal(Outcome::PathFailure {
+                    class: PathErrorClass::InvalidInput,
+                    code: "DAV_AUTH_REQUIRED",
+                    status: 403,
+                })));
+            }
+            let index = *policy
+                .dav_indices
+                .get(&(dav.origin.source.path.clone(), dav.origin.offset))
+                .ok_or(())?;
+            Ok(Some(ActionFlow::Terminal(Outcome::WebDav(index))))
         }
         Action::DynamicProxy(dynamic) => {
             if !dynamic.anonymous && !ctx.state.as_ref().is_some_and(|s| s.authenticated()) {

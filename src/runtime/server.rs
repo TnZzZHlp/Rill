@@ -99,8 +99,8 @@ pub fn run(path: &Path) -> u8 {
             return 1;
         }
     };
-    let state = match RuntimeState::new(prepared) {
-        Ok(state) => state,
+    let (state, startup) = match RuntimeState::new_deferred(prepared) {
+        Ok(prepared) => prepared,
         Err(error) => {
             Logger::new("info").event(Level::Error, "runtime_failed", &[("code", error.code)]);
             return 1;
@@ -125,7 +125,7 @@ pub fn run(path: &Path) -> u8 {
             return 1;
         }
     };
-    let status = runtime.block_on(serve(state));
+    let status = runtime.block_on(serve_prepared(state, Some(startup)));
     runtime.shutdown_background();
     status
 }
@@ -139,6 +139,13 @@ impl Drop for ObservabilityShutdown {
 }
 
 pub async fn serve(state: Arc<RuntimeState>) -> u8 {
+    serve_prepared(state, None).await
+}
+
+async fn serve_prepared(
+    state: Arc<RuntimeState>,
+    startup: Option<super::state::StartupActivation>,
+) -> u8 {
     let _observability_shutdown = ObservabilityShutdown(state.observability.clone());
     let snapshot = state.snapshot();
     let logger = snapshot.logger.clone();
@@ -249,6 +256,9 @@ pub async fn serve(state: Arc<RuntimeState>) -> u8 {
     let capacity = Arc::new(Semaphore::new(1024));
     let (shutdown, receiver) = watch::channel(false);
     let mut workers = JoinSet::new();
+    if let Some(startup) = startup {
+        startup.commit();
+    }
     workers.spawn(crate::control::server::serve(
         control,
         coordinator.clone(),

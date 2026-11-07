@@ -11,6 +11,10 @@ static POLICY_BYTES: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(Debug)]
 pub struct PreparedPolicy {
+    pub(crate) dav_candidates: Vec<crate::webdav::registry::PreparedStorage>,
+    pub dav_handles: Vec<std::sync::Arc<crate::webdav::registry::StorageHandle>>,
+    pub dav_indices: BTreeMap<(PathBuf, usize), usize>,
+    pub dav_sites: Vec<bool>,
     pub dynamic_actions: Vec<super::model::DynamicProxy>,
     pub dynamic_count: usize,
     pub dynamic_indices: BTreeMap<(PathBuf, usize), usize>,
@@ -21,6 +25,7 @@ pub struct PreparedPolicy {
     pub auth_headers: Vec<std::sync::Arc<[http::HeaderName]>>,
     pub tokens: BTreeMap<(PathBuf, usize), crate::auth::model::TokenDigest>,
     bytes: usize,
+    dav_bytes: usize,
 }
 #[derive(Debug)]
 pub struct CompiledRegex {
@@ -30,6 +35,10 @@ pub struct CompiledRegex {
 
 impl Drop for PreparedPolicy {
     fn drop(&mut self) {
+        drop(std::mem::take(&mut self.dav_candidates));
+        drop(std::mem::take(&mut self.dav_handles));
+        drop(std::mem::take(&mut self.dav_indices));
+        drop(std::mem::take(&mut self.dav_sites));
         drop(std::mem::take(&mut self.dynamic_actions));
         drop(std::mem::take(&mut self.dynamic_indices));
         drop(std::mem::take(&mut self.regexes));
@@ -56,7 +65,7 @@ impl CompilePermit {
         let total = policy
             .bytes
             .checked_add(bytes)
-            .filter(|n| *n <= 8 * MIB)
+            .filter(|n| *n <= 8 * MIB - policy.dav_bytes)
             .ok_or_else(|| error("POLICY_LIMIT", origin))?;
         if bytes > self.0 {
             return Err(error("POLICY_INVALID_REGEX", origin));
@@ -81,11 +90,14 @@ fn error(code: &'static str, origin: &Origin) -> ConfigError {
     )
 }
 impl PreparedPolicy {
+    pub(crate) const fn remaining_bytes(&self) -> usize {
+        8 * MIB - self.bytes - self.dav_bytes
+    }
     pub(crate) fn reserve(&mut self, bytes: usize, origin: &Origin) -> Result<()> {
         let total = self
             .bytes
             .checked_add(bytes)
-            .filter(|n| *n <= 8 * MIB)
+            .filter(|n| *n <= 8 * MIB - self.dav_bytes)
             .ok_or_else(|| error("POLICY_LIMIT", origin))?;
         POLICY_BYTES
             .try_update(Ordering::AcqRel, Ordering::Acquire, |old| {
@@ -121,7 +133,7 @@ impl ExternalBudget {
         policy
             .bytes
             .checked_add(total)
-            .filter(|n| *n <= 8 * MIB)
+            .filter(|n| *n <= 8 * MIB - policy.dav_bytes)
             .ok_or_else(|| error("POLICY_LIMIT", origin))?;
         self.reserve(policy, bytes, origin)
     }
@@ -139,7 +151,7 @@ impl ExternalBudget {
         policy
             .bytes
             .checked_add(total)
-            .filter(|n| *n <= 8 * MIB)
+            .filter(|n| *n <= 8 * MIB - policy.dav_bytes)
             .ok_or_else(|| error("POLICY_LIMIT", origin))?;
         POLICY_BYTES
             .try_update(Ordering::AcqRel, Ordering::Acquire, |old| {
@@ -152,6 +164,22 @@ impl ExternalBudget {
 }
 
 impl ExternalBudget {
+    pub(crate) fn reserve_process(&mut self, bytes: usize) -> bool {
+        let Some(total) = self.bytes.checked_add(bytes) else {
+            return false;
+        };
+        if POLICY_BYTES
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |old| {
+                old.checked_add(bytes).filter(|n| *n <= 64 * MIB)
+            })
+            .is_err()
+        {
+            return false;
+        }
+        self.bytes = total;
+        true
+    }
+
     pub(crate) fn release(&mut self, bytes: usize) {
         self.bytes -= bytes;
         POLICY_BYTES.fetch_sub(bytes, Ordering::AcqRel);
@@ -307,6 +335,44 @@ fn visit_matcher(p: &mut PreparedPolicy, m: &Matcher) -> Result<()> {
 }
 fn visit_action(p: &mut PreparedPolicy, a: &Action, origin: &Origin) -> Result<()> {
     match a {
+        Action::WebDav(dav) => {
+            p.reserve(
+                std::mem::size_of::<crate::webdav::model::WebDav>()
+                    + dav.storage_id.capacity()
+                    + dav.root.value.as_os_str().len()
+                    + origin_bytes(&dav.origin)
+                    + 128,
+                &dav.origin,
+            )?;
+            let candidate = crate::webdav::registry::registry().prepare_config(dav, p)?;
+            for previous in &p.dav_candidates {
+                let same_id = previous.identity().storage_id == candidate.identity().storage_id;
+                if same_id && previous.identity() != candidate.identity() {
+                    return Err(ConfigError::new(
+                        "RESTART_REQUIRED",
+                        "webdav",
+                        "storage identity changed",
+                        &dav.origin,
+                    ));
+                }
+                if !same_id
+                    && crate::webdav::namespace::overlaps(previous.root(), candidate.root())
+                        .map_err(|_| error("RESOURCE_IO", &dav.origin))?
+                {
+                    return Err(ConfigError::new(
+                        "DAV_ROOT_OVERLAP",
+                        "webdav",
+                        "DAV storage roots overlap",
+                        &dav.origin,
+                    ));
+                }
+            }
+            p.dav_indices.insert(
+                (dav.origin.source.path.clone(), dav.origin.offset),
+                p.dav_candidates.len(),
+            );
+            p.dav_candidates.push(candidate);
+        }
         Action::BodyReplace(replace) => crate::body_transform::compile::replace(p, replace)?,
         Action::Encode(encode) => p.reserve(
             crate::body_transform::compile::encode_bytes(encode),
@@ -590,6 +656,17 @@ fn unauthenticated_continue(actions: &[Action], mut reachable: bool) -> Result<b
     for action in actions {
         match action {
             Action::BasicAuth(_) | Action::StaticToken(_) => reachable = false,
+            Action::WebDav(dav) => {
+                if reachable {
+                    return Err(ConfigError::new(
+                        "DAV_AUTH_REQUIRED",
+                        "webdav",
+                        "WebDAV requires prior authentication",
+                        &dav.origin,
+                    ));
+                }
+                return Ok(false);
+            }
             Action::DynamicProxy(dynamic) => {
                 if reachable && !dynamic.anonymous {
                     return Err(ConfigError::new(
@@ -630,6 +707,10 @@ pub fn compile(
     mut dependencies: Option<&mut crate::config::dependencies::DependencyPlan>,
 ) -> Result<PreparedPolicy> {
     let mut p = PreparedPolicy {
+        dav_candidates: Vec::new(),
+        dav_handles: Vec::new(),
+        dav_indices: BTreeMap::new(),
+        dav_sites: vec![false; config.sites.len()],
         dynamic_actions: Vec::new(),
         dynamic_count: 0,
         dynamic_indices: BTreeMap::new(),
@@ -640,20 +721,25 @@ pub fn compile(
         auth_headers: vec![std::sync::Arc::from([]); config.sites.len()],
         tokens: BTreeMap::new(),
         bytes: 0,
+        dav_bytes: 0,
     };
     if let Some(site) = config.sites.first() {
         p.reserve(
-            p.filesystem_sites.capacity().saturating_add(
-                p.auth_headers
-                    .capacity()
-                    .saturating_mul(std::mem::size_of::<std::sync::Arc<[http::HeaderName]>>()),
-            ),
+            p.filesystem_sites
+                .capacity()
+                .saturating_add(p.dav_sites.capacity())
+                .saturating_add(
+                    p.auth_headers
+                        .capacity()
+                        .saturating_mul(std::mem::size_of::<std::sync::Arc<[http::HeaderName]>>()),
+                ),
             &site.origin,
         )?;
     }
     let mut sites = 0;
     for (site_index, site) in config.sites.iter().enumerate() {
         if let Some(chain) = &site.chain {
+            let dav_start = p.dav_candidates.len();
             crate::body_transform::compile::validate(chain)?;
             validate_dynamic_auth(&chain.rules)?;
             if let Some(errors) = &chain.errors {
@@ -754,8 +840,24 @@ pub fn compile(
                 }
                 visit_sequence(&mut p, &rule.actions, &rule.origin)?;
             }
+            p.dav_sites[site_index] = p.dav_candidates.len() != dav_start;
         }
     }
+    let available = p.remaining_bytes();
+    let required = p
+        .dav_candidates
+        .iter()
+        .try_fold(0_usize, |total, candidate| {
+            total.checked_add(candidate.required())
+        })
+        .ok_or_else(|| error("POLICY_LIMIT", &config.server.origin))?;
+    if required > available {
+        return Err(error("POLICY_LIMIT", &config.server.origin));
+    }
+    for candidate in &mut p.dav_candidates {
+        candidate.limit(available - (required - candidate.required()))?;
+    }
+    p.dav_bytes = required;
     Ok(p)
 }
 
@@ -767,6 +869,10 @@ mod tests {
     fn regex_build_admission_uses_final_candidate_size() -> Result<()> {
         let origin = Origin::file(std::path::Path::new("policy.kdl"));
         let mut policy = PreparedPolicy {
+            dav_candidates: Vec::new(),
+            dav_handles: Vec::new(),
+            dav_indices: BTreeMap::new(),
+            dav_sites: Vec::new(),
             dynamic_actions: Vec::new(),
             dynamic_count: 0,
             dynamic_indices: BTreeMap::new(),
@@ -777,6 +883,7 @@ mod tests {
             auth_headers: Vec::new(),
             tokens: BTreeMap::new(),
             bytes: 0,
+            dav_bytes: 0,
         };
         policy.reserve(8 * MIB - 256 * 1024, &origin)?;
         for index in 0..5 {
@@ -786,6 +893,10 @@ mod tests {
         }
         assert_eq!(policy.regexes.len(), 5);
         assert!(policy.bytes < 8 * MIB);
+        policy.dav_bytes = policy.remaining_bytes() - 1024;
+        let mut external = ExternalBudget::default();
+        assert!(external.reserve(&policy, 1025, &origin).is_err());
+        external.reserve(&policy, 1024, &origin)?;
         Ok(())
     }
 }

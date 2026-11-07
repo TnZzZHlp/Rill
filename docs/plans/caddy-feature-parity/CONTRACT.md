@@ -166,6 +166,18 @@ webdav root="/srv/dav" storage-id="documents"
 ```
 拒绝未受保护的 `webdav root="/srv/dav" storage-id="documents"`：`DAV_AUTH_REQUIRED`。
 
+008 补强实施已提供显式请求级真实目录项 Proof、共享遍历 ledger 和持久 inode 私有标记；仍待独立复审/最终验收，见 [022](../../validation/022-caddy-webdav.md)。不以普通 FS 回归冒称 casefold 专用环境或所有崩溃窗口已实测。
+
+008 实施补充经用户明确确认：保留 `.rill-dav` 属性目录及 `.rill-dav-put-` 临时名前缀，任何服务入口（含旧静态快照、列表、缓存及解析后别名）不得读取内部数据。目录 0700/文件 0600 不替代同服务 UID 的读取屏障；既有同名用户目录不接管，check 不创建，失败候选只撤回自己的未发布资源。DAV 路径组件不允许 symlink，普通文件 nlink>1 拒绝；不同 storage-id 的同根/父子物理根（含已移除 ID 的历史身份）不得建立平行锁域。这些限制不改变一般旧静态根内安全 symlink 语义。无法证明物理根不重叠的 mount 别名安全拒绝。请求级 NamespaceSession 持 owned namespace guard，所有存在组件经父 FD 增量枚举确认真实 bytes 拼写与 dev/ino/type/mount；折叠但没有精确项的 alias 拒绝。source/target/tagged If 与整个请求各 walk 共用 4096 枚举/访问 ledger，根信用和私有非 dot 项不免费，不按目录/树重置；先完成 source 和旧 overwrite target 两树预检再删除。
+
+Destination 及 tagged If URI 使用同快照的实际方法、入口头、客户 IP 和已成功鉴权动作做纯授权证明，终点须为同一 prepared DAV handle；路径变换/子树/href 同样要有明确映射，不重验密码、不重放外部副作用、不猜逆映射。仅出现 method/header 匹配不是拒绝理由。目的/子资源的新增解释扣同请求剩余 1024 策略步，不按每资源重置；首规则中可证明闭合的普通无条件/prefix 域与显式 strip-prefix、相同 prepared handle 可复用请求级证明。复杂策略可能在 4096 项前耗尽步骤，遍历项上限不是任意复杂政策下的成功保证。GET/HEAD 复用既有表示与 007 响应变换边界，写响应和安全/容量错误不被错误链改成成功。
+
+用户合并表单 d4fd7a63 已明确批准：rustix =1.1.4（default-features=false、fs/std，Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT）及必要锁条目；固定持久 inode xattr 与同 parent O_TMPFILE 先标记/sync 再安全 link 保留名方案；cadaver 官方包/必要库仅临时隔离获取，最小 DAV HTTP 测试 helper，独立 private mount namespace 的 1 MiB tmpfs ENOSPC fixture。不追认此前检查点为安全完成，不允许宿主安装/apt upgrade/镜像拉取或其他新依赖。
+
+内部 owner/property/temp 均带固定 user.rill.webdav.private 标记；退休不清，static 最终普通文件安全重开后以有界小栈 fgetxattr 查标，防退休/重启别名；目录用受约束 O_PATH 父链/固定名身份屏障，不新增所有普通 static GET 枚举限额或全面禁链。DAV activate 真实验证 xattr/O_TMPFILE/安全发布能力，缺失则 fail closed，不先命名后打标；check 不写能力探测。匿名发布可用已验证 procfd 且原 FD 保活的安全 link，并复验目标身份，不以 proc 路径重新授权客户端路径。旧未 tag 检查点格式拒绝接管，须隔离/清理，不承诺任意历史硬链接自动识别。
+
+PUT rename/父 sync 后清标记/file sync；清标记失败/崩溃可留下已提交但不可读目标，结果 unknown，不回滚/自动重试。管理员确认完整性后显式清固定 xattr/fsync 恢复，不新增 CLI。进程内退休记录保真实 FD 和现有预算，链接仍在则不丢屏障或提前归还临时空间，直到 nlink0 回收，不留永久裸 inode tombstone。
+
 ### 3.9 动态代理
 
 `dynamic-proxy prefix="/fetch/" anonymous=#false { allow-port 80; allow-port 443; }` 为终止动作。prefix 后是一次 URL 解码的完整 http/https URL；默认仅端口 80/443，额外端口只由 allow-port 显式加入。anonymous 默认 false，必须事先鉴权；true 显式接受开放代理滥用风险。拒绝 userinfo、非公网、特殊地址、自身入口及任一混合 DNS 禁止候选；每轮解析全部检查后固定连接 IP，不二次解析、不自动跟随 Location、不重放。移除入口 Authorization、Proxy-Authorization、Cookie；默认删除响应 Set-Cookie，并将指向同一目标的 Location 改写为此前缀内 URL，其他 Location 原样返回且不跟随。
@@ -405,7 +417,7 @@ impl ActivatedStorage {
 
 现有 `ResourcePreparer` 的默认 `prepare_tracked` 在存在证书时返回 INTERNAL，否则委托 `prepare`；`ConfigurationOnly` 和 `HttpPreparer` 均覆盖该方法以跟踪依赖。扩展两者而非替换接口：check 的 `CheckResources` 携带经编译的 `PreparedPolicy` 并报告策略验证结果，不创建策略运行资源、日志文件或 worker；现有 TLS 和静态 root 检查仍照常准备，不声称 check 不打开任何资源。run 的 `HttpResources` 持有完整准备策略，按 site 索引移入快照。
 
-锁由进程级 registry 以 storage-id 和准备时 root 的设备/ inode 身份拥有；同身份跨 reload 保锁，重启失锁。同 storage-id 的 root 身份变化返回 `RESTART_REQUIRED`，不得把旧锁转到新 root。准备不修改活动 registry；所有可失败的检查、配额、属性存储与候选激活均在快照 store 前完成，ActivatedStorage 以 RAII 持有未发布资源，其他资源激活失败或最终 gate 检查失败时 Drop 只回滚自己的未发布条目，不触碰旧锁/handle。完整候选持有这些 handle 后一次 store，随后 commit 不可失败；不得在 store 后执行返回 Result 的资源准备。激活与候选提交串行；旧请求持有原 handle。registry 同时持有跨代 namespace 锁：内部 PUT 提交、DELETE、MOVE、MKCOL、COPY 与属性变更遵守同一锁，覆盖父 FD 解析、身份复验及提交；临时上传需持有能阻止父目录 MOVE 的 namespace 保护，取消会清理同一父 FD 下本事务拥有的临时条目。命名空间锁不能替代 WebDAV 逻辑锁/token 验证；后者在相同临界区再次校验。承袭现有静态 root 的信任边界：服务 UID/root/管理员对本地文件系统的并发变更是受信行为，不声称抵御恶意管理员在复验之后移动父目录；内部 DAV 操作不能绕过 namespace 锁。属性持久化独立于内存锁，原子性按 3.8。
+锁由进程级 registry 以 storage-id 和准备时 root 的设备/ inode 身份拥有；同身份跨 reload 保锁，重启失锁。同 storage-id 的 root 身份变化返回 `RESTART_REQUIRED`，不得把旧锁转到新 root。准备不修改活动 registry；所有可失败的检查、配额、属性存储与候选激活均在快照 store 前完成，ActivatedStorage 以 RAII 持有未发布资源，其他资源激活失败或最终 gate 检查失败时 Drop 只回滚自己的未发布条目，不触碰旧锁/handle。完整候选持有这些 handle 后一次 store，随后 commit 不可失败；不得在 store 后执行返回 Result 的资源准备。激活与候选提交串行；旧请求持有原 handle。registry 同时持有跨代 namespace 锁：内部 PUT 提交、DELETE、MOVE、MKCOL、COPY 与属性变更遵守同一锁，覆盖父 FD 解析、身份复验及提交；临时上传需持有能阻止父目录 MOVE 的 namespace 保护，取消会清理同一父 FD 下本事务拥有的临时条目。命名空间锁不能替代 WebDAV 逻辑锁/token 验证；后者在相同临界区再次校验。历史身份、私有属性 inode、锁 owner、XML/遍历和输出信用复用既有进程 64 MiB policy pool，分配前预留；历史/旧代/真实任务不因短快照释放提前退券，属性删除、替换及锁过期回收对应额度。父代理确认的 syscall 边界：所有长耗时准备、临时 sync、父 FD/条件重核都在最终 commit 准入 CAS 前，紧邻准入检查取消和期限；CAS 不是 rename 的文件系统线性化证明。取消先赢则绝不 rename 并清理自己的 temp；有效期限内 commit 准入先赢后只剩无 await/无排队的不可抢占 rename/父 sync，可能跨过断开/期限，该次客户端结果未知，不声称回滚、不自动重试。rename 失败清 temp；成功后父 sync 或回复失败不能删除新 target 假装恢复旧文件。承袭现有静态 root 的信任边界：服务 UID/root/管理员对本地文件系统的并发变更是受信行为，不声称抵御恶意管理员在复验之后移动父目录；内部 DAV 操作不能绕过 namespace 锁。属性持久化独立于内存锁，原子性按 3.8。
 
 ```rust
 // src/observability/owner.rs

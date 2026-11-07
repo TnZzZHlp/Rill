@@ -1,6 +1,7 @@
 use std::fs::{self, File};
 use std::io::{self, Read};
 use std::os::fd::{AsRawFd, OwnedFd};
+use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Component, Path, PathBuf};
 
@@ -88,6 +89,13 @@ impl Root {
             )
             .map_err(io_error)?,
         );
+        Self::from_prepared_fd(root)
+    }
+
+    pub(crate) fn from_prepared_fd(root: File) -> io::Result<Self> {
+        if !root.metadata()?.is_dir() {
+            return Err(io_error(Errno::ENOTDIR));
+        }
         let probe = constrained_open(&root, Path::new("."))?;
         let probe_metadata = File::from(probe).metadata()?;
         if !probe_metadata.is_dir() || !same_file(&root.metadata()?, &probe_metadata) {
@@ -112,7 +120,7 @@ impl Root {
         Ok(Self { root, proc_fd })
     }
 
-    fn mount_id(&self, file: &File) -> io::Result<u64> {
+    pub(crate) fn mount_id(&self, file: &File) -> io::Result<u64> {
         let path = format!("../fdinfo/{}", file.as_raw_fd());
         let info = File::from(
             openat(
@@ -186,7 +194,98 @@ impl Root {
         Ok((metadata.dev(), metadata.ino()))
     }
 
+    pub(crate) fn link_anonymous(&self, file: &File, parent: &File, name: &str) -> io::Result<()> {
+        let before = file.metadata()?;
+        if !before.is_file() || before.nlink() != 0 || !parent.metadata()?.is_dir() {
+            return Err(io_error(Errno::EACCES));
+        }
+        let number = file.as_raw_fd().to_string();
+        nix::unistd::linkat(
+            &self.proc_fd,
+            number.as_str(),
+            parent,
+            name,
+            nix::fcntl::AtFlags::AT_SYMLINK_FOLLOW,
+        )
+        .map_err(io_error)?;
+        let named = File::from(constrained_open_with_flags(
+            parent,
+            Path::new(name),
+            OFlag::O_NOFOLLOW,
+        )?);
+        if !same_file(&before, &named.metadata()?) || named.metadata()?.nlink() != 1 {
+            return Err(io_error(Errno::EIO));
+        }
+        Ok(())
+    }
+
+    pub(crate) fn private_directory(&self, directory: &File) -> io::Result<bool> {
+        let mut current = directory.try_clone()?;
+        for _ in 0..4096 {
+            let metadata = current.metadata()?;
+            if !metadata.is_dir() {
+                return Err(io_error(Errno::ENOTDIR));
+            }
+            let parent = File::from(
+                openat(
+                    &current,
+                    "..",
+                    OFlag::O_PATH | OFlag::O_DIRECTORY | OFlag::O_NOFOLLOW | OFlag::O_CLOEXEC,
+                    Mode::empty(),
+                )
+                .map_err(io_error)?,
+            );
+            let candidate = openat(
+                &parent,
+                ".rill-dav",
+                OFlag::O_PATH | OFlag::O_NOFOLLOW | OFlag::O_CLOEXEC,
+                Mode::empty(),
+            );
+            match candidate {
+                Ok(fd) => {
+                    let private = File::from(fd);
+                    if same_file(&metadata, &private.metadata()?) {
+                        return Ok(true);
+                    }
+                }
+                Err(Errno::ENOENT) => (),
+                Err(error) => return Err(io_error(error)),
+            }
+            if same_file(&metadata, &parent.metadata()?)
+                && self.mount_id(&current)? == self.mount_id(&parent)?
+            {
+                return Ok(false);
+            }
+            current = parent;
+        }
+        Err(io_error(Errno::EACCES))
+    }
+
+    pub(crate) fn capability(&self) -> &File {
+        &self.root
+    }
+
+    pub(crate) fn reopen_checked(&self, file: File, directory: bool) -> io::Result<File> {
+        let metadata = file.metadata()?;
+        if (directory && !metadata.is_dir()) || (!directory && !metadata.is_file()) {
+            return Err(io_error(Errno::EACCES));
+        }
+        let fd: OwnedFd = file.into();
+        let reopened = reopen(&self.proc_fd, &fd, directory)?;
+        if !same_file(&metadata, &reopened.metadata()?) {
+            return Err(io_error(Errno::EIO));
+        }
+        Ok(reopened)
+    }
+
     pub fn open(&self, relative: &Path) -> io::Result<File> {
+        let visibility = crate::webdav::visibility::read();
+        if relative
+            .components()
+            .any(|part| crate::webdav::visibility::reserved(part.as_os_str()))
+        {
+            return Err(io_error(Errno::EACCES));
+        }
         if relative.components().any(|component| {
             matches!(
                 component,
@@ -203,7 +302,20 @@ impl Root {
         let fd = constrained_open(&self.root, path)?;
         let path_file = File::from(fd);
         let metadata = path_file.metadata()?;
+        let resolved =
+            nix::fcntl::readlinkat(&self.proc_fd, path_file.as_raw_fd().to_string().as_str())
+                .map_err(io_error)?;
+        if Path::new(std::ffi::OsStr::from_bytes(resolved.as_bytes()))
+            .components()
+            .any(|part| crate::webdav::visibility::reserved(part.as_os_str()))
+            || crate::webdav::visibility::denied(&path_file, &visibility)?
+        {
+            return Err(io_error(Errno::EACCES));
+        }
         if metadata.is_dir() {
+            if self.private_directory(&path_file)? {
+                return Err(io_error(Errno::EACCES));
+            }
             return Ok(path_file);
         }
         if !metadata.is_file() {
@@ -213,6 +325,9 @@ impl Root {
         let file = reopen(&self.proc_fd, &fd, false)?;
         if !same_file(&metadata, &file.metadata()?) {
             return Err(io::Error::from_raw_os_error(Errno::EIO as i32));
+        }
+        if crate::webdav::private_file::marked(&file)? {
+            return Err(io_error(Errno::EACCES));
         }
         Ok(file)
     }

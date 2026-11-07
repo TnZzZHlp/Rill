@@ -5,10 +5,10 @@ pub(crate) mod path;
 mod prepared;
 mod range;
 pub(crate) mod representation;
-mod response;
+pub(crate) mod response;
 pub(crate) mod root;
 mod serve;
-mod validator;
+pub(crate) mod validator;
 
 pub use cache::Stats as StaticCacheStats;
 pub use prepared::PreparedStatic;

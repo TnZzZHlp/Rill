@@ -128,6 +128,7 @@ fn validate_chain_action(
         | crate::http_policy::model::Action::Rewrite(_)
         | crate::http_policy::model::Action::StripPrefix(_)
         | crate::http_policy::model::Action::TryFiles { .. }
+        | crate::http_policy::model::Action::WebDav(_)
         | crate::http_policy::model::Action::DynamicProxy(_)
         | crate::http_policy::model::Action::Continue
         | crate::http_policy::model::Action::Reenter

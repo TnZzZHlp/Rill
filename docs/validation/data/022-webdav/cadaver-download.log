@@ -1,0 +1,3 @@
+Get:1 https://deb.debian.org/debian trixie/main amd64 cadaver amd64 0.26+dfsg-2 [84.5 kB]
+Get:2 https://deb.debian.org/debian trixie/main amd64 libneon27t64-gnutls amd64 0.34.2-1 [72.8 kB]
+Fetched 157 kB in 1s (221 kB/s)

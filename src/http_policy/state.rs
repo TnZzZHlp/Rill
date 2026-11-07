@@ -27,6 +27,12 @@ struct ResponseFilter {
     captures: Option<Arc<CaptureGroup>>,
 }
 
+pub(crate) struct EntryRequest {
+    pub headers: HeaderMap,
+    pub path: String,
+    pub connection_names: Vec<String>,
+    _memory: crate::webdav::budget::Memory,
+}
 pub struct RequestPolicyState {
     client_ip: IpAddr,
     site: String,
@@ -36,6 +42,7 @@ pub struct RequestPolicyState {
     auth_headers: Arc<[http::HeaderName]>,
     authenticated: bool,
     authenticated_actions: Vec<usize>,
+    entry: Option<Arc<EntryRequest>>,
     captures: Option<Arc<CaptureGroup>>,
     filters: Vec<ResponseFilter>,
     pub steps_left: u16,
@@ -58,6 +65,7 @@ impl RequestPolicyState {
             auth_headers: Arc::from([]),
             authenticated: false,
             authenticated_actions: Vec::new(),
+            entry: None,
             captures: None,
             filters: Vec::new(),
             steps_left: 1024,
@@ -73,6 +81,45 @@ impl RequestPolicyState {
     }
     pub fn authenticated_action(&self, action: usize) -> bool {
         self.authenticated_actions.contains(&action)
+    }
+    pub(crate) fn set_entry_headers(&mut self, headers: &HeaderMap) -> Result<(), PolicyError> {
+        let bytes = headers
+            .capacity()
+            .checked_mul(128)
+            .and_then(|n| {
+                n.checked_add(
+                    headers
+                        .iter()
+                        .map(|(name, value)| name.as_str().len() + value.len())
+                        .sum::<usize>(),
+                )
+            })
+            .and_then(|n| {
+                n.checked_add(
+                    2 * self.path.len()
+                        + 256
+                        + self.connection_names.capacity() * std::mem::size_of::<String>()
+                        + self.connection_names.iter().map(String::len).sum::<usize>(),
+                )
+            })
+            .ok_or(PolicyError)?;
+        let memory = crate::webdav::budget::Memory::acquire(bytes).map_err(|_| PolicyError)?;
+        self.entry = Some(Arc::new(EntryRequest {
+            headers: headers.clone(),
+            path: self.path.clone(),
+            connection_names: self.connection_names.clone(),
+            _memory: memory,
+        }));
+        Ok(())
+    }
+    pub(crate) fn entry_request(&self) -> Option<&Arc<EntryRequest>> {
+        self.entry.as_ref()
+    }
+    pub(crate) fn successful_actions(&self) -> &[usize] {
+        &self.authenticated_actions
+    }
+    pub(crate) fn client_ip(&self) -> IpAddr {
+        self.client_ip
     }
     pub fn authenticated(&self) -> bool {
         self.authenticated

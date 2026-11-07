@@ -1,0 +1,18 @@
+   Compiling rill v0.1.0 (/root/github/Rill)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.13s
+     Running tests/webdav.rs (target/debug/deps/webdav-e8c5e43f324968dd)
+
+running 1 test
+test webdav::disk::isolated_tmpfs_enospc_returns_507_preserves_target_and_cleans_temporary ...
+running 1 test
+test webdav::disk::isolated_tmpfs_enospc_returns_507_preserves_target_and_cleans_temporary ... isolated tmpfs size=1048576: status=507 old_target_preserved=true temp_cleanup=true available_before=1040384 available_after=1040384
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 19 filtered out; finished in 0.23s
+
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 19 filtered out; finished in 0.23s
+
+mbx[cache]: 0 hits, 1 misses, 1 incremental; 0 B downloaded, 0 B uploaded, 0 B stored locally
+mbx[savings]: across 2430 builds, rustc has been excused from 1h 21m of its duties.

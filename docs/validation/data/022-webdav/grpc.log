@@ -1,0 +1,82 @@
+$ podman image inspect 394ffa2d2ac8f5c9f45148f22bad3587429bceb19c93b88e8595f1e3f7892853 --format {{.Id}}
+$ cargo build --locked --offline --manifest-path /root/github/Rill/tests/feasibility/grpc_container/Cargo.toml
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.18s
+artifacts=/var/tmp/rill-grpc-acceptance-tckj7kgu
+$ openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=Rill acceptance ca -addext basicConstraints=critical,CA:TRUE -keyout /var/tmp/rill-grpc-acceptance-tckj7kgu/ca.key -out /var/tmp/rill-grpc-acceptance-tckj7kgu/certs/ca.pem
+$ openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=Rill acceptance other-ca -addext basicConstraints=critical,CA:TRUE -keyout /var/tmp/rill-grpc-acceptance-tckj7kgu/other-ca.key -out /var/tmp/rill-grpc-acceptance-tckj7kgu/certs/other-ca.pem
+$ openssl req -newkey rsa:2048 -nodes -subj /CN=grpc.test -keyout /var/tmp/rill-grpc-acceptance-tckj7kgu/certs/server.key -out /var/tmp/rill-grpc-acceptance-tckj7kgu/server.csr
+$ openssl req -newkey rsa:2048 -nodes -subj /CN=grpc.test -keyout /var/tmp/rill-grpc-acceptance-tckj7kgu/certs/server2.key -out /var/tmp/rill-grpc-acceptance-tckj7kgu/server2.csr
+$ openssl x509 -req -in /var/tmp/rill-grpc-acceptance-tckj7kgu/server.csr -days 1 -CA /var/tmp/rill-grpc-acceptance-tckj7kgu/certs/ca.pem -CAkey /var/tmp/rill-grpc-acceptance-tckj7kgu/ca.key -CAcreateserial -extfile /var/tmp/rill-grpc-acceptance-tckj7kgu/server.ext -out /var/tmp/rill-grpc-acceptance-tckj7kgu/certs/server.pem
+$ openssl x509 -req -in /var/tmp/rill-grpc-acceptance-tckj7kgu/server2.csr -days 1 -CA /var/tmp/rill-grpc-acceptance-tckj7kgu/certs/other-ca.pem -CAkey /var/tmp/rill-grpc-acceptance-tckj7kgu/other-ca.key -CAcreateserial -extfile /var/tmp/rill-grpc-acceptance-tckj7kgu/server.ext -out /var/tmp/rill-grpc-acceptance-tckj7kgu/certs/server2.pem
+$ podman network create --opt isolate=true rill-grpc-acceptance-tckj7kgu
+$ podman create --pull=never --name rill-grpc-acceptance-tckj7kgu --network rill-grpc-acceptance-tckj7kgu --read-only --cap-drop=all --security-opt=no-new-privileges --user 65534:65534 --memory 256m --cpus 1 --pids-limit 64 --stop-signal SIGINT -p 127.0.0.1::50051 -p 127.0.0.1::50052 -p 127.0.0.1::50053 -p 127.0.0.1::50054 -v /root/.cache/mbx/targets/v1/a95707062f630169d590b4bcd4db587ca3fa9e89569fe0c04d9b7555f428d24a/debug/rill-grpc-acceptance:/acceptance:ro -v /var/tmp/rill-grpc-acceptance-tckj7kgu/certs:/certs:ro --entrypoint /acceptance 394ffa2d2ac8f5c9f45148f22bad3587429bceb19c93b88e8595f1e3f7892853 backend /certs/server.pem /certs/server.key /certs/server2.pem /certs/server2.key
+$ podman start 8ff1ac3bea37f7562f0f16206d988089911cc9688a1f60dd5ab833c977f162f6
+8ff1ac3bea37f7562f0f16206d988089911cc9688a1f60dd5ab833c977f162f6
+$ podman port 8ff1ac3bea37f7562f0f16206d988089911cc9688a1f60dd5ab833c977f162f6 50051/tcp
+$ podman port 8ff1ac3bea37f7562f0f16206d988089911cc9688a1f60dd5ab833c977f162f6 50052/tcp
+$ podman port 8ff1ac3bea37f7562f0f16206d988089911cc9688a1f60dd5ab833c977f162f6 50053/tcp
+$ podman port 8ff1ac3bea37f7562f0f16206d988089911cc9688a1f60dd5ab833c977f162f6 50054/tcp
+$ /root/github/Rill/target/debug/rill-grpc-acceptance client https://127.0.0.1:43925 /var/tmp/rill-grpc-acceptance-tckj7kgu/certs/ca.pem ok
+PASS https://127.0.0.1:43925 unary
+PASS https://127.0.0.1:43925 512KiB flow-control
+PASS https://127.0.0.1:43925 client-stream
+PASS https://127.0.0.1:43925 server-stream and success trailers
+PASS https://127.0.0.1:43925 grpc-status=15 and grpc-message after DATA
+PASS https://127.0.0.1:43925 bidi responses before request EOF
+PASS https://127.0.0.1:43925 trailers-only grpc-status=3 and grpc-message
+PASS https://127.0.0.1:43925 cancel reaches backend and same-TCP sibling RPC succeeds
+PASS https://127.0.0.1:43925 deadline cancels backend and sibling RPC succeeds
+$ /root/github/Rill/target/debug/rill-grpc-acceptance client https://127.0.0.1:43925 /var/tmp/rill-grpc-acceptance-tckj7kgu/certs/ca.pem backpressure http://127.0.0.1:39819
+STAGE upload pressure=7; sibling launched; resuming upload
+PASS upload blocked at 7/128 then resumed; sibling same TCP
+STAGE reader pressure=44; sibling launched; resuming reader
+PASS reader blocked producer at 44/128 then resumed; sibling same TCP
+PASS invalid candidate rejected
+PASS failed candidate retained old stream and backend
+$ /root/github/Rill/target/release/rill reload --socket /var/tmp/rill-grpc-acceptance-tckj7kgu/control-h2c/rill.sock
+id=3870475-1793993030492815193-0 generation=2
+PASS old bidi survives reload; new RPC backend=two
+$ /root/github/Rill/target/debug/rill-grpc-acceptance client https://127.0.0.1:58659 /var/tmp/rill-grpc-acceptance-tckj7kgu/certs/ca.pem ok
+PASS https://127.0.0.1:58659 unary
+PASS https://127.0.0.1:58659 512KiB flow-control
+PASS https://127.0.0.1:58659 client-stream
+PASS https://127.0.0.1:58659 server-stream and success trailers
+PASS https://127.0.0.1:58659 grpc-status=15 and grpc-message after DATA
+PASS https://127.0.0.1:58659 bidi responses before request EOF
+PASS https://127.0.0.1:58659 trailers-only grpc-status=3 and grpc-message
+PASS https://127.0.0.1:58659 cancel reaches backend and same-TCP sibling RPC succeeds
+PASS https://127.0.0.1:58659 deadline cancels backend and sibling RPC succeeds
+$ /root/github/Rill/target/debug/rill-grpc-acceptance client https://127.0.0.1:58659 /var/tmp/rill-grpc-acceptance-tckj7kgu/certs/ca.pem backpressure http://127.0.0.1:39819
+STAGE upload pressure=7; sibling launched; resuming upload
+PASS upload blocked at 7/128 then resumed; sibling same TCP
+STAGE reader pressure=34; sibling launched; resuming reader
+PASS reader blocked producer at 34/128 then resumed; sibling same TCP
+PASS invalid candidate rejected
+PASS failed candidate retained old stream and backend
+$ /root/github/Rill/target/release/rill reload --socket /var/tmp/rill-grpc-acceptance-tckj7kgu/control-tls-h2/rill.sock
+id=3870622-1793993036559630181-0 generation=2
+PASS old bidi survives reload; new RPC backend=two
+$ podman rm --force --ignore 8ff1ac3bea37f7562f0f16206d988089911cc9688a1f60dd5ab833c977f162f6
+8ff1ac3bea37f7562f0f16206d988089911cc9688a1f60dd5ab833c977f162f6
+$ podman network rm rill-grpc-acceptance-tckj7kgu
+rill-grpc-acceptance-tckj7kgu
+{
+  "image": "394ffa2d2ac8f5c9f45148f22bad3587429bceb19c93b88e8595f1e3f7892853",
+  "scenarios": [
+    "rill-h2c",
+    "rill-backpressure-h2c",
+    "rill-reload-h2c-old-stream",
+    "rill-tls-h2",
+    "rill-backpressure-tls-h2",
+    "rill-reload-tls-h2-old-stream"
+  ],
+  "cleanup": true,
+  "ports": {
+    "h2c": 39819,
+    "tls-h2": 34797,
+    "h2c-two": 42011,
+    "tls-h2-two": 40641
+  },
+  "passed": true,
+  "cleanup_errors": []
+}

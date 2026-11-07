@@ -48,10 +48,44 @@ impl PreparedRoute {
 
 #[derive(Debug)]
 pub struct HttpResources {
+    pub(crate) activated_dav: Vec<crate::webdav::registry::ActivatedStorage>,
+    dav_activation: Option<tokio::sync::OwnedSemaphorePermit>,
     pub(crate) _dynamic_trust: Option<Arc<crate::proxy::trust::store::TrustStore>>,
     pub policy: crate::http_policy::compile::PreparedPolicy,
     pub tls: PreparedTls,
     pub routes: Vec<Vec<PreparedRoute>>,
+}
+
+impl HttpResources {
+    pub(crate) fn activate(&mut self) -> Result<()> {
+        if !self.policy.dav_candidates.is_empty() {
+            self.dav_activation = Some(crate::webdav::registry::activation_permit().map_err(
+                |error| {
+                    crate::config::ConfigError::new(
+                        error.code,
+                        "webdav",
+                        "DAV activation is busy",
+                        self.policy.dav_candidates[0].origin(),
+                    )
+                },
+            )?);
+        }
+        for candidate in std::mem::take(&mut self.policy.dav_candidates) {
+            if let Some(handle) = self
+                .policy
+                .dav_handles
+                .iter()
+                .find(|handle| handle.identity == *candidate.identity())
+            {
+                self.policy.dav_handles.push(handle.clone());
+                continue;
+            }
+            let activated = candidate.activate()?;
+            self.policy.dav_handles.push(activated.handle().clone());
+            self.activated_dav.push(activated);
+        }
+        Ok(())
+    }
 }
 
 pub struct HttpPreparer;
@@ -111,6 +145,8 @@ impl HttpPreparer {
             })
             .collect::<Result<Vec<_>>>()?;
         Ok(HttpResources {
+            activated_dav: Vec::new(),
+            dav_activation: None,
             _dynamic_trust: if checked.policy.dynamic_count > 0 {
                 trust
             } else {
@@ -273,8 +309,26 @@ pub struct RuntimeState {
     shutdown: watch::Sender<bool>,
 }
 
+pub(crate) struct StartupActivation {
+    storages: Vec<crate::webdav::registry::ActivatedStorage>,
+    _permit: Option<tokio::sync::OwnedSemaphorePermit>,
+}
+impl StartupActivation {
+    pub(crate) fn commit(self) {
+        for storage in self.storages {
+            storage.commit();
+        }
+    }
+}
 impl RuntimeState {
-    pub fn new(mut prepared: PreparedSnapshot<HttpResources>) -> Result<Arc<Self>> {
+    pub fn new(prepared: PreparedSnapshot<HttpResources>) -> Result<Arc<Self>> {
+        let (state, activation) = Self::new_deferred(prepared)?;
+        activation.commit();
+        Ok(state)
+    }
+    pub(crate) fn new_deferred(
+        mut prepared: PreparedSnapshot<HttpResources>,
+    ) -> Result<(Arc<Self>, StartupActivation)> {
         let entry = prepared.configuration.entry.clone();
         let startup = StartupSettings::from_configuration(&prepared.configuration);
         let origin = Origin::file(&entry);
@@ -298,9 +352,12 @@ impl RuntimeState {
                 &origin,
             )
         })?;
+        prepared.resources.activate()?;
+        let activated = std::mem::take(&mut prepared.resources.activated_dav);
+        let activation = prepared.resources.dav_activation.take();
         let snapshot = RuntimeSnapshot::from_prepared(prepared, 1, &observability);
         let (shutdown, _) = watch::channel(false);
-        Ok(Arc::new(Self {
+        let state = Arc::new(Self {
             active: ArcSwap::from_pointee(snapshot),
             observability,
             entry,
@@ -309,7 +366,14 @@ impl RuntimeState {
             namespace,
             closed: Mutex::new(Gate::default()),
             shutdown,
-        }))
+        });
+        Ok((
+            state,
+            StartupActivation {
+                storages: activated,
+                _permit: activation,
+            },
+        ))
     }
 
     pub fn snapshot(&self) -> Arc<RuntimeSnapshot> {
@@ -458,8 +522,14 @@ impl RuntimeState {
             generation,
             &Origin::file(&self.entry),
         )?;
+        let activated = std::mem::take(&mut prepared.resources.activated_dav);
+        let activation = prepared.resources.dav_activation.take();
         let candidate = RuntimeSnapshot::from_prepared(prepared, generation, &self.observability);
         self.active.store(Arc::new(candidate));
+        for storage in activated {
+            storage.commit();
+        }
+        drop(activation);
         gate.active_plan = Some(plan);
         gate.failed_plan = None;
         let mut old = gate.watch.replace(watch);
@@ -507,8 +577,14 @@ impl RuntimeState {
             generation,
             &Origin::file(&self.entry),
         )?;
+        let activated = std::mem::take(&mut prepared.resources.activated_dav);
+        let activation = prepared.resources.dav_activation.take();
         let candidate = RuntimeSnapshot::from_prepared(prepared, generation, &self.observability);
         self.active.store(Arc::new(candidate));
+        for storage in activated {
+            storage.commit();
+        }
+        drop(activation);
         Ok(generation)
     }
 }

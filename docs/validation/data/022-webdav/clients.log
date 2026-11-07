@@ -1,0 +1,54 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.12s
+     Running tests/webdav.rs (target/debug/deps/webdav-e8c5e43f324968dd)
+
+running 1 test
+test webdav::clients::real_cadaver_and_rclone_use_loopback_only_with_temporary_credentials ... cadaver 0.26
+neon 0.34.2: Library build, IPv6, libxml 2.9.14, zlib 1.3.1, GNU TLS 3.8.9.
+readline 8.2
+dav:/> ls
+Listing collection `/': collection is empty.
+dav:/> mkcol collection
+Creating `collection': succeeded.
+dav:/> cd collection
+dav:/collection/> put /tmp/rill-003-3868913-0/input.txt note.txt
+Uploading /tmp/rill-003-3868913-0/input.txt to `/collection/note.txt': [.. succeeded.
+dav:/collection/> propset note.txt fixture retained
+Setting property on `note.txt': succeeded.
+dav:/collection/> propget note.txt fixture
+Fetching properties for `note.txt':
+Value of fixture is: retained
+dav:/collection/> lock note.txt
+Locking `note.txt': succeeded.
+dav:/collection/> unlock note.txt
+Unlocking `note.txt': succeeded.
+dav:/collection/> copy note.txt copied.txt
+Copying `/collection/note.txt' to `/collection/copied.txt': succeeded.
+dav:/collection/> move copied.txt moved.txt
+Moving `/collection/copied.txt' to `/collection/moved.txt': succeeded.
+dav:/collection/> get moved.txt /tmp/rill-003-3868913-0/cadaver.txt
+Downloading `moved.txt' to `/tmp/rill-003-3868913-0/cadaver.txt': [.. succeeded.
+dav:/collection/> delete note.txt
+Deleting `note.txt': succeeded.
+dav:/collection/> delete moved.txt
+Deleting `moved.txt': succeeded.
+dav:/collection/> cd ..
+dav:/> rmcol collection
+Deleting collection `collection': succeeded.
+dav:/> quit
+Connection to `localhost' closed.
+
+rclone v1.60.1-DEV
+rclone mkdir: ok
+rclone copyto: ok
+rclone lsl: ok
+rclone copyto: ok
+rclone copyto: ok
+rclone moveto: ok
+rclone deletefile: ok
+mbx[progress]: 15s elapsed; 0 hits, 0 misses, 0 bypassed, 0 not looked up; ~0s compiler work saved
+rclone deletefile: ok
+rclone rmdir: ok
+cadaver/rclone: loopback methods, properties, locks and byte comparison passed
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 15.82s

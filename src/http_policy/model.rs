@@ -52,6 +52,7 @@ pub enum Action {
         candidates: Vec<super::path::PathTemplate>,
     },
     DynamicProxy(DynamicProxy),
+    WebDav(crate::webdav::model::WebDav),
     Continue,
     Reenter,
     Route {

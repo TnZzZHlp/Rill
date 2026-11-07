@@ -173,6 +173,74 @@ async fn start_dynamic(
     Ok(false)
 }
 
+async fn start_dav(
+    session: &mut Session,
+    ctx: &mut Context,
+    site: usize,
+    index: usize,
+    secure: bool,
+    authority: &str,
+) -> Result<bool> {
+    if let Some(status) = ctx.error_status {
+        return reject(session, ctx, status).await;
+    }
+    let Some(state) = ctx.policy.as_ref() else {
+        return reject(session, ctx, 403).await;
+    };
+    let mut deadline = crate::webdav::request::deadline();
+    match ctx.budget.as_ref().map(|budget| *budget.borrow()) {
+        Some(Phase::Ingress(existing)) if Instant::now() >= existing => {
+            return reject(session, ctx, 408).await;
+        }
+        Some(Phase::Headers(existing)) => deadline = deadline.min(existing),
+        _ => (),
+    }
+    if let Some(budget) = &ctx.budget {
+        budget.send_replace(Phase::Headers(deadline));
+    }
+    session.set_read_timeout(Some(Duration::from_secs(60)));
+    session.set_write_timeout(Some(Duration::from_secs(60)));
+    let prepared = match crate::webdav::request::prepare(
+        session,
+        crate::webdav::request::RequestInput {
+            snapshot: ctx.snapshot.clone(),
+            site,
+            index,
+            state,
+            scheme: ctx
+                .forwarding
+                .as_ref()
+                .map_or(if secure { "https" } else { "http" }, |forwarding| {
+                    forwarding.proto
+                }),
+            authority,
+            deadline,
+        },
+    )
+    .await
+    {
+        Ok(prepared) => prepared,
+        Err(error) => {
+            ctx.snapshot
+                .logger
+                .event(Level::Warn, "dav_error", &[("code", error.code)]);
+            return reject(session, ctx, error.status).await;
+        }
+    };
+    let state = ctx.policy.take();
+    let result = crate::webdav::request::send(
+        session,
+        prepared,
+        ctx.snapshot.clone(),
+        state.as_ref(),
+        |_| ctx.begin_response(),
+    )
+    .await;
+    ctx.policy = state;
+    result?;
+    Ok(true)
+}
+
 async fn authentication_failed(
     session: &mut Session,
     ctx: &mut Context,
@@ -464,6 +532,9 @@ impl ProxyHttp for Handler {
                 names.clone(),
             );
             state.set_auth_headers(snapshot.policy.auth_headers[site].clone());
+            if snapshot.policy.dav_sites[site] && state.set_entry_headers(&headers).is_err() {
+                return reject(session, ctx, 503).await;
+            }
             let initial_policy_path = policy_path;
             let (deadline, timeout_status) = ctx.budget.as_ref().map_or(
                 (Instant::now() + Duration::from_secs(60), 408),
@@ -515,6 +586,9 @@ impl ProxyHttp for Handler {
                 crate::http_policy::execute::Outcome::Route(route) => Some((site, route)),
                 crate::http_policy::execute::Outcome::Dynamic(index) => {
                     return start_dynamic(session, ctx, site, index, &names).await;
+                }
+                crate::http_policy::execute::Outcome::WebDav(index) => {
+                    return start_dav(session, ctx, site, index, secure, &authority.original).await;
                 }
 
                 crate::http_policy::execute::Outcome::PathFailure { code, status, .. } => {
@@ -684,6 +758,9 @@ impl ProxyHttp for Handler {
                         }
                         crate::http_policy::execute::Outcome::Dynamic(index) => {
                             return start_dynamic(session, ctx, site, index, &names).await;
+                        }
+                        crate::http_policy::execute::Outcome::WebDav(_) => {
+                            return reject(session, ctx, status).await;
                         }
                         crate::http_policy::execute::Outcome::Route(next) => {
                             route = next;

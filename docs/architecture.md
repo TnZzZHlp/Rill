@@ -15,6 +15,7 @@
 | src/tls/ | PEM 检查、证书集合、SNI 回调及握手身份 | 独立发布第二个活动配置 |
 | src/proxy/ | Pingora 适配、上游策略、头部和流式处理 | 自行实现 HTTP/TLS 栈 |
 | src/static_files/ | 根目录约束打开、表示选择、条件/范围响应与可选缓存 | 重新解析配置 |
+| src/webdav/ | DAV 方法、FD namespace、临时写事务、持久属性、独占锁及进程 registry | 独立 HTTP 栈、第二个配置发布点 |
 | src/control/ | Unix Socket、对端授权、帧限制、请求结果 | 绕过 runtime 验证 |
 | src/observability/ | 结构化运行事件与访问日志 | 改变代理业务结果 |
 
@@ -141,6 +142,22 @@ watch 使用独立于快照的 inotify FD 生命周期，最多活动和候选�
 原框架接收/HTTP 解析/flow-control、framing、HPACK、TLS 和内核缓冲不在此预算内。proxy 在同步 push 内预留并复制当前源块、立即 drop 框架 Bytes，之后才提交，不跨 await 持未知底层。respond 直接从候选不可变文本复制一次；变换文件读取先持预算 Buffer；listing/cache 从既有 005 有界 producer 交接时额外按源实际容量持券，源/input 重叠同时计费。codec 内部上下文与工作区也不计字节额度（固定 gzip 32 KiB/zstd 1 MiB window，decoder max log20），因此不是 HTTP 整体或进程 RSS 硬限。
 
 同版 Pingora proxy 增加默认关闭的异步 push/next drain hook，不改 HttpTask 或 UpgradedBody；一次提交一个输入，逐输出 await 写入再继续拉取，默认同步过滤/延时路径不变。下游模块未启压缩，不新增深拷贝。h2 0.4.20 `codec/framed_write.rs:240–258` 会把小 DATA/前缀复制到既有 encoder.buf（16 KiB 默认初始容量，chain threshold 256/1024），属于上述既有 framing 存储；不将其增长或 HPACK 宣称为 007 硬限。其 `Next::Data`/`last_data_frame` 仍持原 owner 时，Rill allocation 继续计费。完整证明范围与实测见 [021](validation/021-caddy-body-transforms.md)。
+
+### 可写 DAV 的所有权边界（能力补齐 008）
+
+请求级真实目录项 Proof、单请求共享遍历 ledger、持 FD 的退休 lease 及跨重启私有 inode 标记已通过独立复审、非 root 完整门禁和隔离验收。普通 FS 回归不冒称实际 casefold 专用环境或每个崩溃窗口均已亲测，见 [022](validation/022-caddy-webdav.md)。
+
+`webdav` 持有方法/条件/XML/属性/锁业务，`config` 只解析冻结终止 DSL，`http_policy` 复用鉴权 dominance 与同请求成功动作证明，`proxy` 只桥接 Pingora Session 和现有请求预算；GET/HEAD 继续使用既有静态表示/007 变换。请求固定一个快照，源 URI/Destination 的纯解释不能重新读取活动代次、重验密码、重放外部副作用或猜路径逆映射。源 URI 单次解码后以规范 unreserved 拼写复核授权域，避免百分号/重复斜线切换弱 auth；随后所有源/目标/tagged If、GET handoff、PUT parent/commit 统一经显式 NamespaceSession。session 持 StorageHandle 与 owned namespace guard、共享 Proof，不使用 ambient/thread-local 或全局路径缓存。每组件根据受约束父 FD 的真实 dentry bytes 精确匹配并复核 dev/ino/type/mount，以 NO_XDEV 拒绝内部目录及普通文件 bind mount 的跨挂载别名（不改普通 static），无精确项的折叠别名拒绝。rustix RawDir 用固定 8 KiB 栈缓冲与 cookie 增量枚举，正证可提前返回，负证必须读完；children/walk 消费相同缓存，所有实际非 dot 项和新绑定共用 4096 ledger（根占一项），私有扫描不免费，source+overwrite 旧 target 两树预检后才删目标。内部变更精确更新父缓存，释放保护后不复用。目标/子资源解释扣同请求剩余 1024 步，不按每资源重置；只有首规则已证明闭合的普通无条件/prefix 域、同 prepared handle 和明确 strip-prefix 才复用证明。复杂链可在 4096 项之前耗尽步骤，不能为保遍历成功放大工作预算。
+
+进程 registry 以 storage-id 与 prepared root dev/ino 持锁和 namespace gate；相同身份跨代复用，移除后身份历史仍受预算约束保存，换 inode 重加要求重启。不同 ID 的同根/父子物理根（含历史）拒绝；同设备不同 mount 无法证明分离时也拒绝。DAV 路径组件拒绝 symlink、普通文件多硬链接，不改变一般静态安全 symlink 政策。namespace 的 Tokio owned gate 由实际 blocking 任务持有，覆盖父 FD 解析/复验、上传及内部修改；逻辑 token/条件在同临界区核验，不拿全局 std Mutex 跨网络等待。
+
+check/prepare 不写 registry 或属性目录。公开低层 prepare(identity, Arc<File>)/activate(self) 保留冻结签名，配置 adapter 保真实来源和信用；Root 的 from_prepared_fd 复用原安全探测，不经 proc 路径授权，candidate 绑定原 registry 内层 Arc owner。完整候选和 watch 等资源准备完后才 activate；进程激活许可从 activation 保留到最终 gate、唯一 store、不可失败 commit。新目录/marker 由候选 RAII 拥有，失败只按身份清理自己未发布项，旧属性/锁/FD 不清空。公开 RuntimeState::new 保持成功即用语义；server 共用 new_deferred 的内部构建，startup guard 跨运行时/watch/signal/listener/resolver/control 准备，在任何处理 worker spawn 前才不可失败 commit，早期失败撤回本次新目录，保既有属性。初始内部 ArcSwap 不等于对外服务已发布。`.rill-dav` 与 `.rill-dav-put-` 是用户明确批准的内部保留名；目录 0700/文件 0600 不是同 UID 静态读屏障。旧静态 Root 在交付 FD/缓存查询前也检查词法保留名、已验证 procfd 的最终路径保留名和私有 dev/ino；procfd 路径仅做 deny，不授权。用户合并表单 d4fd7a63 批准 rustix 1.1.4（default-features=false，fs/std）及持久 inode tag/O_TMPFILE 方案。内部 owner/属性/temp 在同 parent 匿名创建，link 前已预留清理 parent FD/name/identity/信用，由 NamedFile RAII 持有至成功移交；新私有目录在 fallible 登记前也有清理 guard，quota/FD clone 失败不留本候选孤项。精确 inode 清理使用 fstatat 而不再申请新 FD，不声称能消除外部 unlink 失败。固定 user.rill.webdav.private 标记与 sync 成功后才用已验证 procfd 发布保留名并复核身份；无能力则 activate fail closed，不做先命名再打标 fallback。普通 static 文件安全重开后以固定小栈 buffer fgetxattr，标记存在或 ERANGE 拒绝；NODATA/明确 FS NOTSUP 为未标，其余错误拒绝。目录通过 O_PATH 逐祖先查固定 .rill-dav 子目录身份屏障，不枚举普通目录、不无理由读开 execute-only 目录。旧未标记格式拒绝接管。活动私有记录退休时持真实 FD/64 MiB 券与未释放临时磁盘额度，直到 nlink0 的有界回收，不能只保裸 dev/ino；Drop 仅原子退引用，不取 visibility 锁或在 Tokio 做阻塞 IO。退休标记不清，所以即使重启仅 static 配置，普通名硬链接仍拒绝。
+
+PUT 逐块最多 64 KiB，异步 Upload 在读取和短 blocking 写任务间交接唯一所有权，网络等待不占阻塞线程；真实 IO/异步调度的清理任务持 FD、namespace、16 槽之一及磁盘额度至结束，Drop 不在 Tokio 线程同步 unlink；临时空间分配前计量，每文件 256 MiB/进程 1 GiB、300 秒。XML 1 MiB/深 32、属性 64 项/64 KiB、遍历 4096 项/深 16、锁 1024/storage 与 4096/process/3600 秒。PROPFIND Selection 保原 XML owner 并借用 Name，不克隆扩展名称；输出转义逐段写入带券 64 KiB 块，live/属性中间 owner 预留信用，全部响应构造成功后才发送 207，额度不足头前 503，移交输出块不再复制。历史、私有 inode、锁 owner、XML/遍历/存活输出信用复用既有 64 MiB policy pool，过期、删除和真正释放输出时回收；这是 Rill 的有界资源信用，不是 RSS 或文件系统总容量承诺。
+
+完写/sync、父身份及条件重核均在最终 commit 准入 CAS 前；CAS **不等于** rename 已经在文件系统线性化。取消先赢则不 rename、精确清 temp。有效期限内 commit 准入先赢后执行无 await/无排队的不可抢占 rename、父 sync、清私有标记/file sync，可能跨过断开/期限，客户端结果未知；不阻塞 Tokio Drop 等门闩、不自动重试。rename 失败清 temp；成功后父 sync，再清私有标记/file sync，清标记或 sync 失败/崩溃可留下已提交但不可读的新 target，只记录结果未知，不删除 target 伪称回滚、不自动重试。管理员核实完整性后显式移除固定 xattr/fsync 恢复；无自动恢复 CLI。属性单资源原子替换具有相同持久化未知边界；多文件 COPY/MOVE/DELETE 及文件+属性没有整体事务承诺，207 的失败逐项保留。外部 UID/root/管理员/mount 仍属受信控制面。
+
+独立复审、真实客户端/磁盘错误、非 root 全套、历史失败更正与已验证边界见 [022](validation/022-caddy-webdav.md)，008 已通过实际验收；不宣称全部文件系统或崩溃窗口均已实测。
 
 ## 7. 本地控制协议
 

@@ -76,7 +76,8 @@ pub(super) fn sequence<'a>(
             | Action::Rewrite(_)
             | Action::StripPrefix(_)
             | Action::TryFiles { .. } => false,
-            Action::DynamicProxy(_)
+            Action::WebDav(_)
+            | Action::DynamicProxy(_)
             | Action::Continue
             | Action::Reenter
             | Action::Route { .. }
@@ -303,7 +304,7 @@ fn action(
         "basic-auth" | "static-token" => super::chain_auth::parse(node, origin),
         "dynamic-proxy" => super::chain_dynamic::parse(node, origin),
         "body-replace" | "encode" => super::chain_body::parse(node, origin),
-        "webdav" => Err(invalid("CONFIG_UNSUPPORTED", "action", origin)),
+        "webdav" => super::chain_webdav::parse(node, origin),
         _ => Err(unknown(node, origin)),
     }
 }

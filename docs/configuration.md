@@ -55,6 +55,33 @@ MIME 必须显式枚举，不接受通配；encode 至少启用一个编码器�
 
 共享存储限每请求 1 MiB/进程 64 MiB、64 个真实变换任务；含全部 pending、替换、中间、交接及输出 clone 的真实容量；pending 实际可用量须扣同时存活工作缓冲，不保证每条规则或 pending 独享 1 MiB。无界 stage 共用一次收费连续 arena，避免逐块全量重分配；工作信用也在同一额度内（普通输入 64 KiB、decoded/stage 各 16 KiB、最低输出 3×16 KiB），源超过输入信用明确失败。更多存活输出 owner 和静态源额外持留继续扣真实额度，不能按写返回提前释放。此口径于 007 复审后获用户确认；不是接受此前约半 MiB 的扩容浪费。不含 codec 上下文与既有 HTTP/TLS IO 存储，不是 RSS 硬限。解码、累计替换输出最多 64 MiB，解码膨胀最多 100 倍加 64 KiB；活动执行与等待各限两秒，阻塞下游不计执行时间。无界正则可能直到 EOF 才输出，过大正文会失败，不承诺所有大正文可变换。头前资源失败 503；头后失败中止连接/对应 H2 流并记录 error，不发第二响应或成功 EOF。旧 error-page DSL 不与 chain 混用；错误响应可通过已有 handle-errors 的 respond/serve-files 变换。
 
+## Caddy 受约束 WebDAV（能力补齐 008）
+
+方法、请求级目录项 Proof、退休别名与跨重启私有标记机制已通过独立复审、非 root 全套及真实客户端/隔离 ENOSPC 验收。实际命令、额度与恢复边界见 [022](validation/022-caddy-webdav.md)。
+
+仅 chain 终止动作，DSL 固定为：
+
+```kdl
+static-token header="X-Dav-Token" file="/secure/dav-token"
+webdav root="/srv/dav" storage-id="documents"
+```
+
+`root` 和 `storage-id` 均必需且为非空字符串；root 相对声明文件解析。无其他参数、子节点或 anonymous 开关；Profile/Snippet 不扩展。每条可能执行路径必须先完成 Basic 或静态令牌鉴权，不是同站点有任意 auth 就够；branch、continue、reenter、错误链也不能绕过。
+
+支持 OPTIONS、PROPFIND、PROPPATCH、MKCOL、GET、HEAD、PUT、DELETE、COPY、MOVE、LOCK、UNLOCK 的 Class 1/2 常用操作，独占写锁、只读活属性及持久死属性；不提供共享锁、ACL 或版本控制。GET/HEAD 保留既有 Range/条件响应和 007 变换规则，写响应不做正文变换。集合 GET/HEAD 返回 405，浏览集合使用 PROPFIND。Destination 必须同 scheme/authority/存储，拒绝 userinfo、fragment/query；源规范 URI、Destination 和 tagged If 均在读取目标 metadata 前，按同快照实际方法/入口头/已完成鉴权动作纯证明规范外部 URI 的路径映射，不向目的站点重发请求或猜 rewrite 逆映射，不能证明则拒绝。新增目标/子资源解释和主/错误链共享剩余 1024 步；只有可证明闭合的普通无条件/prefix+strip-prefix 域才复用证明，复杂链可能先耗尽步骤而达不到 4096 遍历项上限。MOVE/DELETE 不可作用于整个 root，MOVE 不跨文件系统 fallback-copy。
+
+用户已批准内部保留名 `.rill-dav`（属性目录 0700，内部文件 0600）和 `.rill-dav-put-` 临时名前缀；任何 DAV/静态入口、列表、缓存及别名都不能读取内部内容。既有同名用户目录拒绝启用，不接管。DAV 拒绝路径组件 symlink 和普通文件 nlink>1；不同 storage-id 不得使用同根或父子物理根（含移除后的历史身份），无法证明分离的 mount 别名也拒绝。不改变一般静态根内安全 symlink 规则。管理员须提供服务 UID 可读写、可搜索且有足够空间的 root，允许创建、rename、unlink 和 user xattr；权限拒绝不会绕过。systemd 等只读沙箱须显式开放 DAV root 的写权限，例如 `ReadWritePaths=/srv/dav`；容器须使用可写挂载，不必将服务改为 root。
+
+同 storage-id/prepared root dev/ino 跨 Reload 保锁；移除后更换 inode 重加仍须重启，不能借改路径迁移锁域。重启失内存锁，但属性持久。check 只读准备/验证，不创建属性目录或写文件。所有 fallible 激活在统一单快照 store 前，失败不修改旧资源；store 后 commit 不可失败。
+
+目录项 Proof 绑定当前存储 FD 和 namespace guard：每个已存在组件必须在受约束父 FD 的真实目录项中有完全相同字节拼写，并复核 dev/ino/type/mount；DAV 每组件 NO_XDEV 拒绝内部目录/file bind mount 等跨挂载别名（不改变普通 static 挂载语义）；折叠别名没有精确项则拒绝，不当作缺失。共享增量缓存只在该请求保护内复用，内部变更精确更新，不能跨释放后盲复用。限额：XML 1 MiB/元素深度 32；属性每资源 64 项/规范 XML 合计 64 KiB；共享遍历/证明 ledger 4096 项（含根信用及实际私有目录项扫描）、深度 16；锁每存储 1024、进程 4096、最长 3600 秒；临时 PUT 每文件 256 MiB、进程 1 GiB、16 个、300 秒。分配/写入前 checked 计量，元数据和存活输出信用复用进程 64 MiB policy pool，额度不足明确失败。不是文件系统总容量或 RSS 保证。PROPFIND 选择持原 XML owner、名称借用不克隆；转义展开与完整输出按存活容量计费，在发送 207 前构造完成，超共享额度头前 503，不另加 namespace 长度或请求属性名数量限制。
+
+用户合并表单 d4fd7a63 明确批准 rustix 1.1.4 安全 FD/xattr API 及持久私有标记/匿名创建方案。所有内部可读文件（owner/属性/temp）必须同 parent FD 下 O_TMPFILE 匿名创建，固定 `user.rill.webdav.private` 标记写入/sync 后才安全 link 到保留名；无 xattr/O_TMPFILE/可靠发布能力时 DAV activate 拒绝，没有先命名再打标 fallback。check 不写探测文件，实际能力只在可回滚 activate 验证。普通 static 在安全重开普通文件后、缓存/正文交付前查标记，目录通过 O_PATH 父链与固定 `.rill-dav` 身份拒绝；不增加普通 static 目录枚举限制或无理由要求 execute-only 目录 O_RDONLY。已有未标记检查点目录不迁移接管，`rill-dav-v2` 格式不符拒绝，管理员需先隔离/清理旧数据，不能自动识别任意历史硬链接。
+
+PUT 同 parent FD 的随机临时文件完写/sync、父身份及 token/条件复核后原子 rename；取消先于最终 commit 准入则清 temp、保旧目标。准入后的不可抢占 rename/父 sync、清私有标记/file sync 可能跨过超时或断开；rename 后清标记或 sync 失败/崩溃时新 target 可能已提交但保持不可读，结果未知，不假称回滚、不自动重试。管理员须先验证目标完整性，再显式移除该固定 xattr 并 fsync 文件恢复可读性；不新增自动恢复 CLI，也不清退休私有 inode 的标记。PROPPATCH 单资源属性原子替换；替换后 sync 失败也可能已完成。多资源 DELETE/COPY/MOVE、文件与属性不承诺整体事务，207 要逐项检查，不能当作全部成功。敏感 token/XML/凭据不写日志。外部服务 UID/root/管理员及 mount 变更仍是受信控制面。
+
+实现、独立复审、真实客户端与磁盘错误及最终门禁证据见 [022](validation/022-caddy-webdav.md)。
+
 ## 2. CLI
 
 最终包名与可执行文件名为小写 `rill`，替代原文暂定的 `proxy-server`。CLI 使用 Clap 派生解析；run、check 和 reload 均已提供。

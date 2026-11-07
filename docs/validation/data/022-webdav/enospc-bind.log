@@ -1,0 +1,15 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.12s
+     Running tests/webdav.rs (target/debug/deps/webdav-e8c5e43f324968dd)
+
+running 1 test
+test webdav::disk::isolated_tmpfs_enospc_returns_507_preserves_target_and_cleans_temporary ...
+running 1 test
+test webdav::disk::isolated_tmpfs_enospc_returns_507_preserves_target_and_cleans_temporary ... isolated tmpfs size=1048576: status=507 old_target_preserved=true temp_cleanup=true available_before=1040384 available_after=1040384
+isolated bind aliases: directory_same_identity=true file_same_identity=true file_nlink=1 DAV_GET_PUT=409 original_preserved=true
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.29s
+
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.30s

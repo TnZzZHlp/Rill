@@ -1,0 +1,9 @@
+mbx[savings]: 1h 21m of compilation avoided across 2467 builds. imagine the fan noise. now stop.
+mbx[savings]: worktrees come and go. their 115.0 GiB logical now goes with them.
+mbx[savings]: 37200 cache hits and counting. rustc thinks it has been busy.
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+mbx[savings]: 115.0 GiB logical of target/ was waiting for checkouts that are never coming back. it has stopped waiting.

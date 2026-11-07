@@ -61,10 +61,12 @@ impl ReloadCoordinator {
         let task = tokio::task::spawn_blocking(move || {
             let outcome = (|| {
                 if !watching {
-                    return build(&entry, &HttpPreparer).map(PreparedReload::Plain);
+                    let mut prepared = build(&entry, &HttpPreparer)?;
+                    prepared.resources.activate()?;
+                    return Ok(PreparedReload::Plain(prepared));
                 }
                 match build_tracked(&entry, &HttpPreparer) {
-                    Ok(tracked) => {
+                    Ok(mut tracked) => {
                         if !tracked.prepared.configuration.server.watch {
                             return Err(ConfigError::new(
                                 "RESTART_REQUIRED",
@@ -74,7 +76,10 @@ impl ReloadCoordinator {
                             ));
                         }
                         match WatchResources::prepare(&tracked.dependencies) {
-                            Ok(watch) => Ok(PreparedReload::Tracked(tracked, watch)),
+                            Ok(watch) => {
+                                tracked.prepared.resources.activate()?;
+                                Ok(PreparedReload::Tracked(tracked, watch))
+                            }
                             Err(error) => Ok(PreparedReload::Failed(
                                 error,
                                 tracked.dependencies,

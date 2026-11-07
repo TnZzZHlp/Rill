@@ -5,6 +5,7 @@ mod chain_body;
 mod chain_dynamic;
 mod chain_headers;
 mod chain_paths;
+mod chain_webdav;
 mod observability;
 mod server;
 mod site;
