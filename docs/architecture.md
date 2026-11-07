@@ -90,7 +90,7 @@ watch 使用独立于快照的 inotify FD 生命周期，最多活动和候选�
 ### TLS 握手
 
 1. 004 的 Resolver 通过 Pingora `handshake_with_callback` 安装 `TlsAccept`（001 验证的 `TlsSettings::with_callbacks` 使用同一扩展点），证书回调在开始选证书时读取一次活动快照。
-2. 从该快照按规范化 SNI 查找并安装证书、链和私钥。完整准备已验证材料，回调不做文件读取。
+2. 从该快照按规范化 SNI 查找并安装证书、链和私钥。`config/parser/site_domains.rs` 解析显式域名证书映射，旧式单证书站点与映射站点统一由 TLS 准备阶段验证覆盖并生成域名绑定；握手先确认匹配站点启用了 TLS，再查询精确/一级通配绑定，不扫描其他证书或为纯 HTTP 精确站点回退通配证书。一个映射站点的所有域名共享路由和日志，绑定随完整快照一次发布。完整准备已验证材料，回调不做文件读取。
 3. 使用 OpenSSL 安全的 `Ssl::new_ex_index` / `set_ex_data` 保存选中的 Arc。不能在握手完成时重新 load 当前配置推断证书代次。
 4. `handshake_complete_callback` 把同一选择传入 `SslDigest.extension`，HTTP 层可以查询握手身份。缺少身份或安装失败则拒绝服务，不能退到其他站点。
 5. 初版关闭 session tickets、会话缓存和重新协商，保证新握手执行选证书回调。恢复 resumption 需要独立验证证书更新约束。

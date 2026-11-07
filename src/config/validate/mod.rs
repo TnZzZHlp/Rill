@@ -238,14 +238,24 @@ pub fn validate(normalized: NormalizedConfig) -> Result<ValidatedConfig> {
             }
             site_domains.push(name);
         }
-        if let Some(reference) = &site.tls {
-            if !normalized.certificates.contains_key(&reference.value) {
-                return Err(ConfigError::new(
-                    "TLS_INVALID",
-                    "tls",
-                    "certificate reference does not exist",
-                    &reference.origin,
-                ));
+        if let Some(tls) = &site.tls {
+            for domain in &site_domains {
+                let reference = tls.reference(&domain.value).ok_or_else(|| {
+                    ConfigError::new(
+                        "TLS_INVALID",
+                        "domains",
+                        "domain has no certificate binding",
+                        &domain.origin,
+                    )
+                })?;
+                if !normalized.certificates.contains_key(&reference.value) {
+                    return Err(ConfigError::new(
+                        "TLS_INVALID",
+                        "tls",
+                        "certificate reference does not exist",
+                        &reference.origin,
+                    ));
+                }
             }
         } else if server.redirect_https {
             return Err(ConfigError::new(

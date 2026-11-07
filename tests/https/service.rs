@@ -13,6 +13,69 @@ use pingora::upstreams::peer::HttpPeer;
 use super::support::*;
 
 #[test]
+fn domain_mapping_selects_explicit_certificates_and_preserves_site_isolation() -> TestResult {
+    let directory = Directory::new()?;
+    let first = Certificate::issue(&["a.test", "one.example.test"], None, false, (-60, 3600))?;
+    let second = Certificate::issue(&["b.test", "*.example.test"], None, false, (-60, 3600))?;
+    first.save(&directory.0, "default", &[])?;
+    second.save(&directory.0, "second", &[])?;
+    let address = vacant()?;
+    let mut config = configuration(
+        &directory.0,
+        None,
+        address,
+        "127.0.0.1:3000".parse()?,
+        r#"site {
+            domains {
+                "A.TEST." { tls "default"; }
+                "b.test" { tls "second"; }
+                "one.example.test" { tls "default"; }
+                "*.example.test" { tls "second"; }
+            }
+            site-label "shared"
+            chain { rule { respond 200 text="shared"; }; }
+        }
+        site "plain.example.test" { chain { rule { respond 200 text="plain"; }; } }"#,
+    );
+    config.push_str(&format!(
+        "tls \"second\" {{ cert \"{}\"; key \"{}\"; }}\n",
+        directory.0.join("second.pem").display(),
+        directory.0.join("second.key").display()
+    ));
+    let mut proxy = Proxy::start(address, &config)?;
+    for (name, expected) in [
+        ("a.test", &first),
+        ("b.test", &second),
+        ("one.example.test", &first),
+        ("two.example.test", &second),
+    ] {
+        let mut stream = tls_connect(address, name, &[&first, &second], true)?;
+        assert_eq!(
+            stream
+                .ssl()
+                .peer_certificate()
+                .ok_or("missing certificate")?
+                .to_der()?,
+            expected.cert.to_der()?
+        );
+        assert_eq!(tls_request(&mut stream, name, "/")?.2, b"shared");
+    }
+    for name in [
+        "unknown.test",
+        "deep.two.example.test",
+        "plain.example.test",
+    ] {
+        assert!(tls_connect(address, name, &[&first, &second], true).is_err());
+    }
+    assert!(tls_connect(address, "a.test", &[&first, &second], false).is_err());
+    let mut stream = tls_connect(address, "a.test", &[&first], true)?;
+    assert_eq!(tls_request(&mut stream, "b.test", "/")?.0, 421);
+    proxy.signal()?;
+    assert_eq!(proxy.finish()?.0, 0);
+    Ok(())
+}
+
+#[test]
 fn sni_selects_site_certificates_and_never_falls_back_for_unknown_names() -> TestResult {
     let directory = Directory::new()?;
     let first = Certificate::issue(&["app.test", "alias.test"], None, false, (-60, 3600))?;

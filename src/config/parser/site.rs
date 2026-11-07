@@ -7,7 +7,7 @@ use super::values::{
     argument, at, boolean, once, parameter, path, references, shape, string, unknown,
 };
 use crate::config::error::{ConfigError, Result};
-use crate::config::model::{Parameters, RawAction, RawRoute, RawSite, RouteItem};
+use crate::config::model::{Parameters, RawAction, RawRoute, RawSite, RouteItem, SiteTls};
 use crate::config::source::{Located, Origin};
 
 struct Scope {
@@ -20,6 +20,7 @@ struct Scope {
     browse: Option<Located<bool>>,
     error_pages: BTreeMap<u16, Located<PathBuf>>,
     tls: Option<Located<String>>,
+    domain_bindings: Option<super::site_domains::DomainBindings>,
     items: Vec<RouteItem>,
     chain: Option<crate::http_policy::model::Chain>,
     site_label: Option<Located<String>>,
@@ -42,6 +43,7 @@ fn scope(
         browse: None,
         error_pages: BTreeMap::new(),
         tls: None,
+        domain_bindings: None,
         items: Vec::new(),
         chain: None,
         site_label: None,
@@ -55,6 +57,19 @@ fn scope(
     {
         let origin = at(child, origin);
         match child.name().value() {
+            "domains" if site => {
+                if let Some(first) = &result.domain_bindings {
+                    return Err(ConfigError::new(
+                        "DUPLICATE",
+                        "domains",
+                        "duplicate domain mapping",
+                        &origin,
+                    )
+                    .related(&first.origin));
+                }
+                result.domain_bindings = Some(super::site_domains::parse(child, &origin)?);
+                continue;
+            }
             "site-label" if site => {
                 if result.site_label.is_some() {
                     return Err(ConfigError::new(
@@ -209,7 +224,7 @@ pub fn parse(
     origin: &Origin,
     snippets: &mut super::chain_snippets::Snippets<'_>,
 ) -> Result<RawSite> {
-    shape(node, origin, "site", 1..=128, true)?;
+    shape(node, origin, "site", 0..=128, true)?;
     let domains = (0..node.entries().len())
         .map(|index| argument(node, index, origin, "site"))
         .collect::<Result<Vec<_>>>()?;
@@ -236,6 +251,36 @@ pub fn parse(
         .related(&legacy));
     }
     let mut scope = scope(node, origin, true, snippets)?;
+    let (domains, tls) = if let Some(bindings) = scope.domain_bindings.take() {
+        if !domains.is_empty() || scope.tls.is_some() {
+            return Err(ConfigError::new(
+                "POLICY_MODE_CONFLICT",
+                "domains",
+                "domain mapping cannot be mixed with site arguments or site-level tls",
+                &bindings.origin,
+            )
+            .related(
+                scope
+                    .tls
+                    .as_ref()
+                    .map_or(origin, |reference| &reference.origin),
+            ));
+        }
+        (
+            bindings.domains,
+            Some(SiteTls::Domains(bindings.certificates)),
+        )
+    } else {
+        if domains.is_empty() {
+            return Err(ConfigError::new(
+                "CONFIG_TYPE",
+                "site",
+                "site requires domain arguments or a domain mapping",
+                origin,
+            ));
+        }
+        (domains, scope.tls.take().map(SiteTls::Certificate))
+    };
     if scope.chain.is_some() && (scope.action.is_some() || !scope.items.is_empty()) {
         return Err(ConfigError::new(
             "POLICY_MODE_CONFLICT",
@@ -291,7 +336,7 @@ pub fn parse(
         site_label: scope.site_label,
         access_log: scope.access_log,
         chain: scope.chain,
-        tls: scope.tls,
+        tls,
         uses: scope.uses,
         parameters: scope.parameters,
         routes: Vec::new(),

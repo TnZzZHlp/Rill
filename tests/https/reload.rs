@@ -48,6 +48,100 @@ fn keepalive_request(stream: &mut SslStream<TcpStream>) -> TestResult<(u16, Stri
 }
 
 #[test]
+fn domain_mapping_reload_rejects_bad_bindings_and_updates_new_handshakes() -> TestResult {
+    let directory = Directory::new()?;
+    let control = directory.0.join("control");
+    fs::create_dir(&control)?;
+    fs::set_permissions(&control, fs::Permissions::from_mode(0o700))?;
+    let socket = control.join("rill.sock");
+    let site = directory.0.join("site.kdl");
+    let first = Certificate::issue(&["a.test", "b.test"], None, false, (-60, 3600))?;
+    let second = Certificate::issue(&["b.test"], None, false, (-60, 3600))?;
+    first.save(&directory.0, "default", &[])?;
+    second.save(&directory.0, "second", &[])?;
+    let template = |a: &str, b: &str| {
+        format!(
+            "site {{ domains {{ \"a.test\" {{ tls \"{a}\"; }}; \"b.test\" {{ tls \"{b}\"; }}; }}; chain {{ rule {{ respond 200 text=\"shared\"; }}; }}; }}\n"
+        )
+    };
+    fs::write(&site, template("default", "second"))?;
+    let address = vacant()?;
+    let mut config = configuration(
+        &directory.0,
+        None,
+        address,
+        "127.0.0.1:3000".parse()?,
+        &format!("import \"{}\"", site.display()),
+    );
+    config = config.replacen(
+        "server {",
+        &format!("server {{ control-socket \"{}\";", socket.display()),
+        1,
+    );
+    config.push_str(&format!(
+        "tls \"second\" {{ cert \"{}\"; key \"{}\"; }}\n",
+        directory.0.join("second.pem").display(),
+        directory.0.join("second.key").display()
+    ));
+    let mut proxy = Proxy::start(address, &config)?;
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
+    let old = tls_connect(address, "b.test", &[&first, &second], true)?;
+    assert_eq!(
+        old.ssl()
+            .peer_certificate()
+            .ok_or("missing certificate")?
+            .to_der()?,
+        second.cert.to_der()?
+    );
+    fs::write(&site, template("second", "second"))?;
+    let failed = runtime.block_on(rill::control::client::reload(
+        &socket,
+        Duration::from_secs(10),
+    ))?;
+    assert_eq!(failed.status, "error");
+    assert_eq!(failed.code.as_deref(), Some("TLS_INVALID"));
+    let mut after_failure = tls_connect(address, "a.test", &[&first, &second], true)?;
+    assert_eq!(
+        after_failure
+            .ssl()
+            .peer_certificate()
+            .ok_or("missing certificate")?
+            .to_der()?,
+        first.cert.to_der()?
+    );
+    assert_eq!(tls_request(&mut after_failure, "a.test", "/")?.0, 200);
+    fs::write(&site, template("default", "default"))?;
+    let updated = runtime.block_on(rill::control::client::reload(
+        &socket,
+        Duration::from_secs(10),
+    ))?;
+    assert_eq!(updated.status, "ok");
+    assert_eq!(updated.generation, Some(2));
+    let mut new = tls_connect(address, "b.test", &[&first, &second], true)?;
+    assert_eq!(
+        new.ssl()
+            .peer_certificate()
+            .ok_or("missing certificate")?
+            .to_der()?,
+        first.cert.to_der()?
+    );
+    assert_eq!(
+        old.ssl()
+            .peer_certificate()
+            .ok_or("missing certificate")?
+            .to_der()?,
+        second.cert.to_der()?
+    );
+    assert_eq!(tls_request(&mut new, "b.test", "/")?.0, 200);
+    drop(old);
+    proxy.signal()?;
+    assert_eq!(proxy.finish()?.0, 0);
+    Ok(())
+}
+
+#[test]
 fn tls_reload_changes_new_handshakes_and_keepalive_routes_and_rolls_back_invalid_cert() -> TestResult
 {
     let directory = Directory::new()?;

@@ -40,7 +40,7 @@ impl std::fmt::Debug for Certificate {
 
 #[derive(Debug)]
 pub struct PreparedTls {
-    pub(crate) certificates: BTreeMap<String, Arc<Certificate>>,
+    bindings: BTreeMap<String, Arc<Certificate>>,
 }
 
 pub(crate) fn builder() -> std::result::Result<SslAcceptorBuilder, ErrorStack> {
@@ -183,6 +183,13 @@ fn covers(pattern: &str, domain: &str) -> bool {
 }
 
 impl PreparedTls {
+    pub(crate) fn certificate(&self, server_name: &str) -> Option<&Arc<Certificate>> {
+        self.bindings.get(server_name).or_else(|| {
+            let (_, suffix) = server_name.split_once('.')?;
+            self.bindings.get(&format!("*.{suffix}"))
+        })
+    }
+
     pub fn prepare(configuration: &ValidatedConfig) -> Result<Self> {
         Self::prepare_inner(configuration, None)
     }
@@ -381,16 +388,24 @@ impl PreparedTls {
                 }),
             );
         }
+        let mut bindings = BTreeMap::new();
         for site in &configuration.sites {
-            if let Some(reference) = &site.tls {
-                let certificate = certificates.get(&reference.value).ok_or_else(|| {
-                    invalid(
-                        "tls",
-                        "certificate reference does not exist",
-                        &reference.origin,
-                    )
-                })?;
+            if let Some(tls) = &site.tls {
                 for domain in &site.domains {
+                    let reference = tls.reference(&domain.value).ok_or_else(|| {
+                        invalid(
+                            "domains",
+                            "domain has no certificate binding",
+                            &domain.origin,
+                        )
+                    })?;
+                    let certificate = certificates.get(&reference.value).ok_or_else(|| {
+                        invalid(
+                            "tls",
+                            "certificate reference does not exist",
+                            &reference.origin,
+                        )
+                    })?;
                     if !certificate
                         .names
                         .iter()
@@ -403,9 +418,10 @@ impl PreparedTls {
                         )
                         .related(&domain.origin));
                     }
+                    bindings.insert(domain.value.clone(), certificate.clone());
                 }
             }
         }
-        Ok(Self { certificates })
+        Ok(Self { bindings })
     }
 }

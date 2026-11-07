@@ -541,6 +541,78 @@ fn check_reports_syntax_locations_and_cli_argument_exit_codes() -> TestResult {
 }
 
 #[test]
+fn domain_mapping_rejects_mixed_or_ambiguous_declarations() -> TestResult {
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let entry = std::env::temp_dir().join(format!(
+        "rill-domain-map-{}-{unique}.kdl",
+        std::process::id()
+    ));
+    for (site, code) in [
+        (
+            "site \"a.test\" { domains { \"a.test\" { tls \"default\"; }; }; proxy \"http://127.0.0.1:3000\"; }",
+            "POLICY_MODE_CONFLICT",
+        ),
+        (
+            "site { tls \"default\"; domains { \"a.test\" { tls \"default\"; }; }; proxy \"http://127.0.0.1:3000\"; }",
+            "POLICY_MODE_CONFLICT",
+        ),
+        (
+            "site { domains { \"a.test\" { tls \"default\"; }; }; tls \"default\"; proxy \"http://127.0.0.1:3000\"; }",
+            "POLICY_MODE_CONFLICT",
+        ),
+        (
+            "site { domains { \"A.TEST.\" { tls \"default\"; }; \"a.test\" { tls \"other\"; }; }; proxy \"http://127.0.0.1:3000\"; }",
+            "DUPLICATE",
+        ),
+        (
+            "site { domains {}; proxy \"http://127.0.0.1:3000\"; }",
+            "CONFIG_TYPE",
+        ),
+        (
+            "site { domains { \"a.test\" {}; }; proxy \"http://127.0.0.1:3000\"; }",
+            "CONFIG_TYPE",
+        ),
+        (
+            "site { domains { \"a.test\" { tls \"default\"; tls \"other\"; }; }; proxy \"http://127.0.0.1:3000\"; }",
+            "DUPLICATE",
+        ),
+        (
+            "site { domains { \"a.test\" { tls \"default\"; root \"/tmp\"; }; }; proxy \"http://127.0.0.1:3000\"; }",
+            "CONFIG_UNKNOWN",
+        ),
+        (
+            "site { domains { \"a.test\" \"default\"; }; proxy \"http://127.0.0.1:3000\"; }",
+            "CONFIG_TYPE",
+        ),
+        (
+            "site { domains { \"a.test\" { tls \"default\" {}; }; }; proxy \"http://127.0.0.1:3000\"; }",
+            "CONFIG_TYPE",
+        ),
+        (
+            "site { domains { \"a.test\" \"default\" \"other\"; }; proxy \"http://127.0.0.1:3000\"; }",
+            "CONFIG_TYPE",
+        ),
+        (
+            "site { domains { \"a.test\" { tls \"default\"; }; }; domains { \"b.test\" { tls \"other\"; }; }; proxy \"http://127.0.0.1:3000\"; }",
+            "DUPLICATE",
+        ),
+    ] {
+        fs::write(
+            &entry,
+            format!("server {{ http \"127.0.0.1:8080\"; }}\n{site}\n"),
+        )?;
+        assert_eq!(
+            parse(load(&entry)?)
+                .expect_err("invalid domain mapping accepted")
+                .code,
+            code
+        );
+    }
+    fs::remove_file(entry)?;
+    Ok(())
+}
+
+#[test]
 fn chain_snippet_paths_and_diagnostics_keep_definition_and_reference_sources() -> TestResult {
     let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
     let directory = std::env::temp_dir().join(format!(

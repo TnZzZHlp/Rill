@@ -68,11 +68,10 @@ impl TlsAccept for Resolver {
         else {
             return;
         };
-        let Some(certificate) = site
-            .tls
-            .as_ref()
-            .and_then(|reference| snapshot.tls.certificates.get(&reference.value))
-        else {
+        if site.tls.is_none() {
+            return;
+        }
+        let Some(certificate) = snapshot.tls.certificate(&server_name) else {
             return;
         };
         let installed = ssl

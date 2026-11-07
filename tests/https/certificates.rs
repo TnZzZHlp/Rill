@@ -120,6 +120,37 @@ fn invalid_certificates_and_keys_fail_with_located_redacted_errors() -> TestResu
 }
 
 #[test]
+fn domain_mapping_never_falls_back_to_an_unassigned_certificate() -> TestResult {
+    let directory = Directory::new()?;
+    let first = Certificate::issue(&["a.test", "b.test"], None, false, (-60, 3600))?;
+    let second = Certificate::issue(&["b.test"], None, false, (-60, 3600))?;
+    first.save(&directory.0, "default", &[])?;
+    second.save(&directory.0, "second", &[])?;
+    let entry = directory.0.join("config.kdl");
+    for target in ["second", "missing"] {
+        let mut config = configuration(
+            &directory.0,
+            None,
+            "127.0.0.1:8443".parse()?,
+            "127.0.0.1:3000".parse()?,
+            &format!(
+                "site {{ domains {{ \"a.test\" {{ tls \"{target}\"; }}; \"b.test\" {{ tls \"second\"; }}; }}; chain {{ rule {{ respond 200; }}; }}; }}"
+            ),
+        );
+        config.push_str(&format!(
+            "tls \"second\" {{ cert \"{}\"; key \"{}\"; }}\n",
+            directory.0.join("second.pem").display(),
+            directory.0.join("second.key").display()
+        ));
+        fs::write(&entry, config)?;
+        let error = rill::config::prepare::build(&entry, &rill::config::prepare::ConfigurationOnly)
+            .expect_err("unassigned certificate used as fallback");
+        assert_eq!(error.code, "TLS_INVALID");
+    }
+    Ok(())
+}
+
+#[test]
 fn wildcard_coverage_requires_the_entire_configured_namespace() -> TestResult {
     for (names, accepted) in [
         (vec!["*.example.test"], true),

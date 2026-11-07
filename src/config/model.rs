@@ -52,11 +52,26 @@ pub struct RawRoute {
 }
 
 #[derive(Clone, Debug)]
+pub enum SiteTls {
+    Certificate(Located<String>),
+    Domains(BTreeMap<String, Located<String>>),
+}
+
+impl SiteTls {
+    pub fn reference(&self, domain: &str) -> Option<&Located<String>> {
+        match self {
+            Self::Certificate(reference) => Some(reference),
+            Self::Domains(references) => references.get(domain),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct RawSite {
     pub domains: Vec<Located<String>>,
     pub site_label: Option<Located<String>>,
     pub access_log: Option<crate::observability::file_config::LogConfig>,
-    pub tls: Option<Located<String>>,
+    pub tls: Option<SiteTls>,
     pub uses: Vec<Located<String>>,
     pub parameters: Parameters,
     pub chain: Option<crate::http_policy::model::Chain>,
@@ -204,7 +219,7 @@ pub struct Site {
     pub domains: Vec<Located<String>>,
     pub site_label: Option<Located<String>>,
     pub access_log: Option<crate::observability::file_config::LogConfig>,
-    pub tls: Option<Located<String>>,
+    pub tls: Option<SiteTls>,
     pub chain: Option<crate::http_policy::model::Chain>,
     pub routes: Vec<Route>,
     pub origin: Origin,
