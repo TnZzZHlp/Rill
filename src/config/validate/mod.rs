@@ -201,6 +201,19 @@ pub fn validate(normalized: NormalizedConfig) -> Result<ValidatedConfig> {
             &server.origin,
         ));
     }
+    if let Some(log) = normalized
+        .sites
+        .iter()
+        .filter_map(|site| site.access_log.as_ref())
+        .nth(64)
+    {
+        return Err(ConfigError::new(
+            "LOG_CAPACITY",
+            "access-log",
+            "too many site logs",
+            &log.origin,
+        ));
+    }
     let mut domains = BTreeMap::<String, Origin>::new();
     let mut sites = Vec::new();
     for site in normalized.sites {
@@ -313,6 +326,8 @@ pub fn validate(normalized: NormalizedConfig) -> Result<ValidatedConfig> {
         sites.push(Site {
             chain,
             domains: site_domains,
+            site_label: site.site_label,
+            access_log: site.access_log,
             tls: site.tls,
             routes,
             origin: site.origin,

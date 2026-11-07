@@ -321,3 +321,55 @@ fn authentication_old_stream_survives_token_reload() -> Result {
     worker.join().map_err(|_| "backend panic")??;
     Ok(())
 }
+
+#[test]
+fn file_log_follows_old_sse_snapshot_until_stream_ends() -> Result {
+    let mut f = Fixture::new()?;
+    let listener = TcpListener::bind("127.0.0.1:0")?;
+    let backend = listener.local_addr()?;
+    let old_log = f.dir.join("old.jsonl");
+    let new_log = f.dir.join("new.jsonl");
+    let old = config(&f, backend).replace("site \"example.test\" {", &format!("site \"example.test\" {{ site-label \"old\"; access-log file=\"{}\" rotate-size=16384 retain-files=1 retain-days=1;", old_log.display()));
+    fs::write(&f.entry, old)?;
+    let (tx, rx) = mpsc::channel();
+    let worker = thread::spawn(move || -> Result {
+        let mut stream = accept(&listener)?;
+        head(&mut stream)?;
+        stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\n\r\n9\r\ndata: 1\n\n\r\n")?;
+        rx.recv_timeout(Duration::from_secs(5))?;
+        stream.write_all(b"0\r\n\r\n")?;
+        Ok(())
+    });
+    f.start()?;
+    let mut client = f.connect()?;
+    client.write_all(b"GET / HTTP/1.1\r\nHost: example.test\r\nConnection: close\r\n\r\n")?;
+    assert!(head(&mut client)?.starts_with("HTTP/1.1 200"));
+    assert_eq!(chunk(&mut client)?, b"data: 1\n\n");
+    assert!(fs::read(&old_log)?.is_empty());
+    let next = format!(
+        "server {{ http \"{}\"; control-socket \"{}\"; }}\nsite \"example.test\" {{ site-label \"new\"; access-log file=\"{}\" rotate-size=16384 retain-files=1 retain-days=1; chain {{ rule \"new\" {{ respond 200 text=\"ok\"; }} }} }}",
+        f.address,
+        f.socket.display(),
+        new_log.display()
+    );
+    fs::write(&f.entry, next)?;
+    assert_eq!(f.reload()?.generation, Some(2));
+    let mut new_client = f.connect()?;
+    assert_eq!(Fixture::request(&mut new_client, "/")?.0, 200);
+    tx.send(())?;
+    assert!(chunk(&mut client)?.is_empty());
+    worker.join().map_err(|_| "backend panicked")??;
+    for _ in 0..100 {
+        if !fs::read(&old_log)?.is_empty() && !fs::read(&new_log)?.is_empty() {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    let old = fs::read_to_string(&old_log)?;
+    let new = fs::read_to_string(&new_log)?;
+    assert!(old.contains("\"site\":\"old\""));
+    assert!(old.contains("\"route\":\"/*\""));
+    assert!(new.contains("\"site\":\"new\""));
+    assert!(new.contains("\"route\":\"new\""));
+    Ok(())
+}

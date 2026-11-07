@@ -6,11 +6,11 @@
 - 项目根目录：当前仓库 `/root/github/Rill`
 - 计划目录：`docs/plans/caddy-feature-parity/`
 - 规划状态：已批准
-- 实施状态：001 已完成并经用户明确验收；002–008 已完成，独立复审及质量门禁通过；008 完成提交以包含本记录的 Git 提交为准；009 及之后未开始
+- 实施状态：001 已完成并经用户明确验收；002–009 已完成，独立复审及质量门禁通过；009 完成提交以包含本记录的 Git 提交为准；010 未开始
 - 批准依据：用户确认 2.1–2.10 的完整功能边界、模块与十阶段拆分，随后要求排除 OTLP/追踪及所有新增 metrics 能力；2.10 仅保留日志可读身份，现有观测功能删除另行处理；用户指示生成计划。
 - 前置条件：原计划 012 完成，并单独获得实施授权。当前 Git 已有 `c5e6fa797f702eaeb3225e34693ec337b417e0e0` 完成提交；本次只读核验了记录和提交，不重新执行其验证。
 - 需求来源：[能力差距](../../gap-analysis-vs-caddy.md)、本轮结构化访谈与用户最终范围调整。
-- 001–008 已有实际检查；规则与响应见 [016](../../validation/016-caddy-rules-responses.md)，头部、路径及错误链见 [017](../../validation/017-caddy-headers-paths.md)，鉴权见 [018](../../validation/018-caddy-authentication.md)，HTTP/2/gRPC 见 [019](../../validation/019-caddy-http2-grpc.md)，动态代理见 [020](../../validation/020-caddy-dynamic-proxy.md)，正文变换与编码见 [021](../../validation/021-caddy-body-transforms.md)，WebDAV 见 [022](../../validation/022-caddy-webdav.md)。009 及之后检查尚未执行，不代表对应功能已交付。
+- 001–009 已有实际检查；规则与响应见 [016](../../validation/016-caddy-rules-responses.md)，头部、路径及错误链见 [017](../../validation/017-caddy-headers-paths.md)，鉴权见 [018](../../validation/018-caddy-authentication.md)，HTTP/2/gRPC 见 [019](../../validation/019-caddy-http2-grpc.md)，动态代理见 [020](../../validation/020-caddy-dynamic-proxy.md)，正文变换与编码见 [021](../../validation/021-caddy-body-transforms.md)，WebDAV 见 [022](../../validation/022-caddy-webdav.md)。009 文件日志、真实慢盘/满盘/轮转恢复及部署隔离证据见 [023](../../validation/023-caddy-observability.md)，独立复审及最终完整门禁通过；010 检查尚未执行。
 - 001 已产出 [契约](CONTRACT.md)、[追溯矩阵与隔离证据](../../validation/013-caddy-001-contracts-feasibility.md)。已实测：字面量分块无关、真实 h2 的 gRPC trailers 与独立 DATA 帧、流取消后兄弟流可用、WebDAV 受约束写入与锁模型、日志候选无副作用准备与回滚编排。后续[容器验收](../../validation/014-caddy-grpc-container.md)已通过隔离 Pingora 原型的 h2c/TLS h2 四类调用、响应 trailers、取消与 deadline，三轮 114 项判定通过；不代表生产 CLI 功能已实现。[015 收口](../../validation/015-caddy-contracts-feasibility-closure.md)进一步补齐正则捕获、同进程池身份与强制碰撞、DAV/日志跨代生命周期；主 suite 190 passed/1 DNS ignored，扩展容器三轮 150 项判定通过。原 h2 探针未持续轮询服务端 Connection，超时被错误归因于 Pingora；修复后两客户端各 100/100 次完成调用，协议阻断结论撤回。001-T03 与 001-AC03 技术关卡已通过，001-T04 用户明确回复“验收通过”；生产实现仍属后续阶段，不得降级需求或更换框架，不自动开始 002。
 
 ## 概述与事实边界
@@ -35,9 +35,9 @@
 - [x] **G04：动态代理、流式替换与编码有界**
   - 公网目标策略、显式匿名、跨块字面量/正则、gzip/zstd 可用；待决内容超限中止是明确失败，不伪装完整成功。
   - 责任阶段：006、007；验证证据：[020](../../validation/020-caddy-dynamic-proxy.md)、[021](../../validation/021-caddy-body-transforms.md)；动态公网隔离、字节跨块匹配、共享待决/CPU/解压/输出边界、gzip/zstd、旁路与 sidecar 通过独立复审及真实隔离验收。
-- [ ] **G05：日志可运维且不扩展观测导出**
+- [x] **G05：日志可运维且不扩展观测导出**
   - 按站点文件、轮转、字段白名单、可读身份和 stderr 可用；慢盘/满队列不阻塞业务；不新增 OTLP/追踪/metrics。
-  - 责任阶段：009；验证证据：未执行。
+  - 责任阶段：009；验证证据：[023](../../validation/023-caddy-observability.md)，342 passed、4 ignored，真实文件故障、跨代及 Podman 隔离通过；用户确认五秒仅限用户态关闭等待，内核 D 态可延迟进程回收。
 - [ ] **G06：兼容、资源与交付闭环**
   - 批准需求全部逐项验收，旧行为及单快照事务性保持，质量门禁与隔离组合通过，示例脱敏可复现，各完成阶段有独立提交。
   - 责任阶段：010；验证证据：未执行。
@@ -129,7 +129,7 @@ main/CLI 不承载业务规则。统一构建管线产生不可变政策，编�
 | 006 | [公网动态目标代理](subplans/006-dynamic-proxy.md) | 从显式 URL 前缀提取 HTTP/HTTPS 目标，支持明确开启的匿名模式。 | 003、004 | 已完成，独立复审及隔离验收通过 |
 | 007 | [流式正文替换与在线编码](subplans/007-body-transforms.md) | 字面量及 Rust 正则跨块替换、捕获替换与顺序规则；gzip/zstd 在线压缩及已有 sidecar 协调。 | 005、006 | 已完成，独立复审及隔离验收通过 |
 | 008 | [受约束可写 WebDAV](subplans/008-webdav.md) | RFC 4918 Class 1/2 常用方法、独占写锁、属性存储、受约束写操作；rclone/cadaver 兼容。 | 003、004 | 已完成，独立复审、真实客户端及隔离验收通过 |
-| 009 | [文件日志与可读身份](subplans/009-observability.md) | 2.9 的站点文件日志、轮转与字段白名单；2.10 仅保留日志可读身份，不新增 metrics 或 OTLP。 | 002 | 未开始 |
+| 009 | [文件日志与可读身份](subplans/009-observability.md) | 2.9 的站点文件日志、轮转与字段白名单；2.10 仅保留日志可读身份，不新增 metrics 或 OTLP。 | 002 | 已完成，独立复审、隔离验收及质量门禁通过 |
 | 010 | [组合验收与交付](subplans/010-integration-release.md) | 批准范围逐项追溯、脱敏迁移配置、隔离组合回归与交付；不切换现网。 | 001、002、003、004、005、006、007、008、009 | 未开始 |
 
 ### 执行顺序
@@ -140,7 +140,7 @@ main/CLI 不承载业务规则。统一构建管线产生不可变政策，编�
 
 ## 验证策略
 
-001–008 已执行下列质量门禁，记录见各阶段验证证据；后续阶段仍须重新执行：
+001–009 已执行下列质量门禁，记录见各阶段验证证据；后续阶段仍须重新执行：
 
 ```sh
 cargo fmt --all --check

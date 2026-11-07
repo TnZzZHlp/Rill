@@ -22,6 +22,8 @@ struct Scope {
     tls: Option<Located<String>>,
     items: Vec<RouteItem>,
     chain: Option<crate::http_policy::model::Chain>,
+    site_label: Option<Located<String>>,
+    access_log: Option<crate::observability::file_config::LogConfig>,
 }
 
 fn scope(node: &KdlNode, origin: &Origin, site: bool) -> Result<Scope> {
@@ -37,6 +39,8 @@ fn scope(node: &KdlNode, origin: &Origin, site: bool) -> Result<Scope> {
         tls: None,
         items: Vec::new(),
         chain: None,
+        site_label: None,
+        access_log: None,
     };
     let mut seen = BTreeSet::new();
     for child in node
@@ -46,6 +50,34 @@ fn scope(node: &KdlNode, origin: &Origin, site: bool) -> Result<Scope> {
     {
         let origin = at(child, origin);
         match child.name().value() {
+            "site-label" if site => {
+                if result.site_label.is_some() {
+                    return Err(ConfigError::new(
+                        "DUPLICATE",
+                        "site-label",
+                        "duplicate site label",
+                        &origin,
+                    ));
+                }
+                result.site_label = Some(crate::observability::file_config::parse_site_label(
+                    child, &origin,
+                )?);
+                continue;
+            }
+            "access-log" if site => {
+                if result.access_log.is_some() {
+                    return Err(ConfigError::new(
+                        "LOG_CAPACITY",
+                        "access-log",
+                        "duplicate site log",
+                        &origin,
+                    ));
+                }
+                result.access_log = Some(crate::observability::file_config::parse_access_log(
+                    child, &origin,
+                )?);
+                continue;
+            }
             "chain" if site => {
                 if result.chain.is_some() {
                     return Err(ConfigError::new(
@@ -242,6 +274,8 @@ pub fn parse(node: &KdlNode, origin: &Origin) -> Result<RawSite> {
     }
     Ok(RawSite {
         domains,
+        site_label: scope.site_label,
+        access_log: scope.access_log,
         chain: scope.chain,
         tls: scope.tls,
         uses: scope.uses,

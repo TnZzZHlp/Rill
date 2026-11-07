@@ -82,6 +82,12 @@ impl ConfigurationOnly {
         configuration: &ValidatedConfig,
         mut dependencies: Option<&mut DependencyPlan>,
     ) -> Result<CheckResources> {
+        let logs: Vec<_> = configuration
+            .sites
+            .iter()
+            .filter_map(|site| site.access_log.clone())
+            .collect();
+        crate::observability::log_registry::LogRegistry::check(&logs)?;
         crate::proxy::pool_policy::registry()
             .collect_expired()
             .map_err(|_| {

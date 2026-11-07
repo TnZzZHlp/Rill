@@ -465,6 +465,44 @@ impl ProxyHttp for Handler {
         let Some(site) = ctx.snapshot.router.site(&authority.host) else {
             return reject(session, ctx, 404).await;
         };
+        let peer_ip = session
+            .client_addr()
+            .and_then(|address| address.as_inet())
+            .map(|address| address.ip());
+        let log_ip = if ctx.snapshot.configuration.sites[site]
+            .access_log
+            .as_ref()
+            .is_some_and(|config| {
+                config
+                    .fields
+                    .contains(crate::observability::file_config::LogField::ClientIp)
+            }) {
+            peer_ip.and_then(|peer| {
+                let port = session
+                    .server_addr()
+                    .and_then(|address| address.as_inet())
+                    .map_or(80, |address| address.port());
+                forwarding(
+                    request,
+                    &authority,
+                    peer,
+                    port,
+                    secure,
+                    &ctx.snapshot.configuration.server,
+                )
+                .ok()
+                .map(|value| value.client_ip)
+            })
+        } else {
+            None
+        };
+        ctx.observation.file_site(
+            ctx.snapshot.clone(),
+            site,
+            request.method.clone(),
+            request.uri.clone(),
+            log_ip,
+        );
         if secure && ctx.snapshot.configuration.sites[site].tls.is_none() {
             return reject(session, ctx, 404).await;
         }
@@ -570,6 +608,8 @@ impl ProxyHttp for Handler {
                 Err(super::policy::Failure::Unavailable) => return reject(session, ctx, 503).await,
             };
             ctx.error_status = error_status;
+            ctx.observation.file_rule(state.log_rule);
+            ctx.observation.file_client_ip(forwarded.client_ip);
             if state.path() != initial_policy_path {
                 path = state.path().to_owned();
             }
@@ -632,6 +672,9 @@ impl ProxyHttp for Handler {
         let Some((site, mut route)) = selected_route else {
             return reject(session, ctx, 404).await;
         };
+        if ctx.snapshot.configuration.sites[site].chain.is_none() {
+            ctx.observation.file_legacy_route(route);
+        }
         let mut selected_deadline: Option<Instant> = None;
         let deadline = loop {
             if let Some(observed) = ctx
@@ -744,6 +787,7 @@ impl ProxyHttp for Handler {
                     }
                 };
                 path = state.path().to_owned();
+                ctx.observation.file_rule(state.log_rule);
                 super::policy::update_request(session, state.path(), &headers)?;
                 ctx.policy = Some(state);
                 if !matches!(outcome, crate::http_policy::execute::Outcome::NoMatch) {
@@ -876,6 +920,7 @@ impl ProxyHttp for Handler {
                 Err(status) => return reject(session, ctx, status).await,
             }
         };
+        ctx.observation.file_client_ip(forwarding.client_ip);
         let proxy = prepared
             .as_proxy()
             .ok_or_else(|| Error::explain(ErrorType::InternalError, "proxy route not prepared"))?;

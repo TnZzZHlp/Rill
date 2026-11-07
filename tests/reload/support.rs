@@ -1,7 +1,7 @@
 use std::fs;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
-use std::os::unix::fs::PermissionsExt;
+use std::os::unix::fs::{FileTypeExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output, Stdio};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -56,7 +56,10 @@ impl Fixture {
         );
         let deadline = Instant::now() + Duration::from_secs(5);
         loop {
-            if TcpStream::connect_timeout(&self.address, Duration::from_millis(100)).is_ok() {
+            if TcpStream::connect_timeout(&self.address, Duration::from_millis(100)).is_ok()
+                && fs::symlink_metadata(&self.socket)
+                    .is_ok_and(|metadata| metadata.file_type().is_socket())
+            {
                 return Ok(());
             }
             if self

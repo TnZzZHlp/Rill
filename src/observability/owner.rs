@@ -3,7 +3,7 @@ use std::sync::{
     Arc,
     atomic::{AtomicU64, Ordering},
 };
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 pub struct Observability {
     pub access: AccessSink,
@@ -31,6 +31,12 @@ impl Observability {
         HexId::parse(&format!("{:016x}{sequence:016x}", self.namespace))
     }
     pub fn shutdown(&self) {
-        self.access.shutdown(Duration::from_secs(1));
+        let start = Instant::now();
+        let file_wait = Duration::from_millis(4750).saturating_sub(start.elapsed());
+        if !super::log_registry::LogRegistry::process().shutdown(file_wait) {
+            self.access.report_log_timeout();
+        }
+        let remaining = Duration::from_secs(5).saturating_sub(start.elapsed());
+        self.access.shutdown(remaining.min(Duration::from_secs(1)));
     }
 }

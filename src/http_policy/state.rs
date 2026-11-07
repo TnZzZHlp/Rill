@@ -48,6 +48,7 @@ pub struct RequestPolicyState {
     pub steps_left: u16,
     pub reentries: u8,
     pub error_entered: bool,
+    pub log_rule: Option<(bool, usize)>,
 }
 impl RequestPolicyState {
     pub fn new(
@@ -71,6 +72,7 @@ impl RequestPolicyState {
             steps_left: 1024,
             reentries: 0,
             error_entered: false,
+            log_rule: None,
         }
     }
     pub fn mark_authenticated(&mut self, action: usize) {

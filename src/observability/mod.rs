@@ -1,5 +1,12 @@
 pub mod access;
+pub mod file_config;
 pub mod identity;
+pub mod log_budget;
+pub mod log_directory;
+pub mod log_file;
+pub mod log_queue;
+pub mod log_registry;
+pub mod log_worker;
 pub mod logging;
 pub mod owner;
 pub mod request;

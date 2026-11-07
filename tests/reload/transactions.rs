@@ -595,3 +595,89 @@ fn authentication_token_reload_and_bad_candidate_preserve_old() -> Result {
     assert_eq!(request("dummy-new")?, 200);
     Ok(())
 }
+
+#[test]
+fn file_log_failed_reload_keeps_old_generation_and_sink() -> Result {
+    let mut fixture = Fixture::new()?;
+    let old = fixture.dir.join("old.jsonl");
+    let new = fixture.dir.join("new.jsonl");
+    let address = fixture.address;
+    let socket = fixture.socket.clone();
+    let config = |path: &std::path::Path, label: &str| {
+        format!(
+            "server {{ http \"{}\"; control-socket \"{}\"; }}\nsite \"example.test\" {{ site-label \"{label}\"; access-log file=\"{}\" rotate-size=16384 retain-files=1 retain-days=1; chain {{ rule \"ready\" {{ respond 200 text=\"ok\"; }} }} }}",
+            address,
+            socket.display(),
+            path.display()
+        )
+    };
+    fs::write(&fixture.entry, config(&old, "old"))?;
+    fixture.start()?;
+    let mut stream = fixture.connect()?;
+    assert_eq!(Fixture::request(&mut stream, "/first")?.0, 200);
+    fs::write(
+        &fixture.entry,
+        config(&fixture.dir.join("missing/log"), "bad"),
+    )?;
+    assert_eq!(fixture.reload()?.code.as_deref(), Some("RESOURCE_IO"));
+    assert_eq!(Fixture::request(&mut stream, "/second")?.0, 200);
+    fs::write(&fixture.entry, config(&new, "new"))?;
+    assert_eq!(fixture.reload()?.generation, Some(2));
+    assert_eq!(Fixture::request(&mut stream, "/third")?.0, 200);
+    for _ in 0..100 {
+        let a = fs::read_to_string(&old).unwrap_or_default();
+        let b = fs::read_to_string(&new).unwrap_or_default();
+        if a.lines().count() >= 2 && !b.is_empty() {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    let old_text = fs::read_to_string(old)?;
+    let new_text = fs::read_to_string(new)?;
+    assert_eq!(old_text.lines().count(), 2);
+    assert!(
+        old_text
+            .lines()
+            .all(|line| line.contains("\"site\":\"old\""))
+    );
+    assert!(new_text.contains("\"site\":\"new\""));
+    Ok(())
+}
+
+#[test]
+fn retired_log_disk_credit_bounds_sequential_reloads() -> Result {
+    let mut fixture = Fixture::new()?;
+    let address = fixture.address;
+    let socket = fixture.socket.clone();
+    let configuration = |path: &std::path::Path| {
+        format!(
+            "server {{ http \"{address}\"; control-socket \"{}\"; }}\nsite \"example.test\" {{ access-log file=\"{}\" rotate-size=16384 retain-files=1 retain-days=1; chain {{ rule {{ respond 200 text=\"ok\"; }} }} }}",
+            socket.display(),
+            path.display()
+        )
+    };
+    fs::write(&fixture.entry, configuration(&fixture.dir.join("log-0")))?;
+    fixture.start()?;
+    for index in 1..64 {
+        fs::write(
+            &fixture.entry,
+            configuration(&fixture.dir.join(format!("log-{index}"))),
+        )?;
+        thread::sleep(Duration::from_millis(60));
+        assert_eq!(
+            fixture.reload()?.generation,
+            Some(u64::try_from(index + 1)?)
+        );
+    }
+    for index in 0..64 {
+        assert!(fixture.dir.join(format!("log-{index}")).exists());
+    }
+    let extra = fixture.dir.join("overflow");
+    fs::write(&fixture.entry, configuration(&extra))?;
+    thread::sleep(Duration::from_millis(60));
+    assert_eq!(fixture.reload()?.code.as_deref(), Some("LOG_CAPACITY"));
+    assert!(!extra.exists());
+    let mut stream = fixture.connect()?;
+    assert_eq!(Fixture::request(&mut stream, "/")?.0, 200);
+    Ok(())
+}

@@ -49,7 +49,7 @@ sudo podman run -d --name rill-local \
   localhost/rill:local
 ```
 
-按实际 HTTP 或 HTTPS 配置发布相应端口；示例只发布宿主 loopback，不更改宿主全局 sysctl。HTTPS 示例需要自行提供证书和私钥。容器只需运行目录可写；如环境确需临时目录，可额外指定 `--tmpfs /tmp:rw,noexec,nosuid,size=16m`。不要使用 0777 或放宽管理 Socket 权限。
+按实际 HTTP 或 HTTPS 配置发布相应端口；示例只发布宿主 loopback，不更改宿主全局 sysctl。HTTPS 示例需要自行提供证书和私钥。未配置站点文件日志时容器只需运行目录可写；配置文件日志时，管理员另行预建由映射后服务 UID 所有且模式 0700 的宿主日志目录，以 `--mount "type=bind,src=$RILL_LOG_DIR,dst=/var/log/rill,rw"` 显式挂载，并保证容器内祖先目录符合配置文档的规则。如环境确需临时目录，可额外指定 `--tmpfs /tmp:rw,noexec,nosuid,size=16m`。不要使用 0777 或放宽管理 Socket 权限。
 
 `--network=none` 不能提供外部服务，适合受控隔离验证；共享专用私有网络命名空间也是可选测试方式。不能将 `--network=none` 与端口发布当成同时有效的生产部署。Linux `openat2`、`renameat2` 和可用且身份一致的 procfs `/proc/self/fd` 是硬条件；容器 seccomp、用户命名空间及 SELinux 标签须实测兼容。遇到不兼容应报告错误，不以 `--privileged` 绕过。
 

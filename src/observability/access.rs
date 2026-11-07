@@ -128,12 +128,26 @@ fn bounded_field(value: &str, limit: usize, budget: &mut usize) -> String {
     out
 }
 
+fn write_log_timeout(pending: &AtomicBool) {
+    if pending.swap(false, Ordering::AcqRel) {
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis();
+        let _ = writeln!(
+            io::stderr().lock(),
+            "{{\"time_ms\":{timestamp},\"level\":\"warn\",\"event\":\"LOG_TIMEOUT\"}}"
+        );
+    }
+}
+
 struct Inner {
     sender: Mutex<Option<mpsc::SyncSender<LogRecord>>>,
     stop: Arc<AtomicBool>,
     sequence: AtomicU64,
     worker: Mutex<Option<JoinHandle<()>>>,
     finished: Mutex<mpsc::Receiver<()>>,
+    log_timeout: Arc<AtomicBool>,
 }
 #[derive(Clone)]
 pub struct AccessSink {
@@ -150,10 +164,13 @@ impl AccessSink {
         let (finished_tx, finished) = mpsc::sync_channel(1);
         let stop = Arc::new(AtomicBool::new(false));
         let worker_stop = Arc::clone(&stop);
+        let log_timeout = Arc::new(AtomicBool::new(false));
+        let worker_timeout = Arc::clone(&log_timeout);
         let worker = thread::Builder::new()
             .name("rill-access".into())
             .spawn(move || {
                 loop {
+                    write_log_timeout(&worker_timeout);
                     if worker_stop.load(Ordering::Acquire) {
                         break;
                     }
@@ -176,6 +193,7 @@ impl AccessSink {
                         Err(mpsc::RecvTimeoutError::Disconnected) => break,
                     }
                 }
+                write_log_timeout(&worker_timeout);
                 for _ in 0..4096 {
                     if receiver.try_recv().is_err() {
                         break;
@@ -190,8 +208,12 @@ impl AccessSink {
                 sequence: AtomicU64::new(0),
                 worker: Mutex::new(Some(worker)),
                 finished: Mutex::new(finished),
+                log_timeout,
             }),
         })
+    }
+    pub fn report_log_timeout(&self) {
+        self.inner.log_timeout.store(true, Ordering::Release);
     }
     pub fn should_sample(&self, per_thousand: u16) -> bool {
         per_thousand != 0
@@ -287,6 +309,34 @@ impl Drop for Inner {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn timeout_diagnostic_is_nonblocking_and_redacted() {
+        const CHILD: &str = "RILL_LOG_TIMEOUT_TEST_CHILD";
+        if std::env::var_os(CHILD).is_none() {
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "observability::access::tests::timeout_diagnostic_is_nonblocking_and_redacted",
+                    "--test-threads=1",
+                ])
+                .env(CHILD, "1")
+                .output()
+                .unwrap();
+            assert!(output.status.success());
+            let stderr = String::from_utf8(output.stderr).unwrap();
+            let record: serde_json::Value = serde_json::from_str(stderr.trim()).unwrap();
+            assert_eq!(record["event"], "LOG_TIMEOUT");
+            assert_eq!(record["level"], "warn");
+            assert!(record.get("path").is_none());
+            return;
+        }
+        let sink = AccessSink::new().unwrap();
+        let start = std::time::Instant::now();
+        sink.report_log_timeout();
+        assert!(start.elapsed() < Duration::from_secs(1));
+        sink.shutdown(Duration::from_secs(1));
+    }
+
     #[test]
     fn runtime_record_preserves_schema_and_bounded_utf8() {
         let mut budget = 2800;

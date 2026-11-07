@@ -366,6 +366,9 @@ fn execute_rules(
                     }
                     Err(()) => return Outcome::BudgetExceeded,
                     Ok(result) => {
+                        if let Some(state) = ctx.state.as_deref_mut() {
+                            state.log_rule = Some((ctx.error_status.is_some(), rule_index));
+                        }
                         ctx.captures = result.captures.unwrap_or([None; 9]);
                         if let Some(state) = ctx.state.as_deref_mut()
                             && state

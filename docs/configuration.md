@@ -257,13 +257,27 @@ server {
 }
 ```
 
+站点可配置独立 JSONL 文件日志，示例如下；站点文件日志与 server 的 stderr 开关相互独立，同时启用时分别输出：
+
+```kdl
+site "example.test" {
+    site-label "public-site"
+    access-log file="/var/log/rill/site.jsonl" rotate-size=10485760 retain-files=5 retain-days=7
+    chain { rule "health" { respond 200 text="ok"; } }
+}
+```
+
+`file`、`rotate-size`、`retain-files`、`retain-days` 均必需，范围分别是 16 KiB–10 MiB、1–5、1–7 天。可在 `access-log` 子块内重复 `field` 选择字段，仅允许 `timestamp`、`site`、`route`、`method`、`status`、`duration-ms`、`bytes`、`path`、`client-ip`；未声明字段时使用前七项。路径与客户 IP 仅在明确选择时输出，路径不包含查询，不支持任意头、凭据或 Cookie。site 默认使用规范化的首个配置域名，`site-label` 可覆盖；新链使用静态 rule 名称或 `rule-N`，旧 route 使用规范化配置模式，简写为 `/*`；已选站点未匹配路由时 route 为 null。身份不取请求 Host/URI。
+
+最终父目录须事先由管理员创建，为服务 UID 所有且模式 0700；完整路径禁止符号链接。祖先目录须属 root 或服务 UID，若组或其他用户可写则须有 sticky 位；check 和 run 均不创建父目录。新日志文件先以 O_TMPFILE 匿名打开并验证身份，再通过安全 procfd 和无覆盖 linkat 发布；文件系统不支持时拒绝激活，不回退。check 只验证可观察权限和现有文件，不创建、轮转或启动文件日志 worker。site 配置未通过时不会发布，旧快照及其日志资源继续服务。同一进程最多接管 64 个不同日志目标，包含候选、旧代及已退役但文件可能仍在的目标；每个目标保守计入 6 文件/60 MiB 的磁盘信用。即使管理员删除文件，信用也不在该进程内提前归还；重复切换过多不同目标会返回 `LOG_CAPACITY`，须由管理员管理目录并安排重启。此限制不是跨进程重启的文件系统总配额，重启本身不删除或回收旧日志。若记录短写后无法确认或恢复原长度，同一进程会隔离该目标；旧 sink 退役后重新配置同一目标也会拒绝追加。管理员须检查并修复文件，再安排重启；不自动推断残行完整性。
+
 访问日志默认关闭，采样默认 1000‰；布尔值使用 `#true`/`#false`，采样为 0–1000 的整数。开关和采样随快照发布，已开始请求保留旧策略。运行事件和访问事件共享有界后台日志线程；关闭访问日志并不关闭运行日志线程。`check` 不启动日志 worker 或监听。
 
 [本地示例](../examples/observability/config.kdl) 监听 `127.0.0.1:18080`，Host 为 `observe.test`，开启访问日志。运行前为控制 Socket 配置服务 UID 所有的 0700 私有目录内路径。
 
 Prometheus 指标和 OTLP tracing 已移除。`metrics`、`tracing`、`trace-sample-per-mille`、`otlp-endpoint` 均为未知字段，包括显式关闭的旧字段；迁移时从配置中删除这些节点，再执行 check。服务不创建指标监听、追踪 provider 或 exporter，也不读取 OpenTelemetry 配置环境变量；这些环境变量不再导致 `CONFIG_ENV` 拒启。上游 TLS 的 `SSL_CERT_FILE`/`SSL_CERT_DIR` 行为不变。
 
-访问日志保留本地 `request_id`，不再输出 `trace_id`/`span_id`。代理继续删除传入的 traceparent、tracestate 和 baggage，不注入新的 traceparent。日志尽力送达，队列、写出和关闭边界见[架构](architecture.md#11-访问日志运行边界)。
+访问日志保留本地 `request_id`，不再输出 `trace_id`/`span_id`。代理继续删除传入的 traceparent、tracestate 和 baggage，不注入新的 traceparent。日志尽力送达，关闭的五秒限制用户态等待；内核 D 态 IO 可能延迟进程回收，阻塞 stderr 时不保证超时诊断送达。队列、写出和关闭边界见[架构](architecture.md#11-访问日志运行边界)。
 
 ## 8. 原文示例逐项对照
 

@@ -23,6 +23,7 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ReadOnlyPaths=/etc/rill /srv/rill
 ReadWritePaths=/run/rill
+ReadWritePaths=-/var/log/rill
 ProtectHome=true
 PrivateTmp=true
 PrivateDevices=true

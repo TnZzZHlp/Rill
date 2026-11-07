@@ -48,6 +48,11 @@ impl PreparedRoute {
 
 #[derive(Debug)]
 pub struct HttpResources {
+    log_origin: Origin,
+    prepared_logs: Option<crate::observability::log_registry::PreparedLogSinks>,
+    activated_logs: Option<crate::observability::log_registry::ActivatedLogSinks>,
+    log_site_indices: Vec<usize>,
+    file_logs: Vec<Option<Arc<crate::observability::log_registry::LogSink>>>,
     pub(crate) activated_dav: Vec<crate::webdav::registry::ActivatedStorage>,
     dav_activation: Option<tokio::sync::OwnedSemaphorePermit>,
     pub(crate) _dynamic_trust: Option<Arc<crate::proxy::trust::store::TrustStore>>,
@@ -83,6 +88,15 @@ impl HttpResources {
             let activated = candidate.activate()?;
             self.policy.dav_handles.push(activated.handle().clone());
             self.activated_dav.push(activated);
+        }
+        if let Some(prepared) = self.prepared_logs.take() {
+            let logs = prepared.activate().map_err(|error| {
+                crate::observability::log_registry::config_error(&error, &self.log_origin)
+            })?;
+            for (&site, sink) in self.log_site_indices.iter().zip(logs.sinks()) {
+                self.file_logs[site] = Some(Arc::clone(sink));
+            }
+            self.activated_logs = Some(logs);
         }
         Ok(())
     }
@@ -144,7 +158,36 @@ impl HttpPreparer {
                     .collect::<Result<Vec<_>>>()
             })
             .collect::<Result<Vec<_>>>()?;
+        let log_site_indices: Vec<_> = configuration
+            .sites
+            .iter()
+            .enumerate()
+            .filter_map(|(i, site)| site.access_log.as_ref().map(|_| i))
+            .collect();
+        let logs: Vec<_> = log_site_indices
+            .iter()
+            .filter_map(|&i| configuration.sites[i].access_log.clone())
+            .collect();
+        let prepared_logs = if logs.is_empty() {
+            None
+        } else {
+            Some(
+                crate::observability::log_registry::LogRegistry::process()
+                    .prepare(&logs)
+                    .map_err(|error| {
+                        crate::observability::log_registry::config_error(&error, &logs[0].origin)
+                    })?,
+            )
+        };
         Ok(HttpResources {
+            log_origin: logs.first().map_or_else(
+                || configuration.server.origin.clone(),
+                |log| log.origin.clone(),
+            ),
+            prepared_logs,
+            activated_logs: None,
+            log_site_indices,
+            file_logs: vec![None; configuration.sites.len()],
             activated_dav: Vec::new(),
             dav_activation: None,
             _dynamic_trust: if checked.policy.dynamic_count > 0 {
@@ -200,6 +243,7 @@ pub struct RuntimeSnapshot {
     pub tls: PreparedTls,
     pub logger: Logger,
     pub observation_routes: Vec<Vec<crate::observability::request::ObservationRoute>>,
+    pub file_logs: Vec<Option<Arc<crate::observability::log_registry::LogSink>>>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -277,6 +321,7 @@ impl RuntimeSnapshot {
             _dynamic_trust: prepared.resources._dynamic_trust,
             policy: prepared.resources.policy,
             observation_routes,
+            file_logs: prepared.resources.file_logs,
             router: Router::build(&prepared.configuration),
             logger: Logger::new(&prepared.configuration.server.log_level)
                 .with_sink(observability.access.clone()),
@@ -310,11 +355,15 @@ pub struct RuntimeState {
 }
 
 pub(crate) struct StartupActivation {
+    logs: Option<crate::observability::log_registry::ActivatedLogSinks>,
     storages: Vec<crate::webdav::registry::ActivatedStorage>,
     _permit: Option<tokio::sync::OwnedSemaphorePermit>,
 }
 impl StartupActivation {
     pub(crate) fn commit(self) {
+        if let Some(logs) = self.logs {
+            logs.commit();
+        }
         for storage in self.storages {
             storage.commit();
         }
@@ -353,6 +402,7 @@ impl RuntimeState {
             )
         })?;
         prepared.resources.activate()?;
+        let logs = prepared.resources.activated_logs.take();
         let activated = std::mem::take(&mut prepared.resources.activated_dav);
         let activation = prepared.resources.dav_activation.take();
         let snapshot = RuntimeSnapshot::from_prepared(prepared, 1, &observability);
@@ -370,6 +420,7 @@ impl RuntimeState {
         Ok((
             state,
             StartupActivation {
+                logs,
                 storages: activated,
                 _permit: activation,
             },
@@ -522,10 +573,14 @@ impl RuntimeState {
             generation,
             &Origin::file(&self.entry),
         )?;
+        let logs = prepared.resources.activated_logs.take();
         let activated = std::mem::take(&mut prepared.resources.activated_dav);
         let activation = prepared.resources.dav_activation.take();
         let candidate = RuntimeSnapshot::from_prepared(prepared, generation, &self.observability);
         self.active.store(Arc::new(candidate));
+        if let Some(logs) = logs {
+            logs.commit();
+        }
         for storage in activated {
             storage.commit();
         }
@@ -577,10 +632,14 @@ impl RuntimeState {
             generation,
             &Origin::file(&self.entry),
         )?;
+        let logs = prepared.resources.activated_logs.take();
         let activated = std::mem::take(&mut prepared.resources.activated_dav);
         let activation = prepared.resources.dav_activation.take();
         let candidate = RuntimeSnapshot::from_prepared(prepared, generation, &self.observability);
         self.active.store(Arc::new(candidate));
+        if let Some(logs) = logs {
+            logs.commit();
+        }
         for storage in activated {
             storage.commit();
         }

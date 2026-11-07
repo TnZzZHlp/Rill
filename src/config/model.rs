@@ -54,6 +54,8 @@ pub struct RawRoute {
 #[derive(Clone, Debug)]
 pub struct RawSite {
     pub domains: Vec<Located<String>>,
+    pub site_label: Option<Located<String>>,
+    pub access_log: Option<crate::observability::file_config::LogConfig>,
     pub tls: Option<Located<String>>,
     pub uses: Vec<Located<String>>,
     pub parameters: Parameters,
@@ -200,6 +202,8 @@ pub struct Route {
 #[derive(Debug)]
 pub struct Site {
     pub domains: Vec<Located<String>>,
+    pub site_label: Option<Located<String>>,
+    pub access_log: Option<crate::observability::file_config::LogConfig>,
     pub tls: Option<Located<String>>,
     pub chain: Option<crate::http_policy::model::Chain>,
     pub routes: Vec<Route>,
