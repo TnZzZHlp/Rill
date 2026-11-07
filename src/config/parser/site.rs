@@ -26,7 +26,12 @@ struct Scope {
     access_log: Option<crate::observability::file_config::LogConfig>,
 }
 
-fn scope(node: &KdlNode, origin: &Origin, site: bool) -> Result<Scope> {
+fn scope(
+    node: &KdlNode,
+    origin: &Origin,
+    site: bool,
+    snippets: &mut super::chain_snippets::Snippets<'_>,
+) -> Result<Scope> {
     let mut result = Scope {
         uses: Vec::new(),
         parameters: Parameters::default(),
@@ -87,7 +92,7 @@ fn scope(node: &KdlNode, origin: &Origin, site: bool) -> Result<Scope> {
                         &origin,
                     ));
                 }
-                result.chain = Some(super::chain::parse(child, &origin)?);
+                result.chain = Some(super::chain::parse(child, &origin, snippets)?);
                 continue;
             }
             "error-page" => {
@@ -169,7 +174,12 @@ fn scope(node: &KdlNode, origin: &Origin, site: bool) -> Result<Scope> {
 pub fn route(node: &KdlNode, origin: &Origin) -> Result<RawRoute> {
     shape(node, origin, "route", 1..=1, true)?;
     let pattern = argument(node, 0, origin, "route")?;
-    let scope = scope(node, origin, false)?;
+    let scope = scope(
+        node,
+        origin,
+        false,
+        &mut super::chain_snippets::Snippets::default(),
+    )?;
     let action = scope.action.ok_or_else(|| {
         ConfigError::new(
             "CONFIG_TYPE",
@@ -194,7 +204,11 @@ pub fn route(node: &KdlNode, origin: &Origin) -> Result<RawRoute> {
     })
 }
 
-pub fn parse(node: &KdlNode, origin: &Origin) -> Result<RawSite> {
+pub fn parse(
+    node: &KdlNode,
+    origin: &Origin,
+    snippets: &mut super::chain_snippets::Snippets<'_>,
+) -> Result<RawSite> {
     shape(node, origin, "site", 1..=128, true)?;
     let domains = (0..node.entries().len())
         .map(|index| argument(node, index, origin, "site"))
@@ -221,7 +235,7 @@ pub fn parse(node: &KdlNode, origin: &Origin) -> Result<RawSite> {
         )
         .related(&legacy));
     }
-    let mut scope = scope(node, origin, true)?;
+    let mut scope = scope(node, origin, true, snippets)?;
     if scope.chain.is_some() && (scope.action.is_some() || !scope.items.is_empty()) {
         return Err(ConfigError::new(
             "POLICY_MODE_CONFLICT",

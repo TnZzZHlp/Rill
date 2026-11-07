@@ -541,6 +541,155 @@ fn check_reports_syntax_locations_and_cli_argument_exit_codes() -> TestResult {
 }
 
 #[test]
+fn chain_snippet_paths_and_diagnostics_keep_definition_and_reference_sources() -> TestResult {
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let directory = std::env::temp_dir().join(format!(
+        "rill-chain-snippet-{}-{unique}",
+        std::process::id()
+    ));
+    fs::create_dir_all(directory.join("defs/assets"))?;
+    let definition = directory.join("defs/shared.kdl");
+    fs::write(
+        &definition,
+        "chain-snippet \"files\" { rule \"shared\" { serve-files root=\"assets\"; }; }\n",
+    )?;
+    let entry = directory.join("config.kdl");
+    fs::write(
+        &entry,
+        "server { http \"127.0.0.1:8080\"; }\nimport \"defs/shared.kdl\"\nsite \"a.test\" { chain { use-snippet \"files\"; }; }\n",
+    )?;
+    let snapshot = build(&entry, &ConfigurationOnly)?;
+    let Action::Static { root, .. } = &snapshot.configuration.sites[0].routes[0].action else {
+        return Err("static route expected".into());
+    };
+    assert_eq!(root.value, fs::canonicalize(directory.join("defs/assets"))?);
+    assert_eq!(root.origin.source.path, fs::canonicalize(&definition)?);
+    assert!(
+        root.origin
+            .references
+            .iter()
+            .any(|r| r.source.path == fs::canonicalize(&entry).expect("entry exists"))
+    );
+    fs::remove_dir(directory.join("defs/assets"))?;
+    let error = build(&entry, &ConfigurationOnly).expect_err("missing snippet root accepted");
+    assert_eq!(error.origin.source.path, fs::canonicalize(&definition)?);
+    assert!(
+        error
+            .origin
+            .references
+            .iter()
+            .any(|r| r.source.path == fs::canonicalize(&entry).expect("entry exists"))
+    );
+    fs::remove_dir_all(directory)?;
+    Ok(())
+}
+
+#[test]
+fn chain_snippet_invalid_reference_graphs_are_rejected_even_when_unused() -> TestResult {
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let entry = std::env::temp_dir().join(format!(
+        "rill-chain-graph-{}-{unique}.kdl",
+        std::process::id()
+    ));
+    for (definitions, code) in [
+        (
+            "chain-snippet \"a\" { use-snippet \"missing\"; }",
+            "SNIPPET_REF",
+        ),
+        (
+            "chain-snippet \"a\" { use-snippet \"b\"; }\nchain-snippet \"b\" { use-snippet \"a\"; }",
+            "SNIPPET_REF",
+        ),
+        (
+            "chain-snippet \"a\" { rule { respond 200; }; }\nchain-snippet \"a\" { rule { respond 200; }; }",
+            "DUPLICATE",
+        ),
+        ("chain-snippet \"a\" {}", "CONFIG_TYPE"),
+    ] {
+        fs::write(
+            &entry,
+            format!(
+                "server {{ http \"127.0.0.1:8080\"; }}\nsite \"a.test\" {{ chain {{ rule {{ respond 200; }}; }}; }}\n{definitions}\n"
+            ),
+        )?;
+        assert_eq!(
+            parse(load(&entry)?)
+                .expect_err("invalid graph accepted")
+                .code,
+            code
+        );
+    }
+    fs::remove_file(entry)?;
+    Ok(())
+}
+
+#[test]
+fn chain_snippet_exponential_expansion_is_bounded() -> TestResult {
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let entry = std::env::temp_dir().join(format!(
+        "rill-chain-budget-{}-{unique}.kdl",
+        std::process::id()
+    ));
+    let mut input = String::from(
+        "server { http \"127.0.0.1:8080\"; }\nsite \"a.test\" { chain { use-snippet \"s0\"; }; }\n",
+    );
+    for i in 0..14 {
+        input.push_str(&format!(
+            "chain-snippet \"s{i}\" {{ use-snippet \"s{}\"; use-snippet \"s{}\"; }}\n",
+            i + 1,
+            i + 1
+        ));
+    }
+    input.push_str("chain-snippet \"s14\" { rule { respond 200; }; }\n");
+    fs::write(&entry, input)?;
+    assert_eq!(
+        parse(load(&entry)?)
+            .expect_err("unbounded expansion accepted")
+            .code,
+        "CONFIG_LIMIT"
+    );
+    fs::remove_file(entry)?;
+    Ok(())
+}
+
+#[test]
+fn chain_snippets_are_validated_in_their_error_handler_context() -> TestResult {
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let entry = std::env::temp_dir().join(format!(
+        "rill-chain-errors-{}-{unique}.kdl",
+        std::process::id()
+    ));
+    fs::write(
+        &entry,
+        "server { http \"127.0.0.1:8080\"; }\nchain-snippet \"errors\" { rule { match { error-status 404; }; respond 404 text=\"missing\"; }; }\nsite \"a.test\" { chain { rule { respond 200; }; handle-errors { use-snippet \"errors\"; }; }; }\n",
+    )?;
+    let parsed = parse(load(&entry)?)?;
+    assert_eq!(
+        parsed.sites[0]
+            .chain
+            .as_ref()
+            .ok_or("chain missing")?
+            .errors
+            .as_ref()
+            .ok_or("error chain missing")?
+            .len(),
+        1
+    );
+    fs::write(
+        &entry,
+        "server { http \"127.0.0.1:8080\"; }\nchain-snippet \"success\" { rule { respond 200; }; }\nsite \"a.test\" { chain { rule { respond 200; }; handle-errors { use-snippet \"success\"; }; }; }\n",
+    )?;
+    assert_eq!(
+        parse(load(&entry)?)
+            .expect_err("success snippet bypassed error-chain restriction")
+            .code,
+        "POLICY_INVALID_RESPONSE"
+    );
+    fs::remove_file(entry)?;
+    Ok(())
+}
+
+#[test]
 fn snippet_nested_forward_reuse_keeps_paths_and_profile_precedence() -> TestResult {
     let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
     let dir = std::env::temp_dir().join(format!("rill-snippet-{}-{unique}", std::process::id()));

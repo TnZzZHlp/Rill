@@ -106,7 +106,7 @@ rill reload --socket /run/rill/control.sock --timeout 30s
 
 ## 3. 顶层与路径
 
-顶层允许 `server`、`import`、`tls`、`profile`、`snippet`、`site`。尚未实现的功能必须报告“不支持”，不能静默忽略。
+顶层允许 `server`、`import`、`tls`、`profile`、`snippet`、`chain-snippet`、`site`。尚未实现的功能必须报告“不支持”，不能静默忽略。
 
 ```kdl
 server {
@@ -224,6 +224,36 @@ site "api.example.com" {
 - request-timeout 从路由选择后开始计入连接、上传及等待最终响应头的总时间，最终响应头到达后不限制流式响应总时长；read-timeout 限制上游相邻读取，idle-timeout 用于下游读写及连接池闲置。连接/上游读取超时返回 504，拒绝连接返回 502；响应已开始后故障只中止连接，不追加第二份 HTTP 响应。
 
 ## 7. Snippet 与可选文件监听
+
+### 规则链片段
+
+顶层 `chain-snippet "name" { ... }` 定义完整 `rule` 片段，在 `chain` 或 `handle-errors` 内使用 `use-snippet "name"`，按引用位置展开。片段内仅允许完整 `rule` 和嵌套 `use-snippet`，不支持参数、动作级引用或嵌入 `handle-errors`。引用可以前向定义；名称在独立于旧 `snippet` 的全局命名空间中唯一。
+
+```kdl
+chain-snippet "security" {
+    rule "security-headers" {
+        header "response" {
+            set "X-Content-Type-Options" "nosniff"
+            set "X-Frame-Options" "DENY"
+        }
+        continue
+    }
+}
+site "example.test" {
+    chain {
+        use-snippet "security"
+        rule "home" {
+            respond 200 text="ok"
+        }
+    }
+}
+```
+
+展开不改变顺序、终止动作或鉴权检查；公共非终止规则必须显式 `continue`。重复引用不会自动去重，展开后重复规则名仍报错。错误链引用仍执行原有错误状态限制，不能通过片段返回 2xx/3xx。相对 root、凭据等路径从片段定义文件解析，错误保留定义和引用来源。导入的片段文件沿用现有 watch/Reload 管线。
+
+所有定义（包括未引用定义）检查空定义、语法、未知引用及循环；实际使用时按主链或错误链上下文再次校验。定义检查与实际站点展开各有一组全配置共享预算：深度最多 64、引用展开步骤最多 16384、复制规则最多 4096、逻辑 payload 最多 8 MiB（包含序列化文本、节点结构及引用元数据，不是 RSS 配额）。站点中的未引用原生规则不占片段复制预算，但仍受原有策略限制。不新增参数替换、配置宏或运行时文件读取。
+
+### 旧式路由片段与文件监听
 
 顶层 `snippet "name" { ... }` 定义完整路由片段，site 使用 `use-snippet "name"`。每条引用恰好一个名称，可写多条；snippet 内只允许完整 `route` 和嵌套的 `use-snippet`，不允许空定义，不支持参数或模板。Snippet 名称在独立名称空间全局唯一，可前向引用；Profile 仍使用 `use`。所有定义包括未引用定义均检查未知引用和循环；展开后按普通路由规则检查冲突。相对路径以定义文件为基准，错误保留定义和引用两侧的有界去重来源链。整个配置的展开预算为深度 64、复制路由 4096、步骤 16384 和逻辑 payload 8 MiB，超限拒绝候选。
 

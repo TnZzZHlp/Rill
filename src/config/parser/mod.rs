@@ -5,6 +5,7 @@ mod chain_body;
 mod chain_dynamic;
 mod chain_headers;
 mod chain_paths;
+mod chain_snippets;
 mod chain_webdav;
 mod observability;
 mod server;
@@ -105,6 +106,8 @@ fn certificate(node: &KdlNode, origin: &Origin) -> Result<Certificate> {
 }
 
 pub fn parse(loaded: LoadedConfig) -> Result<ParsedConfig> {
+    let mut chain_snippets = chain_snippets::Snippets::collect(&loaded.nodes)?;
+    chain_snippets.validate_definitions()?;
     let mut result = ParsedConfig {
         entry: loaded.entry,
         server: None,
@@ -113,7 +116,7 @@ pub fn parse(loaded: LoadedConfig) -> Result<ParsedConfig> {
         certificates: BTreeMap::new(),
         sites: Vec::new(),
     };
-    for located in loaded.nodes {
+    for located in &loaded.nodes {
         let node = &located.node;
         let origin = &located.origin;
         match node.name().value() {
@@ -129,7 +132,10 @@ pub fn parse(loaded: LoadedConfig) -> Result<ParsedConfig> {
                 }
                 result.server = Some(server::parse(node, origin)?);
             }
-            "site" => result.sites.push(site::parse(node, origin)?),
+            "site" => result
+                .sites
+                .push(site::parse(node, origin, &mut chain_snippets)?),
+            "chain-snippet" => {}
             "profile" => {
                 let profile = profile(node, origin)?;
                 if let Some(first) = result.profiles.get(&profile.name.value) {

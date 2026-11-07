@@ -170,8 +170,8 @@ pub(super) fn match_block(
     }
     matcher(first, &at(first, origin), depth, count, error_chain)
 }
-fn parse_rules<'a>(
-    nodes: impl IntoIterator<Item = &'a KdlNode>,
+pub(super) fn parse_rules<'a>(
+    nodes: impl IntoIterator<Item = (&'a KdlNode, &'a Origin)>,
     origin: &Origin,
     error_chain: bool,
     total: &mut usize,
@@ -179,8 +179,8 @@ fn parse_rules<'a>(
     let mut rules = Vec::new();
     let mut ids = BTreeSet::new();
     let mut count = 0;
-    for n in nodes {
-        let loc = at(n, origin);
+    for (n, node_origin) in nodes {
+        let loc = node_origin.clone();
         if n.name().value() == "handle-errors" {
             return Err(invalid("POLICY_INVALID_CHAIN", "handle-errors", &loc));
         }
@@ -243,7 +243,11 @@ fn parse_rules<'a>(
     }
     Ok(rules)
 }
-pub fn parse(node: &KdlNode, origin: &Origin) -> Result<Chain> {
+pub fn parse(
+    node: &KdlNode,
+    origin: &Origin,
+    snippets: &mut super::chain_snippets::Snippets<'_>,
+) -> Result<Chain> {
     shape(node, origin, "chain", 0..=0, true)?;
     let nodes: Vec<_> = children(node).collect();
     let mut total = 0;
@@ -262,11 +266,23 @@ pub fn parse(node: &KdlNode, origin: &Origin) -> Result<Chain> {
     } else {
         (&nodes[..], None)
     };
-    let rules = parse_rules(main.iter().copied(), origin, false, &mut total)?;
+    let expanded = snippets.expand(main.iter().copied(), origin)?;
+    let rules = parse_rules(
+        expanded.iter().map(|n| (&n.node, &n.origin)),
+        origin,
+        false,
+        &mut total,
+    )?;
     let errors = if let Some(node) = error_node {
         let loc = at(node, origin);
         shape(node, &loc, "handle-errors", 0..=0, true)?;
-        Some(parse_rules(children(node), &loc, true, &mut total)?)
+        let expanded = snippets.expand(children(node), &loc)?;
+        Some(parse_rules(
+            expanded.iter().map(|n| (&n.node, &n.origin)),
+            &loc,
+            true,
+            &mut total,
+        )?)
     } else {
         None
     };

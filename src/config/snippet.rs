@@ -217,7 +217,7 @@ fn route_cost(route: &RawRoute, chain: &[Origin]) -> Option<usize> {
     Some(cost)
 }
 
-fn add_chain(origin: &mut Origin, chain: &[Origin]) {
+pub(crate) fn add_chain(origin: &mut Origin, chain: &[Origin]) {
     let mut seen = std::collections::BTreeSet::new();
     seen.insert((origin.source.path.clone(), origin.offset, origin.length));
     origin.references.retain(|reference| {

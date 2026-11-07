@@ -70,7 +70,7 @@ RuntimeSnapshot 包含标准化配置、Router、准备好的代理或静态路�
 
 `RuntimeState` 拥有唯一 `ArcSwap<RuntimeSnapshot>`。准备时不写活动状态，管理提交串行化：读取配置、准备全部资源、比较启动设置、赋代次、一次 store，随后返回成功。关闭和提交共用短暂的 std Mutex gate，store 前检查关闭状态和 30 秒期限；blocking closure 只构建，不能访问 state 或 store。代次 checked_add 防溢出。启动快照使用后释放，不永久持有第一代；运行期 App 日志读取当前快照。失败没有发布，因此所谓回滚是保留旧快照，而不是先局部更新再反向恢复。
 
-Snippet 在标准化时展开，定义和引用来源有界去重保留；引用深度、复制路由、步骤及逻辑 payload 使用全配置共享预算。具体限制见配置文档。
+旧式路由 Snippet 在标准化时展开；规则链 `chain-snippet` 由 `config/parser/chain_snippets.rs` 在链解析前按引用位置展开，再复用同一规则解析、策略编译和鉴权检查。定义和引用来源有界去重保留，相对资源路径以定义文件为准；未引用定义也检查引用图和结构。规则链片段不进入运行时，不新增活动状态或配置构建路径。引用深度、复制规则/路由、步骤及逻辑 payload 使用有界预算，具体限制见配置文档。
 
 watch 使用独立于快照的 inotify FD 生命周期，最多活动和候选各一个 FD，快照不持有 FD；切换时交接 dirty 事件。自动及手动 Reload 共用 admission/execution permits 和提交 gate，均经过完整候选准备和单点发布，不能绕过关闭或期限检查。注册前后核对实际消费 FD fingerprint；溢出、失效和不可覆盖分别触发有日志的重建或 degraded 有界重试。仅信任本地文件系统及既有 proc/namespace 边界，不承诺恶意或远端文件系统的事务及事件保证。
 

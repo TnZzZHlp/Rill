@@ -208,6 +208,38 @@ fn snippet_routes_serve_both_hosts_without_sharing_other_routes() -> TestResult 
 }
 
 #[test]
+fn chain_snippets_preserve_nested_reference_order_across_sites() -> TestResult {
+    let address = vacant()?;
+    let config = format!(
+        r#"server {{ http "{address}"; }}
+site "a.test" {{ chain {{
+    use-snippet "common"
+    rule {{ header "response" {{ set "X-Order" "site"; }}; respond 200 text="a"; }}
+}} }}
+site "b.test" {{ chain {{ use-snippet "common"; rule {{ respond 200 text="b"; }}; }} }}
+chain-snippet "common" {{
+    use-snippet "base"
+    rule {{ header "response" {{ set "X-Order" "common"; }}; continue; }}
+}}
+chain-snippet "base" {{
+    rule {{ header "response" {{ set "X-Order" "base"; set "X-Shared" "yes"; }}; continue; }}
+}}"#
+    );
+    let mut proxy = Proxy::start(address, &config)?;
+    for (host, expected, body) in [("a.test", "site", b"a"), ("b.test", "common", b"b")] {
+        let (status, headers, actual) = send(address, host, "/")?;
+        assert_eq!(status, 200);
+        assert_eq!(actual, body);
+        let headers = headers.to_ascii_lowercase();
+        assert!(headers.contains(&format!("x-order: {expected}\r\n")));
+        assert!(headers.contains("x-shared: yes\r\n"));
+    }
+    proxy.signal()?;
+    assert_eq!(proxy.finish()?.0, 0);
+    Ok(())
+}
+
+#[test]
 fn chain_rules_responses_and_existing_actions() -> TestResult {
     let directory = Directory::new()?;
     std::fs::write(directory.0.join("home.txt"), b"static")?;
