@@ -758,11 +758,23 @@ mod tests {
         for _ in 0..1024 {
             assert_eq!(sink.submit(&record, policy), Ok(()));
         }
+        let rejected_start = Instant::now();
         assert_eq!(sink.submit(&record, policy), Err(LogDropped));
-        assert!(start.elapsed() < Duration::from_secs(2));
+        let rejected_elapsed = rejected_start.elapsed();
+        let elapsed = start.elapsed();
+        assert!(elapsed < Duration::from_secs(2));
         assert_eq!(sink.dropped(), 1);
+        let blocked_bytes = fs::metadata(&path).unwrap().len();
         drop(stalled);
         assert!(sink.shutdown(Duration::from_secs(5)));
+        println!(
+            "QUEUE_SAMPLE accepted=1024 dropped={} elapsed_us={} rejected_us={} blocked_bytes={} drained_bytes={}",
+            sink.dropped(),
+            elapsed.as_micros(),
+            rejected_elapsed.as_micros(),
+            blocked_bytes,
+            fs::metadata(&path).unwrap().len()
+        );
         drop(sink);
         fs::remove_dir_all(root).unwrap();
     }

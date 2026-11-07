@@ -53,6 +53,10 @@ HTTPS 示例 `examples/deploy/https.kdl` 需要管理员自行提供证书及私
 
 已交付静态 TLS、代理、静态文件、Reload、Snippet、可选 watch、静态增强和访问日志。访问日志默认关闭，主入口保持精简；运行日志与访问日志共用后台日志线程。ACME 和 HTTP/3 不属于当前目标。历史验证范围见 008–012 记录；其中指标和追踪的历史结果不代表当前仍支持这些功能。闭环客户端受限 RPS 不是容量，不能据旧记录承诺长期稳定或性能领先。
 
+## Caddy 能力隔离组合
+
+`examples/caddy-parity/` 提供静态/SPA、API、CORS、gRPC、受保护 DAV、动态代理替换和站点文件日志的脱敏配置与隔离运行说明。需在临时目录生成凭据并自行提供后端；010 组合验收、资源实测及独立复审已完成，证据见 [024](docs/validation/024-caddy-integration-release.md)；不代表生产切换或容量保证。
+
 ## 完整组合示例
 
 `examples/release/` 将入口、共享 snippet、三个域名的 site 和静态内容分开。保留目录结构复制后，将 `config.kdl` 的控制 Socket 改为服务 UID 拥有的 0700 私有目录内路径；默认 `/run/rill/control.sock` 仅在管理员已准备该目录时可用。以服务身份执行：

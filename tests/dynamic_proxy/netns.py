@@ -52,6 +52,14 @@ class Backend(http.server.BaseHTTPRequestHandler):
         paths.append(self.path)
         clients.append(self.client_address)
         connections.append(self.connection)
+        if self.path == '/transform':
+            body = b'old.example.test'
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if self.path == '/sse':
             self.send_response(200)
             self.send_header('Content-Type', 'text/event-stream')
@@ -182,7 +190,7 @@ with tempfile.TemporaryDirectory(prefix='rill-dynamic-netns-') as directory:
     os.chmod(token_path, 0o600)
     config = os.path.join(directory, 'config.kdl')
     with open(config, 'w', encoding='utf-8') as file:
-        file.write(f'server {{ http "0.0.0.0:18081"; control-socket "{control}/rill.sock"; }}\nsite "app.test" {{ chain {{ rule {{ dynamic-proxy prefix="/fetch/" anonymous=#true {{ allow-port 18080; allow-port 18081; allow-port 18443; allow-port 18444; allow-port 18445; }}; }}; }}; }}\nsite "auth.test" {{ chain {{ rule {{ static-token header="X-Token" file="{token_path}"; dynamic-proxy prefix="/fetch/" {{ allow-port 18080; }}; }}; }}; }}\nsite "basic.test" {{ chain {{ rule {{ match {{ method "POST"; }}; static-token header="X-Token" file="{token_path}"; continue; }}; rule {{ basic-auth realm="test" {{ user "dummy" hash="$2b$10$bZNofx165EOWoS0dTW8yNeqg/9IrzWZQz8FkIVCF6Tt6RMVxfIEHm"; }}; header "request" {{ set "Cookie" "dummy-readded"; }}; header "response" {{ set "Set-Cookie" "dummy-readded"; }}; dynamic-proxy prefix="/fetch/" {{ allow-port 18080; allow-port 18443; }}; }}; }}; }}\n')
+        file.write(f'server {{ http "0.0.0.0:18081"; control-socket "{control}/rill.sock"; }}\nsite "app.test" {{ chain {{ rule {{ dynamic-proxy prefix="/fetch/" anonymous=#true {{ allow-port 18080; allow-port 18081; allow-port 18443; allow-port 18444; allow-port 18445; }}; }}; }}; }}\nsite "auth.test" {{ chain {{ rule {{ static-token header="X-Token" file="{token_path}"; body-replace mime="text/html" {{ literal "old.example.test" "new.example.test"; }}; dynamic-proxy prefix="/fetch/" {{ allow-port 18080; }}; }}; }}; }}\nsite "basic.test" {{ chain {{ rule {{ match {{ method "POST"; }}; static-token header="X-Token" file="{token_path}"; continue; }}; rule {{ basic-auth realm="test" {{ user "dummy" hash="$2b$10$bZNofx165EOWoS0dTW8yNeqg/9IrzWZQz8FkIVCF6Tt6RMVxfIEHm"; }}; header "request" {{ set "Cookie" "dummy-readded"; }}; header "response" {{ set "Set-Cookie" "dummy-readded"; }}; dynamic-proxy prefix="/fetch/" {{ allow-port 18080; allow-port 18443; }}; }}; }}; }}\n')
     process = subprocess.Popen([os.path.abspath('target/debug/rill'), 'run', '--config', config], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, env={**os.environ, 'SSL_CERT_FILE': cert, 'SSL_CERT_DIR': directory})
     try:
         for _ in range(200):
@@ -251,6 +259,9 @@ with tempfile.TemporaryDirectory(prefix='rill-dynamic-netns-') as directory:
         assert response.startswith(b'HTTP/1.1 302') and len(seen) == before + 1, response
         assert not any(key.lower() in ('x-token', 'authorization', 'cookie') for key in seen[-1]), seen[-1]
         print('PASS token authentication and credential isolation')
+        response = request('http://8.8.8.8:18080/transform', 'auth.test', 'dummy-token')
+        assert response.startswith(b'HTTP/1.1 200') and b'new.example.test' in response and b'old.example.test' not in response, response
+        print('PASS authenticated dynamic target and HTML replacement')
         basic = 'Basic ' + base64.b64encode(b'dummy:dummy-password').decode('ascii')
         before = len(seen)
         for auth in ['', 'Basic bad', basic + '\r\nAuthorization: ' + basic]:

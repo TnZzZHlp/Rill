@@ -13,9 +13,9 @@
 - 同一作用域的标量字段只能出现一次；不能用“最后一个胜出”掩盖重复配置。只有明确允许的 `import`、`use`、监听地址、路由、`use-snippet`、域名列表和 CIDR 策略列表可重复。
 - 所有错误包括错误码、文件、节点、行列及原因。跨文件冲突同时给出两处来源；展开节点保留定义与引用链。
 
-## Caddy 动态代理（006 验收进行中）
+## Caddy 动态代理（006 已验收）
 
-`dynamic-proxy prefix="/fetch/" anonymous=#true { allow-port 8080; }` 是终止动作；默认仅允许 80/443，额外端口须显式列出。默认 `anonymous=#false`，要求执行路径已成功完成 Basic 或 static-token 鉴权；`#true` 明确接受开放代理及滥用风险。prefix 后当前 URI 的原始 path-and-query 作为整体解码一次，目标仅限 HTTP/HTTPS，拒绝凭据、特殊地址及自身入口。动态请求每次重新解析并检查全部候选后固定 SocketAddr，不跟随重定向，不在发送业务请求后重放。入口认证、Cookie 和转发身份头不会发往目标，响应 Set-Cookie 删除；同源 Location 编码到 prefix 内。每 origin 的 8 条存活物理连接包括握手、空闲池和跨代连接；全进程活动请求上限 128。动态功能尚在独立验收，不代表 006 已完成。
+`dynamic-proxy prefix="/fetch/" anonymous=#true { allow-port 8080; }` 是终止动作；默认仅允许 80/443，额外端口须显式列出。默认 `anonymous=#false`，要求执行路径已成功完成 Basic 或 static-token 鉴权；`#true` 明确接受开放代理及滥用风险。prefix 后当前 URI 的原始 path-and-query 作为整体解码一次，目标仅限 HTTP/HTTPS，拒绝凭据、特殊地址及自身入口。动态请求每次重新解析并检查全部候选后固定 SocketAddr，不跟随重定向，不在发送业务请求后重放。入口认证、Cookie 和转发身份头不会发往目标，响应 Set-Cookie 删除；同源 Location 编码到 prefix 内。每 origin 的 8 条存活物理连接包括握手、空闲池和跨代连接；全进程活动请求上限 128。006 独立验收见 [020](validation/020-caddy-dynamic-proxy.md)；010 组合验收与资源实测见 [024](validation/024-caddy-integration-release.md)，已通过最终门禁及独立复审。
 
 ## Caddy 能力补齐 002：规则链与固定响应
 
@@ -33,9 +33,9 @@ site "example.test" {
 }
 ```
 
-规则以 `respond`、固定 `proxy`、`serve-files` 或 `branch` 终止，显式 `continue` 才继续后续规则。branch 只执行首个匹配的 `when`，否则执行可选末尾 `otherwise`；没有匹配分支时终止并返回 404。`respond` 状态为 200–599，默认空文本和 `text/plain; charset=utf-8`；204/304 不允许正文，HEAD 不发送正文。固定代理当前仅支持 http1；静态动作使用现有 root 保护并支持 `index`、`spa`、`cache-control`、`precompressed`、`browse`。`header` 支持请求和响应头动作；`rewrite`、`strip-prefix` 和 `try-files` 按链顺序更新当前路径并保留原查询，`reenter` 从链首重新匹配且最多四次。`try-files` 仅对受约束 root 下的普通文件命中，只有缺失才继续下一候选。链尾可声明一次 `handle-errors`：仅本地缺失、方法不支持及本地临时不可用可进入；安全拒绝、容量耗尽、上游响应/传输错误和已提交响应不进入。错误链共享步骤及重入预算，只进入一次；`respond` 不允许 2xx/3xx，错误文件保留原状态且不按 Range/条件请求返回 206/304。Basic 和静态令牌鉴权见下文；其余后续动作暂不支持，不会静默忽略。`{upstream-authority}` 使用经验证的连接目标规范 authority，始终包含端口，IPv6 使用方括号；不使用 DNS 候选地址或 `proxy` 的 `host` 覆盖值。动作执行时尚未确定上游则使用该变量明确失败并返回 503，不填空、不猜目标、不重放规则；延后响应头动作可在代理目标确定后使用，respond/static 无上游时同样失败。正则运行工作区独立限额为全进程 64 MiB；额度不足返回 503。
+规则以 `respond`、固定 `proxy`、`serve-files` 或 `branch` 终止，显式 `continue` 才继续后续规则。branch 只执行首个匹配的 `when`，否则执行可选末尾 `otherwise`；没有匹配分支时终止并返回 404。`respond` 状态为 200–599，默认空文本和 `text/plain; charset=utf-8`；204/304 不允许正文，HEAD 不发送正文。固定代理支持 HTTP/1、h2c 和 TLS h2；静态动作使用现有 root 保护并支持 `index`、`spa`、`cache-control`、`precompressed`、`browse`。`header` 支持请求和响应头动作；`rewrite`、`strip-prefix` 和 `try-files` 按链顺序更新当前路径并保留原查询，`reenter` 从链首重新匹配且最多四次。`try-files` 仅对受约束 root 下的普通文件命中，只有缺失才继续下一候选。链尾可声明一次 `handle-errors`：仅本地缺失、方法不支持及本地临时不可用可进入；安全拒绝、容量耗尽、上游响应/传输错误和已提交响应不进入。错误链共享步骤及重入预算，只进入一次；`respond` 不允许 2xx/3xx，错误文件保留原状态且不按 Range/条件请求返回 206/304。Basic、静态令牌、动态代理、正文过滤和 WebDAV 见相应章节；未知动作不会静默忽略。`{upstream-authority}` 使用经验证的连接目标规范 authority，始终包含端口，IPv6 使用方括号；不使用 DNS 候选地址或 `proxy` 的 `host` 覆盖值。动作执行时尚未确定上游则使用该变量明确失败并返回 503，不填空、不猜目标、不重放规则；延后响应头动作可在代理目标确定后使用，respond/static 无上游时同样失败。正则运行工作区独立限额为全进程 64 MiB；额度不足返回 503。
 
-## Caddy 正文替换与在线编码（007 待独立验收）
+## Caddy 正文替换与在线编码（007 已验收）
 
 链中可登记非终止响应过滤声明，之后仍须终止动作或显式 continue/reenter：
 
@@ -98,7 +98,7 @@ rill reload --socket /run/rill/control.sock --timeout 30s
 - 成功退出码 0；配置或准备失败 1；命令参数错误 2；管理通信失败、超时或结果未知 3。服务端明确返回失败时退出码 1。
 - `reload` 等待真实结果，成功输出请求 ID 与配置代次；超时不承诺操作没有发生，不自动重试。`--timeout` 默认 30 秒，覆盖连接、发送和等待接收；仅接受正整数及 ms/s/m/h 单位，拒绝溢出。等待响应首字节不受帧 5 秒期限提前截断，首字节后帧读取限 5 秒。
 - 日志写标准错误，成功结果写标准输出，错误不得打印私钥、凭据或完整敏感配置。run 输出受 log-level 过滤的 JSON 行日志；check 保留配置位置诊断文本。
-- HTTPS 上游的身份来自配置 URL，转发 Host 仍保留客户端已验证 authority；采用系统 OpenSSL 信任路径及管理员指定的 SSL_CERT_FILE/SSL_CERT_DIR，不提供跳过验证。DNS 名校验链和主机名，IP 校验链并在发送请求前严格核对 iPAddress SAN，复用连接也必须核验。旧语法上游使用 HTTP/1；chain 固定代理支持 `protocol="h2c"`（仅 HTTP URL）和 `protocol="tls-h2"`（仅 HTTPS URL），完整 gRPC 尚未完成验收。入站可使用 HTTP/1 或 HTTP/2。 上游 CA 候选冻结源文件及 hash 目录，源变化须 Reload；CA 原始材料、可计量副本和元数据计入候选 8 MiB/进程 64 MiB 策略预算，OpenSSL 内部解析、证书对象和惰性缓存不计入该预算，预算不是 RSS 上限。
+- HTTPS 上游的身份来自配置 URL，转发 Host 仍保留客户端已验证 authority；采用系统 OpenSSL 信任路径及管理员指定的 SSL_CERT_FILE/SSL_CERT_DIR，不提供跳过验证。DNS 名校验链和主机名，IP 校验链并在发送请求前严格核对 iPAddress SAN，复用连接也必须核验。旧语法上游使用 HTTP/1；chain 固定代理支持 `protocol="h2c"`（仅 HTTP URL）和 `protocol="tls-h2"`（仅 HTTPS URL），完整 gRPC 独立验收见 [019](validation/019-caddy-http2-grpc.md)。入站可使用 HTTP/1 或 HTTP/2。 上游 CA 候选冻结源文件及 hash 目录，源变化须 Reload；CA 原始材料、可计量副本和元数据计入候选 8 MiB/进程 64 MiB 策略预算，OpenSSL 内部解析、证书对象和惰性缓存不计入该预算，预算不是 RSS 上限。
 - run 在启动前解析并检查上游地址；请求触发 60 秒应用缓存刷新（并非 DNS TTL），失败不返回过期地址，失败退避 1 秒。全部候选检查、去重且不超过 64 个；任一禁止地址拒绝整次解析。单请求固定候选，最多尝试 8 个建立连接失败的地址，已建连或已发送请求后失败不重放。Reload 重新准备上游。
 - HTTP/HTTPS 监听为 IPv4/IPv6 独立绑定，IPv6 设置 IPv6-only，可同端口双栈部署；任一监听绑定失败即启动失败，不继续提供部分站点。SIGTERM/SIGINT 都停止接受并等待最多 30 秒排空；正常退出 0，超期中止并退出 1。
 - HTTP/1.x 初始请求头总期限为 60 秒，复用连接下一请求的头部总期限使用上一请求路由的 idle-timeout；总期限不会随每次读取重新计时。已解析请求头最多 64 KiB；HTTP/1.x 框架解析本身仍有约 1 MiB 硬边界。全局最多 1024 个接受容量槽位，包含等待接受的保留槽位。

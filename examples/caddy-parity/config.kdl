@@ -1,0 +1,39 @@
+server {
+    http "127.0.0.1:18080"
+    control-socket "runtime/control.sock"
+}
+site "parity.test" {
+    site-label "parity"
+    access-log file="runtime/log/access.jsonl" rotate-size=16384 retain-files=1 retain-days=1
+    chain {
+        rule "cors-preflight" {
+            match { all { method "OPTIONS"; path-glob "/api/*"; }; }
+            header "response" { set "Access-Control-Allow-Origin" "https://app.example.test"; set "Access-Control-Allow-Methods" "GET, POST, OPTIONS"; }
+            respond 204
+        }
+        rule "api" {
+            match { path-glob "/api/*"; }
+            header "response" { set "Access-Control-Allow-Origin" "https://app.example.test"; }
+            proxy "http://127.0.0.1:18081"
+        }
+        rule "grpc" {
+            match { path-glob "/grpc.example.Service/*"; }
+            proxy "http://127.0.0.1:18082" protocol="h2c"
+        }
+        rule "dav" {
+            match { path-glob "/dav/*"; }
+            static-token header="X-Dav-Token" file="runtime/token"
+            strip-prefix "/dav"
+            webdav root="runtime/dav" storage-id="documents"
+        }
+        rule "fetch" {
+            match { path-glob "/fetch/*"; }
+            static-token header="X-Dav-Token" file="runtime/token"
+            body-replace mime="text/html" { literal "old.example.test" "new.example.test"; }
+            dynamic-proxy prefix="/fetch/"
+        }
+        rule "static" {
+            serve-files root="public" { spa #true; cache-control "public, max-age=60"; }
+        }
+    }
+}

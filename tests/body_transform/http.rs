@@ -99,6 +99,18 @@ site "app.test" {{ chain {{
             !headers.to_ascii_lowercase().contains("last-modified:"),
             "{headers}"
         );
+        if path == "/local" && encoding == "gzip" {
+            assert!(
+                headers
+                    .lines()
+                    .filter_map(|line| line.split_once(':'))
+                    .any(
+                        |(name, value)| name.eq_ignore_ascii_case("content-encoding")
+                            && value.trim().eq_ignore_ascii_case("gzip")
+                    ),
+                "{headers}"
+            );
+        }
         let mut decoded = Vec::new();
         if headers
             .to_ascii_lowercase()

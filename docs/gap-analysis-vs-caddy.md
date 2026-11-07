@@ -2,6 +2,25 @@
 
 本文记录一次真实 Caddy 站点集合的迁移评估结论，用于说明当前 Rill 无法承接哪些配置，以及若要承接需要新增什么。它是差距清单，不是实施计划，也不代表相关功能已排入 001–012 之外的任何阶段。
 
+## 当前状态（010 已完成）
+
+下文保留调查时原文，不代表当前实现。能力边界以 [冻结契约](plans/caddy-feature-parity/CONTRACT.md) 和当前配置文档为准；历史阶段验证不替代 010 本轮组合验收。
+
+| 调查项 | 当前能力及历史追溯 | 010 本轮状态 |
+| --- | --- | --- |
+| 2.1 头改写 | 请求/响应头动作、CORS 等见 [017](validation/017-caddy-headers-paths.md) | 示例预检 204、真实 API 200/404 带 CORS；组合回归覆盖响应头 |
+| 2.2 respond | 固定状态和文本见 [016](validation/016-caddy-rules-responses.md) | 示例预检 204 |
+| 2.3 路径 | strip-prefix、rewrite、try-files、错误链见 [017](validation/017-caddy-headers-paths.md) | 本轮路径组合与失败边界见 [024](validation/024-caddy-integration-release.md) |
+| 2.4 匹配器 | 类型化条件与布尔组合见 [016](validation/016-caddy-rules-responses.md)、[017](validation/017-caddy-headers-paths.md) | 本轮真实方法、头前缀/等值和布尔组合等见 [024](validation/024-caddy-integration-release.md) |
+| 2.5 上游和 gRPC | 条件固定代理及 h2c/TLS h2 见 [019](validation/019-caddy-http2-grpc.md) | 真实通用 gRPC 四类调用与跨 reload 长流见 [024](validation/024-caddy-integration-release.md) |
+| 2.6 鉴权和 DAV | Basic/令牌和受约束 DAV 见 [018](validation/018-caddy-authentication.md)、[022](validation/022-caddy-webdav.md) | 同服务鉴权、PUT、失败候选和 reload 组合回归；专项边界及真实客户端/满盘本轮结果见 [024](validation/024-caddy-integration-release.md) |
+| 2.7 动态代理和替换 | 动态公网策略及有界变换见 [020](validation/020-caddy-dynamic-proxy.md)、[021](validation/021-caddy-body-transforms.md) | 私有 namespace 的认证动态目标及 HTML 替换通过，见 [024](validation/024-caddy-integration-release.md) |
+| 2.8 编码 | gzip/zstd 与 sidecar 见 [021](validation/021-caddy-body-transforms.md) | 本轮真实编码组合与资源采样见 [024](validation/024-caddy-integration-release.md) |
+| 2.9 日志 | 按站点文件、轮转和白名单见 [023](validation/023-caddy-observability.md) | 同服务组合、受控队列饱和及满盘见 [024](validation/024-caddy-integration-release.md) |
+| 2.10 身份 | 仅日志配置 site/route 可读身份，见 [023](validation/023-caddy-observability.md) | 组合回归校验 site/route；不新增指标身份映射 |
+
+OTLP、追踪、新增 metrics、2.11 通用运行时能力及生产切换均排除；不声称兼容所有 Caddy 行为。010 完整结果见 [024](validation/024-caddy-integration-release.md)，本轮逐项验收、资源实测及独立复审已通过，不作为所有历史站点可直接迁移的证明。
+
 ## 1. 评估对象与方法
 
 对照对象是一台 Debian 13 设备上的 Caddy v2.11.7 实例：`/etc/caddy/Caddyfile` 加 `sites/*.caddy` 共 17 个文件、25 个站点域名，占用 80/443。该实例使用手工维护的 PEM 证书（`/etc/caddy/certs/<domain>/fullchain.pem` + `key.pem`，叶证书加中间证书，无 ACME），由 Syncthing 同步配置后经 inotify 触发 reload。
